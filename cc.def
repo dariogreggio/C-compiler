@@ -1,0 +1,10 @@
+; cc.def : Declares the module parameters for the DLL.
+
+LIBRARY      "cc"
+DESCRIPTION  'DLL compilatore C OpenC'
+
+EXPORTS
+    ; Explicit exports can go here
+		Compila		@100
+		GetVersione		@101
+
