@@ -222,7 +222,8 @@ public:
 		outListing=0x40000,
 		ottimizzaSpeed=0x1000000,
 		ottimizzaSize=0x2000000,
-		ottimizzaLoop=0x4000000
+		ottimizzaLoop=0x4000000,
+		ottimizzaConst=0x8000000
 		};
 
 public:

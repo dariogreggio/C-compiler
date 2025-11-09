@@ -108,6 +108,7 @@ public:
 
 public:
 	CString theCC;
+	BOOL isInitialized;
 
 // Dialog Data
 	//{{AFX_DATA(COpzioniCompilPropPage1)
@@ -141,6 +142,9 @@ class COpzioniCompilPropPage2 : public CPropertyPage
 {
 	DECLARE_DYNCREATE(COpzioniCompilPropPage2)
 
+public:
+	BOOL isInitialized;
+
 // Construction
 public:
 	COpzioniCompilPropPage2();
@@ -165,7 +169,10 @@ public:
 	BOOL	m_Debug;
 	CString	m_AltreDefine;
 	int		m_MemoryModel;
-	BOOL	m_AbsRel;
+	BOOL	m_OttimizzaCostanti;
+	BOOL	m_OttimizzaDimensione;
+	BOOL	m_OttimizzaVelocita;
+	int		m_AbsRel;
 	//}}AFX_DATA
 
 
@@ -228,6 +235,9 @@ class COpzioniCompilPropPage3 : public CPropertyPage
 {
 	DECLARE_DYNCREATE(COpzioniCompilPropPage3)
 
+public:
+	BOOL isInitialized;
+
 // Construction
 public:
 	COpzioniCompilPropPage3();
@@ -253,6 +263,7 @@ protected:
 	// Generated message map functions
 	//{{AFX_MSG(COpzioniCompilPropPage3)
 		// NOTE: the ClassWizard will add member functions here
+	virtual BOOL OnInitDialog();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 

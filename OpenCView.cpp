@@ -38,19 +38,19 @@ END_MESSAGE_MAP()
 /////////////////////////////////////////////////////////////////////////////
 // COpenCView construction/destruction
 
-COpenCView::COpenCView()
-{
-	// TODO: add construction code here
+COpenCView::COpenCView() {
 
-}
+	m_bDelayUpdateItems = FALSE;
+	
+	}
 
-COpenCView::~COpenCView()
-{
-}
+COpenCView::~COpenCView() {
+	}
 
 BOOL COpenCView::PreCreateWindow(CREATESTRUCT& cs) {
 	// TODO: Modify the Window class or styles here by modifying
 	//  the CREATESTRUCT cs
+
 
 	return CRichEditView::PreCreateWindow(cs);
 	}
@@ -108,8 +108,6 @@ COpenCDoc* COpenCView::GetDocument() // non-debug version is inline
 /////////////////////////////////////////////////////////////////////////////
 // COpenCEditView message handlers
 
-
-
 int COpenCView::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	PARAFORMAT pf;
 	PARAFORMAT pf2;
@@ -119,8 +117,8 @@ int COpenCView::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	if(CRichEditView::OnCreate(lpCreateStruct) == -1)
 		return -1;
 	
-	GetEditCtrl().SetFont(&(((CMainFrame *)theApp.m_pMainWnd)->myFont),TRUE);
-	GetEditCtrl().ModifyStyle(WS_VSCROLL | WS_HSCROLL,0);		// altrimenti mi becco pure le barre dell'Edit Ctrl...
+	GetRichEditCtrl().SetFont(&(((CMainFrame *)theApp.m_pMainWnd)->myFont),TRUE);
+	GetRichEditCtrl().ModifyStyle(WS_VSCROLL | WS_HSCROLL,0);		// altrimenti mi becco pure le barre dell'Edit Ctrl...
 
 	pf.cbSize = sizeof(PARAFORMAT);
 	pf.dwMask = PFM_ALIGNMENT | PFM_TABSTOPS;
@@ -161,7 +159,6 @@ void COpenCView::OnDestroy() {
 	int correz=6;
 	wsprintf(myBuf,"%d,%d,%d,%d",rc.left-correz,rc.top-correz,rc.right+correz,rc.bottom/*+correz*/);
 
-	// si rimpicciolisce a ogni giro... SISTEMARE!
 	d->WritePrivateProfileString(IDS_COORDINATE,myBuf);
 	}
 
@@ -173,28 +170,80 @@ void COpenCView::OnChar(UINT nChar, UINT nRepCnt, UINT nFlags) {
 	CRichEditView::OnChar(nChar, nRepCnt, nFlags);
 	}
 
+BOOL COpenCView::SetTabStops(const int& cxEachStop) {
+
+	return GetRichEditCtrl().SendMessage(EM_SETTABSTOPS,1,(uint32_t)&cxEachStop);
+	}
+
+uint32_t COpenCView::CharFromPos(POINT pt) {
+	POINTL pt2;
+
+	return GetRichEditCtrl().SendMessage(EM_CHARFROMPOS,0,(uint32_t)&pt);
+	}
+
+uint32_t COpenCView::GetLineCount() {
+
+	return GetRichEditCtrl().GetLineCount();
+	}
+
+DWORD CALLBACK COpenCView::MyStreamInCallback(DWORD dwCookie, LPBYTE pbBuff, LONG cb, LONG *pcb) {
+  CFile* pFile = (CFile*) dwCookie;
+
+  *pcb = pFile->Read(pbBuff, cb);
+  return 0;
+	}
+
+DWORD CALLBACK COpenCView::MyStreamOutCallback(DWORD dwCookie, LPBYTE pbBuff, LONG cb, LONG *pcb) {
+  CFile* pFile = (CFile*) dwCookie;
+
+  pFile->Write(pbBuff, cb);
+  *pcb = cb;
+  return 0;
+	}
+
+long COpenCView::StreamIn(EDITSTREAM es) {
+
+	es.pfnCallback = COpenCView::MyStreamInCallback;
+	return GetRichEditCtrl().StreamIn(SF_TEXT, es);
+	}
+
+long COpenCView::StreamOut(EDITSTREAM es) {
+
+	es.pfnCallback = COpenCView::MyStreamOutCallback;
+	GetRichEditCtrl().SetModify(FALSE);
+	return GetRichEditCtrl().StreamOut(SF_TEXT, es);
+	}
+
 void COpenCView::OnEditTrovaselezione() {
 	char *lpszFind;
 	int nStartChar,nEndChar;
-	int oldSel=GetEditCtrl().GetSel();
+	CHARRANGE cha;
+	int oldSel;
+	GetRichEditCtrl().GetSel(cha);
 	uint8_t foundState=0;
+// astratto...	IDataObject ido;
 
-	nStartChar=GetEditCtrl().CharFromPos(GetEditCtrl().GetCaretPos());
+	nStartChar=CharFromPos(GetRichEditCtrl().GetCaretPos());
 //	GetEditCtrl().GetSel(nStartChar,nEndChar);
 	nStartChar=LOWORD(nStartChar);
 
 	nEndChar=nStartChar+1;
 
 rifo:
-	GetEditCtrl().SetSel(nStartChar,nEndChar);
-	GetEditCtrl().Copy();
+	GetRichEditCtrl().SetSel(nStartChar,nEndChar);
+	GetRichEditCtrl().Copy();
+
+	// o anche GetTextRange()
+
 
 	// selezionare la parola completa... NON c'è un metodo automatico :( senza passare da clipboard
-	if(OpenClipboard()) {
-		HANDLE h=GetClipboardData(CF_TEXT);
-	  lpszFind= (char*)GlobalLock(h); 
+/*	if(OpenClipboard()) {
+//		HRESULT h=GetClipboardData( &cha,RECO_PASTE, &ido, &iddo);
+		GetRichEditCtrl().Copy();
+
+	  //lpszFind= (char*)GlobalLock(h); 
 		CloseClipboard();
-		}
+		}*/
 	switch(foundState) {
 		case 0:
 			if(isgraph(*lpszFind)) {
@@ -203,7 +252,7 @@ rifo:
 				goto rifo;
 				}
 			else {
-				GetEditCtrl().SetSel(oldSel/*0,0*/);
+				GetRichEditCtrl().SetSel(cha);
 				MessageBeep(0);
 				return;
 				}

@@ -393,24 +393,33 @@ void COpenCApp::OnStrumentiOpzioni() {
 	mySheet.AddPage(&myPage1);
 	mySheet.AddPage(&myPage2);
 	if(mySheet.DoModal() == IDOK) {
-		ccName=myPage0.theCC.Left(myPage0.theCC.Find(':'));
-		Opzioni=0;
-		Opzioni |= myPage1.m_Debug ? debugMode : 0;
-		Opzioni |= myPage1.m_SoloPre ? preProcOnly : 0;
-		Opzioni |= myPage1.m_NoMacro ? noMacro : 0;
-		Opzioni |= myPage1.m_SynCheckOnly ? synCheckOnly : 0;
-		Opzioni |= myPage1.m_CheckStack ? checkStack : 0;
-		Opzioni |= myPage1.m_CheckPtr ? checkPtr : 0;
-		Opzioni |= myPage1.m_CharUnsigned ? charUnsigned : 0;
-		Opzioni |= myPage1.m_MultipleStrings ? multipleStrings : 0;
-		Opzioni |= myPage1.m_PascalCalls ? pascalCalls : 0;
-		Opzioni |= myPage1.m_InlineCalls ? inlineCalls : 0;
-		Opzioni |= myPage1.m_OutSource ? outSource : 0;
-		Opzioni |= myPage1.m_OutAsm ? outAsm : 0;
-		Opzioni |= myPage1.m_OutListing ? outListing : 0;
-		Opzioni |= myPage1.m_OttimizzaLoop ? ottimizzaLoop : 0;
-		altreDefine=myPage1.m_AltreDefine;
-		MemoryModel=myPage1.m_MemoryModel;
+		if(myPage0.isInitialized) {
+			ccName=myPage0.theCC.Left(myPage0.theCC.Find(':'));
+			}
+		if(myPage1.isInitialized) {
+			Opzioni=0;
+			Opzioni |= myPage1.m_Debug ? debugMode : 0;
+			Opzioni |= myPage1.m_SoloPre ? preProcOnly : 0;
+			Opzioni |= myPage1.m_NoMacro ? noMacro : 0;
+			Opzioni |= myPage1.m_SynCheckOnly ? synCheckOnly : 0;
+			Opzioni |= myPage1.m_CheckStack ? checkStack : 0;
+			Opzioni |= myPage1.m_CheckPtr ? checkPtr : 0;
+			Opzioni |= myPage1.m_CharUnsigned ? charUnsigned : 0;
+			Opzioni |= myPage1.m_MultipleStrings ? multipleStrings : 0;
+			Opzioni |= myPage1.m_PascalCalls ? pascalCalls : 0;
+			Opzioni |= myPage1.m_InlineCalls ? inlineCalls : 0;
+			Opzioni |= myPage1.m_OutSource ? outSource : 0;
+			Opzioni |= myPage1.m_OutAsm ? outAsm : 0;
+			Opzioni |= myPage1.m_OutListing ? outListing : 0;
+			Opzioni |= myPage1.m_OttimizzaLoop ? ottimizzaLoop : 0;
+			Opzioni |= myPage1.m_OttimizzaVelocita ? ottimizzaSpeed : 0;
+			Opzioni |= myPage1.m_OttimizzaDimensione ? ottimizzaSize : 0;
+			Opzioni |= myPage1.m_OttimizzaCostanti ? ottimizzaConst : 0;
+			altreDefine=myPage1.m_AltreDefine;
+			MemoryModel=myPage1.m_MemoryModel;
+			}
+		if(myPage2.isInitialized) {
+			}
 		}
 	}
 
@@ -481,7 +490,7 @@ void CWinAppEx::OnClosingMainFrame() {
 	if(m_bLoadWindowPlacement) {
 		if(m_pMainWnd) {
 			m_pMainWnd->GetWindowRect(&r);
-			StoreWindowPlacement(r,0,m_pMainWnd->IsIconic());
+			StoreWindowPlacement(r,0,m_pMainWnd->IsIconic() || m_pMainWnd->IsZoomed());
 			}
 		}
 	}

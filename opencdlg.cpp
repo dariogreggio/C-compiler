@@ -125,6 +125,8 @@ BOOL COpzioniCompilPropPage1::OnInitDialog() {
 		FindClose(hFile);
 		}
 	m_CCcombo.SelectString(0,theApp.ccName);
+
+	isInitialized=TRUE;
 	UpdateData(FALSE);
 	
 	return TRUE;  // return TRUE unless you set the focus to a control
@@ -167,7 +169,10 @@ COpzioniCompilPropPage2::COpzioniCompilPropPage2() : CPropertyPage(COpzioniCompi
 	m_Debug = FALSE;
 	m_AltreDefine = _T("");
 	m_MemoryModel = -1;
-	m_AbsRel = FALSE;
+	m_OttimizzaCostanti = FALSE;
+	m_OttimizzaDimensione = FALSE;
+	m_OttimizzaVelocita = FALSE;
+	m_AbsRel = -1;
 	//}}AFX_DATA_INIT
 }
 
@@ -196,7 +201,10 @@ void COpzioniCompilPropPage2::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT1, m_AltreDefine);
 	DDV_MaxChars(pDX, m_AltreDefine, 200);
 	DDX_CBIndex(pDX, IDC_COMBO2, m_MemoryModel);
-	DDX_Check(pDX, IDC_CHECK15, m_AbsRel);
+	DDX_Check(pDX, IDC_CHECK17, m_OttimizzaCostanti);
+	DDX_Check(pDX, IDC_CHECK16, m_OttimizzaDimensione);
+	DDX_Check(pDX, IDC_CHECK15, m_OttimizzaVelocita);
+	DDX_Radio(pDX, IDC_RADIO1, m_AbsRel);
 	//}}AFX_DATA_MAP
 }
 
@@ -227,9 +235,14 @@ BOOL COpzioniCompilPropPage2::OnInitDialog() {
 	m_OutAsm=theApp.Opzioni & COpenCApp::outAsm ? 1 : 0;
 	m_OutListing=theApp.Opzioni & COpenCApp::outListing ? 1 : 0;
 	m_OttimizzaLoop=theApp.Opzioni & COpenCApp::ottimizzaLoop ? 1 : 0;
+	m_OttimizzaVelocita=theApp.Opzioni & COpenCApp::ottimizzaSpeed ? 1 : 0;
+	m_OttimizzaDimensione=theApp.Opzioni & COpenCApp::ottimizzaSize ? 1 : 0;
+	m_OttimizzaCostanti=theApp.Opzioni & COpenCApp::ottimizzaConst ? 1 : 0;
 	m_AltreDefine=theApp.altreDefine;
 
 	m_MemoryModel=theApp.MemoryModel;
+
+	isInitialized=TRUE;
 	UpdateData(FALSE);
 
 	return TRUE;  // return TRUE unless you set the focus to a control
@@ -299,3 +312,16 @@ END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // COpzioniCompilPropPage3 message handlers
+
+BOOL COpzioniCompilPropPage3::OnInitDialog() {
+
+	CPropertyPage::OnInitDialog();
+
+	isInitialized=TRUE;
+	UpdateData(FALSE);
+
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+	}
+
+

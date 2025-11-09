@@ -1,9 +1,6 @@
 // OpenCEditView.h : interface of the COpenCEditView class
 //
 /////////////////////////////////////////////////////////////////////////////
-//#include <afxrich.h>
-//troppo incasinato... per ora faccio cosi': (v. anche Doc)
-#define CRichEditView CEditView
 
 class COpenCView : public CRichEditView {
 protected: // create from serialization only
@@ -12,11 +9,22 @@ protected: // create from serialization only
 
 // Attributes
 public:
+	UINT_PTR m_uTimerID;
+	BOOL m_bDelayUpdateItems;
+
 	COpenCDoc* GetDocument();
+	BOOL IsModified() { return GetRichEditCtrl().GetModify(); }
+	static DWORD CALLBACK MyStreamInCallback(DWORD , LPBYTE , LONG , LONG *);
+	static DWORD CALLBACK MyStreamOutCallback(DWORD , LPBYTE , LONG , LONG *);
+	long StreamIn(EDITSTREAM);
+	long StreamOut(EDITSTREAM);
 
 // Operations
 public:
 	BOOL GetWindowPos(RECT *);
+	uint32_t CharFromPos(POINT);
+	BOOL SetTabStops(const int& cxEachStop);
+	uint32_t GetLineCount();
 
 // Overrides
 	// ClassWizard generated virtual function overrides

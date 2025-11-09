@@ -4,7 +4,12 @@
 
 //#include <afxrich.h>
 //troppo incasinato... per ora faccio cosi': (v. anche View)
-#define CRichEditDoc CDocument
+//#define CRichEditDoc CDocument
+
+// non va più IsModified!!
+
+class COpenCDoc;
+class COpenCView;
 
 class CExRichDocument : public CRichEditDoc {
 public:
@@ -26,6 +31,40 @@ public:
 	};
 
 
+class COpenCCntrItem : public CRichEditCntrItem {
+	DECLARE_SERIAL(COpenCCntrItem)
+
+// Constructors
+public:
+	COpenCCntrItem(REOBJECT* preo = NULL, COpenCDoc* pContainer = NULL);
+		// Note: pContainer is allowed to be NULL to enable IMPLEMENT_SERIALIZE.
+		//  IMPLEMENT_SERIALIZE requires the class have a constructor with
+		//  zero arguments.  Normally, OLE items are constructed with a
+		//  non-NULL document pointer.
+
+// Attributes
+public:
+	COpenCDoc* GetDocument()
+		{ return (COpenCDoc*)COleClientItem::GetDocument(); }
+	COpenCView* GetActiveView()
+		{ return (COpenCView*)COleClientItem::GetActiveView(); }
+
+	// ClassWizard generated virtual function overrides
+	//{{AFX_VIRTUAL(COpenCCntrItem)
+	public:
+	protected:
+	//}}AFX_VIRTUAL
+
+// Implementation
+public:
+#ifdef _DEBUG
+	virtual void AssertValid() const;
+	virtual void Dump(CDumpContext& dc) const;
+#endif
+};
+
+/////////////////////////////////////////////////////////////////////////////
+
 class COpenCDoc : public CExRichDocument {
 public:
 protected: // create from serialization only
@@ -37,8 +76,11 @@ public:
 	char myPrfSection[128];
 
 protected:
+	uint32_t m_nDocLines;
 
 // Overrides
+	virtual CRichEditCntrItem* CreateClientItem(REOBJECT* preo) const;
+	virtual void OnDeactivateUI(BOOL bUndoable);
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(COpenCDoc)
 	public:
@@ -52,6 +94,7 @@ protected:
 // Implementation
 public:
 	virtual ~COpenCDoc();
+  UINT GetDocumentLength() { return m_nDocLines; }		// cmq non viene usata... v. skypic
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;

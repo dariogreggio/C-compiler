@@ -43,6 +43,7 @@ COpenCDoc::~COpenCDoc() {
 	}
 
 BOOL COpenCDoc::OnNewDocument() {
+
 	if(!CExRichDocument::OnNewDocument())
 		return FALSE;
 
@@ -100,19 +101,55 @@ void COpenCDoc::OnCloseDocument() {
 	wsprintf(myBuf,"%d,%d,%d,%d",rc.left,rc.top,rc.right,rc.bottom);
 	theApp. /*prStore->*/ WritePrivateProfileString(myPrfSection,S1,myBuf);
 
-	CDocument::OnCloseDocument();
+//	SaveState(m_nDocType);
+
+	CRichEditDoc::OnCloseDocument();
+	}
+
+CRichEditCntrItem* COpenCDoc::CreateClientItem(REOBJECT* preo) const {
+	// cast away constness of this
+	return new COpenCCntrItem(preo, (COpenCDoc*)this);
+	}
+
+void COpenCDoc::OnDeactivateUI(BOOL bUndoable) {
+	COpenCView *w=(COpenCView *)getView();
+
+	if(w->m_bDelayUpdateItems)
+		UpdateAllItems(NULL);
+/*	SaveState(m_nDocType);			boh, v. wordpad nel caso
+	CRichEditDoc::OnDeactivateUI(bUndoable);
+	COIPF* pFrame = (COIPF*)m_pInPlaceFrame;
+	if (pFrame)	{
+		if (pFrame->GetMainFrame())
+			ForceDelayed(pFrame->GetMainFrame());
+		if (pFrame->GetDocFrame())
+			ForceDelayed(pFrame->GetDocFrame());
+		}*/
 	}
 
 /////////////////////////////////////////////////////////////////////////////
 // COpenCDoc serialization
 
 void COpenCDoc::Serialize(CArchive& ar) {
+	EDITSTREAM es;
 
 	if(ar.IsStoring())	{
-		((CEditView*)m_viewList.GetHead())->SerializeRaw(ar);  //da MultiPad...
+		es.dwCookie = (DWORD)ar.GetFile();
+//		es.pfnCallback = COpenCView::MyStreamOutCallback;
+		((COpenCView*)m_viewList.GetHead())->StreamOut(es);
+
+//		((CRichEditView*)m_viewList.GetHead())->Serialize(ar);  //da MultiPad...
+
 		}
 	else {
-		((CEditView*)m_viewList.GetHead())->SerializeRaw(ar);  //da MultiPad...
+//		CFile cFile(ar.stream,CFile::read);
+
+		es.dwCookie = (DWORD)ar.GetFile();
+//		es.pfnCallback = COpenCView::MyStreamInCallback;
+		((COpenCView*)m_viewList.GetHead())->StreamIn(es);
+
+//		((CRichEditView*)m_viewList.GetHead())->Serialize(ar);  //da MultiPad...
+		m_nDocLines=((COpenCView*)m_viewList.GetHead())->GetLineCount();		// FINIRE
 		}
 	}
 
@@ -145,7 +182,7 @@ void COpenCDoc::OnCompilaFile() {
 	typedef DWORD (__stdcall *ccFunc)(CWnd *,int,char **);		// "stdcall" serve proprio!!
 	ccFunc f;
 
-	if(IsModified())
+	if(((COpenCView*)m_viewList.GetHead())->IsModified() /*IsModified()*/)
 		OnSaveDocument(GetPathName());	
 	ts=GetPathName();
 	args[0]="openc.exe";		// per compatibilità...
@@ -191,6 +228,8 @@ void COpenCDoc::OnCompilaFile() {
 		parms+="-Os ";
 	if(theApp.Opzioni & COpenCApp::ottimizzaLoop)
 		parms+="-Ol ";
+	if(theApp.Opzioni & COpenCApp::ottimizzaConst)
+		parms+="-O1 ";
 	// altre ottimizzazioni...
 	if(theApp.Opzioni & COpenCApp::noMacro)
 		parms+="-u ";
@@ -345,3 +384,32 @@ void COpenCDoc::OnEditRepeat() {
 void COpenCDoc::OnUpdateEditRepeat(CCmdUI* pCmdUI) {
 	
 	}
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////
+// CWordPadCntrItem implementation
+
+IMPLEMENT_SERIAL(COpenCCntrItem, CRichEditCntrItem, 0)
+
+COpenCCntrItem::COpenCCntrItem(REOBJECT *preo, COpenCDoc* pContainer)
+	: CRichEditCntrItem(preo, pContainer)
+{
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CWordPadCntrItem diagnostics
+
+#ifdef _DEBUG
+void COpenCCntrItem::AssertValid() const
+{
+	CRichEditCntrItem::AssertValid();
+}
+
+void COpenCCntrItem::Dump(CDumpContext& dc) const
+{
+	CRichEditCntrItem::Dump(dc);
+}
+#endif
+
