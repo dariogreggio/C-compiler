@@ -10,6 +10,7 @@
 struct ERRORE Errs[]={
   1000,1,"unknown internal error - contact Cyberdyne",
   1001,1,"internal error:",
+  1002,1,"unsupported:",
   1004,1,"unexpected EOF",
   1016,1,"#if[n]def expected an identifier",
   1018,1,"unexpected #elif",
@@ -33,6 +34,7 @@ struct ERRORE Errs[]={
   2015,1,"too many chars in costant",
   2017,1,"illegal escape sequence",
   2025,1,"enum/struct/union type redefinition:",
+  2026,1,"type redefinition:",
   2027,1,"use of undefined type",
   2030,1,"struct/union member redefinition:",
   2037,1,"left operand specifies undefined struct/union",
@@ -51,6 +53,7 @@ struct ERRORE Errs[]={
   2052,1,"case expression not integral",
   2054,1," expected",
   2057,1,"expected constant expression",
+  2058,1,"divide by zero",
   2059,1,"syntax error",
   2062,1,"unexpected",/*anche 2132*/
   2064,1,"not a function:",/*2063 anche ok*/
@@ -91,14 +94,16 @@ struct ERRORE Errs[]={
   2371,1,"redefinition (different basic types):",/*anche altri*/
   2599,1,"local functions are not supported",
    3001,1,"interrupt function returning a value",
+   3002,1,"interrupt function with parms",
   4002,1,"ignoring unknown flag",/*Microsoft D4002*/
   4005,1,"macro redefinition",
   4013,3,"function undefined; assuming extern returning int",
-  4035,1,"function no return value",
+  4035,1,"function with no return value",
   4042,1,"bad storage class",
   4047,1,"different levels of indirection",
   4049,1,"indirection to different types",
   4098,1,"void function returning a value",
+  4099,1,"void type invalid",
   4101,3,"unreferenced local variable",
   4102,3,"unreferenced label",
   4127,4,"conditional expression is constant",/*anche 4727*/
@@ -109,7 +114,7 @@ struct ERRORE Errs[]={
   0,0,NULL
   };
 
-char *Ccc::OpCond[16]={		// v. OPERANDO_CONDIZIONALE , ne servono solo 6 (logicamente!
+char *Ccc::OpCond[16]={		// v. OPERANDO_CONDIZIONALE , ne servono solo 6 (logicamente!  NO! direi 10, per unsigned/signed
 #if ARCHI
   "LT","GE","LE","GT","EQ","NE", "LT","GE","LE","GT"
 #elif Z80
@@ -117,7 +122,8 @@ char *Ccc::OpCond[16]={		// v. OPERANDO_CONDIZIONALE , ne servono solo 6 (logica
 #elif I8086
   "b", "ae","be","a", "z", "nz", "l", "ge","le","g"
 #elif MC68000
-  "ls","ge","le","gt","eq","ne", "cc","cs","lt","ge","mi","pl","vc","vs"
+  "lt","ge","le","gt","eq","ne", "cs","cc","ls","hi"		// ahem boh...
+//  "ge","lt","gt","le","eq","ne", "cc","cs","hi","ls"		// OCCHIO le inverto perché gli operandi sono invertiti qua!
 #elif I8051
   "b", "ae","be","a", "z", "nz", "l", "ge","le","g"
 #elif MICROCHIP
@@ -141,22 +147,23 @@ char *Ccc::StrOp[20]={
 #endif  
   };
   
-void Ccc::subObj(FILE *FO,struct OP_DEF *s) {
+void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
   
   if(s->mode & OPDEF_MODE_INDIRETTO)			// b7=1 se indiretto
 #if ARCHI
-    fputc('(',FO);
+    FO->put('(');
 #elif Z80
-    fputc('(',FO);
+    FO->put('(');
 #elif I8086
-    fprintf(FO,"%s [",s->mode & 0x7f ==OPDEF_MODE_REGISTRO16 ? "WORD" : "BYTE");		// FINIRE...
+//    FO->printf("%s [",s->mode & 0x7f == OPDEF_MODE_REGISTRO16 ? "WORD" : "BYTE");		// FINIRE...
+    FO->put('[');
 #elif MC68000
 // dopo!    
-		fprintf(FO,"");		// vuole la printf cmq... boh
+		FO->printf("");		// vuole la printf cmq... boh
 #elif MICROCHIP
 		// credo che gli "indiretti" qua non siano mai usati, per ora. si potrebbe convertire in doppia sequenza MOVFW / PLUSW0!
 		if(CPUEXTENDEDMODE)
-	    fputc('[',FO);
+	    FO->put('[');
 		else 
 			;
 #endif
@@ -164,107 +171,139 @@ void Ccc::subObj(FILE *FO,struct OP_DEF *s) {
     case OPDEF_MODE_NULLA:				//
 			break;
     case OPDEF_MODE_REGISTRO_LOW8:				// parte low di registro 16bit
+#if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
+#else
+			if(s->s.n<0 || s->s.n>7) {
+#endif
 				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************666",0);
 				PROCError(1001,"bad register number");
 				return;
 				}
-      fputc(*((*Regs)[s->s.n]+1),FO);
+#if I8086
+      FO->put(*((*Regs)[s->s.n]));
+      FO->put('l');
+#else
+      FO->put(*((*Regs)[s->s.n]+1));
+#endif
       break;
     case OPDEF_MODE_REGISTRO_HIGH8:				// parte high di registro 16bit
+#if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************666",0);
+#else
+			if(s->s.n<0 || s->s.n>7) {
+#endif
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************667",0);
 				PROCError(1001,"bad register number");
 				return;
 				}
-      fputc(*(*Regs)[s->s.n],FO);
+#if I8086
+      FO->put(*(*Regs)[s->s.n]);
+      FO->put('h');
+#else
+      FO->put(*(*Regs)[s->s.n]);
+#endif
       break;
 //    case OPDEF_MODE_REGISTRO16:			// registro 16bit 
 //    case OPDEF_MODE_REGISTRO32:			// registro 132it 
-    case OPDEF_MODE_REGISTRO:				// registro 8 o 16bit intero
+    case OPDEF_MODE_REGISTRO:				// registro 8 o 16 o 32bit intero
+#if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************666",0);
+#else
+			if(s->s.n<0 || s->s.n>7) {
+#endif
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************668",0);
 				PROCError(1001,"bad register number");
 				return;
 				}
 #if MC68000
 		  if(s->s.n>=8 && (s->mode & OPDEF_MODE_INDIRETTO))      // metto anche ofs se è index reg
-        fprintf(FO,"%d(%s)",s->ofs,(*Regs)[s->s.n]);
+        FO->printf("%d(%s)",s->ofs,(*Regs)[s->s.n]);
 			else
-				fputs((*Regs)[s->s.n],FO);
+				FO->print((*Regs)[s->s.n]);
+#elif Z80
+      FO->print((*Regs)[s->s.n]);
+		  if(s->mode & OPDEF_MODE_INDIRETTO)      // metto anche ofs se è index reg  ??? qua
+        FO->printf("%+d",s->ofs);
 #else
-      fputs((*Regs)[s->s.n],FO);
+      FO->print((*Regs)[s->s.n]);
 		  if(s->s.n>=8 && (s->mode & OPDEF_MODE_INDIRETTO))      // metto anche ofs se è index reg
-        fprintf(FO,"%+d",s->ofs);
+        FO->printf("%+d",s->ofs);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO8:				// quantità 8bit
 #if MC68000
-      fprintf(FO,"#%d",(int8_t)s->s.n);
+      FO->printf("#%d",(int8_t)s->s.n);
 #else
-      fprintf(FO,"%d",(int8_t)s->s.n);
+      FO->printf("%d",(int8_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO16:				// quantità 16bit
 #if MC68000
-      fprintf(FO,"#%d",(int16_t)s->s.n);
+      FO->printf("#%d",(int16_t)s->s.n);
 #else
-      fprintf(FO,"%d",(int16_t)s->s.n);
+      FO->printf("%d",(int16_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO32:				// quantità 32bit
 #if MC68000
-      fprintf(FO,"#%ld",(int32_t)s->s.n);
+      FO->printf("#%ld",(int32_t)s->s.n);
 #else
-      fprintf(FO,"%ld",(int32_t)s->s.n);
+      FO->printf("%ld",(int32_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_FRAMEPOINTER:
 #if MC68000
 			if(!(s->mode & OPDEF_MODE_INDIRETTO))
 #endif
-				fputs(Regs->FpS,FO);
+				FO->print(Regs->FpS);
 			if(s->mode & OPDEF_MODE_INDIRETTO || s->ofs) {      // metto anche +0 se è ind.
 #if MICROCHIP
 //				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_IMMEDIATO8,s->ofs);
 //			  PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,14); FARE, forse, v. sopra
-        fprintf(FO,"%+d",(int16_t)s->ofs);
+        FO->printf("%+d",(int16_t)s->ofs);
 #elif Z80
-        fprintf(FO,"%+d",(int8_t)s->ofs);
+        FO->printf("%+d",(int8_t)s->ofs);
 #elif I8086
-        fprintf(FO,"%+d",(int16_t)s->ofs);
+        FO->printf("%+d",(int16_t)s->ofs);
 #elif MC68000
-        fprintf(FO,"%d(%s)",(int16_t)s->ofs,Regs->FpS);
+        FO->printf("%d(%s)",(int16_t)s->ofs,Regs->FpS);
 #endif
 				}
       break;
     case OPDEF_MODE_VARIABILE:
+    case OPDEF_MODE_VARIABILE_INDIRETTO:
 #if I8086
-//      fprintf(FO,"%s PTR %s","BYTE",s->s.v->label);
-      fprintf(FO,"%s",s->s.v->label);
+//      FO->printf("%s PTR %s","BYTE",s->s.v->label);
+      FO->printf("%s",s->s.v->label);
 #elif MC68000
-			if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
-	      fprintf(FO,"#%s",s->s.v->label);
-			else
-	      fprintf(FO,"%s",s->s.v->label);
+			if(MemoryModel & 0x80) {
+				FO->printf("%s-%s(%s)",s->s.v->label,"__BaseAbs",Regs->AbsS);
+				}
+			else {
+				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
+					FO->printf("#%s",s->s.v->label);
+				else
+					FO->printf("%s",s->s.v->label);
+				}
 #else
-      fprintf(FO,"%s",s->s.v->label);
+      FO->printf("%s",s->s.v->label);
 #endif  
       if(s->ofs)
-        fprintf(FO,"%+d",s->ofs);
+        FO->printf("%+d",s->ofs);
       break;
     case OPDEF_MODE_COSTANTE:
 #if I8086
-//      fprintf(FO,"%s PTR %s","BYTE",s->s.label);
-      fprintf(FO,"%s",s->s.label);
+//      FO->printf("%s PTR %s","BYTE",s->s.label);
+      FO->printf("%s",s->s.label);
 #elif MC68000
-//      fprintf(FO,"%s %s","BYTE",s->s.v->label);
-      fprintf(FO,"%s",s->s.label);
+//      FO->printf("%s %s","BYTE",s->s.v->label);
+      FO->printf("%s",s->s.label);
 #else
-      fprintf(FO,"%s",s->s.label);
+      FO->printf("%s",s->s.label);
 #endif  
       if(s->ofs)
-        fprintf(FO,"%+d",s->ofs);
+        FO->printf("%+d",s->ofs);
       break;
     case OPDEF_MODE_STACKPOINTER:
     case OPDEF_MODE_STACKPOINTER_INDIRETTO:
@@ -272,52 +311,52 @@ void Ccc::subObj(FILE *FO,struct OP_DEF *s) {
 #if MC68000
 				switch((int8_t)s->s.v) {
 					case 0:
-						fprintf(FO,"(%s)",Regs->SpS);
+						FO->printf("(%s)",Regs->SpS);
 						break;
 					case -1:
-						fprintf(FO,"-(%s)",Regs->SpS);
+						FO->printf("-(%s)",Regs->SpS);
 						break;
 					case 1:
-						fprintf(FO,"(%s)+",Regs->SpS);
+						FO->printf("(%s)+",Regs->SpS);
 						break;
 					}
 #elif I8086
-				fprintf(FO,"%s",Regs->SpS);
+				FO->printf("%s",Regs->SpS);
 
 #else
-				fprintf(FO,"%s",Regs->SpS);
+				FO->printf("%s",Regs->SpS);
 #endif
 				}
 			else
-				fputs(Regs->SpS,FO);
+				FO->print(Regs->SpS);
       break;
     case OPDEF_MODE_CONDIZIONALE:
 #if MC68000
-      fprintf(FO,s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0x7f],FO);
+      FO->printf(s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0x7f],FO);
 #else
-      fputs(OpCond[s->s.n],FO);
+      FO->print(OpCond[s->s.n]);
 #endif
       break;
     }
   if(s->mode & OPDEF_MODE_INDIRETTO)
 #if ARCHI
-    fputc(')',FO);
+    FO->put(')');
 #elif Z80
-    fputc(')',FO);
+    FO->put(')');
 #elif I8086
-    fputc(']',FO);
+    FO->put(']');
 #elif MC68000
-//			fputc(')',FO)
+//			FO->put(')')
 			;
 #elif MICROCHIP
 		if(CPUEXTENDEDMODE)
-			fputc(']',FO);		// forse... finire!
+			FO->put(']');		// forse... finire!
 		else
 			;
 #endif
   }
   
-int Ccc::PROCObj(FILE *FO) {
+int Ccc::PROCObj(COutputFile *FO) {
   struct LINE *TEXT,*t;
   
   TEXT=RootOut;
@@ -325,53 +364,71 @@ int Ccc::PROCObj(FILE *FO) {
 //  myLog->print(0,"istr: %s: %s,%s (%x)\n",TEXT->opcode,TEXT->s1,TEXT->s2,TEXT->type);
     switch(TEXT->type) {  
       case LINE_TYPE_COMMENTO:
-				if(TEXT->s1.mode != OPDEF_MODE_NULLA)
+				if(TEXT->s1.mode != OPDEF_MODE_NULLA) {
 					subObj(FO,&TEXT->s1);
-		    fputc('\n',FO);
+					FO->put('\n');
+					}
         break;
       case LINE_TYPE_LABEL:
 #if ARCHI
-	      fputc('.',FO);
+	      FO->put('.',FO);
 #endif
 		    subObj(FO,&TEXT->s1);
 #if Z80 || I8086 || MC68000 || I8051 || MICROCHIP
-	      fputc(':',FO);
+	      FO->put(':');
 #endif
         break;
       case LINE_TYPE_DATA_DEF:
-        fprintf(FO,"%s\t",TEXT->opcode);
+        FO->printf("%s\t",TEXT->opcode);
 		    subObj(FO,&TEXT->s1);
         break;
       case LINE_TYPE_LABEL_CON_ISTRUZIONE:
 #if ARCHI
-	      fputc('.',FO);
+	      FO->put('.',FO);
 #endif
 		    subObj(FO,&TEXT->s1);
-        fprintf(FO,"\t%s",TEXT->opcode);
+        FO->printf("\t%s",TEXT->opcode);
         break;
 			case LINE_TYPE_JUMP:
 			case LINE_TYPE_JUMPC:
 			case LINE_TYPE_CALL:
 			case LINE_TYPE_ISTRUZIONE:
       default:
-	      fputc('\t',FO); 				  // prima delle istruzioni TAB
-        fprintf(FO,"%s",TEXT->opcode);
+	      FO->put('\t'); 				  // prima delle istruzioni TAB
+        FO->printf("%s",TEXT->opcode);
 		    if(TEXT->s1.mode) {
+#ifdef MC68000
 					if(TEXT->opcode[1] &&			// serve per i Branch "B" o "J" :)
 						!_tcschr(TEXT->opcode,'#'))		// patch per 68000/costanti, ma ok... la lascio
-						fputc('\t',FO);
+#endif
+						FO->put('\t');
+#if I8086
+					if(((TEXT->s1.mode & 0x80) == OPDEF_MODE_INDIRETTO)) {
+						if(((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO_LOW8) || ((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO_HIGH8))
+							FO->print(" BYTE ");		// 
+						else if((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO16)
+							FO->print(" WORD ");		// 
+						}
+#endif
 			    subObj(FO,&TEXT->s1);
 		      }
 		    if(TEXT->s2.mode) {
 #ifdef MC68000
 					if(TEXT->type == LINE_TYPE_JUMPC)
-						fputc('\t',FO);
+						FO->put('\t');
 					else
 #endif
-						fputc(',',FO);
+						FO->put(',');
 #ifdef MC68000
 					if(TEXT->s2.mode == OPDEF_MODE_VARIABILE_INDIRETTO && TipoOut)		// cagate di Easy68k, se no mi esce il cancelletto a dx! - v. anche sopra
 						TEXT->s2.mode=OPDEF_MODE_VARIABILE;
+#elif I8086
+					if(((TEXT->s2.mode & 0x80) == OPDEF_MODE_INDIRETTO)) {
+						if(((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO_LOW8) || ((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO_HIGH8))
+							FO->print(" BYTE ");		// 
+						else if((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO16)
+							FO->print(" WORD ");		// 
+						}
 #endif
 			    subObj(FO,&TEXT->s2);
 			    }  
@@ -379,13 +436,17 @@ int Ccc::PROCObj(FILE *FO) {
 			}
     if(*TEXT->rem) {
       if(TEXT->type) {
-        fputc('\t',FO);
-        fputc('\t',FO);
+        FO->put('\t');
+        FO->put('\t');
         }
-	    fprintf(FO,"; %s",TEXT->rem);
+	    FO->printf("; %s",TEXT->rem);
       }
-//    if(TEXT->type != LINE_TYPE_COMMENTO)		// c'è già nella riga che arriva da OutSource... NO!
-		  fputc('\n',FO);
+    if(TEXT->type == LINE_TYPE_COMMENTO) {		// c'è già nella riga che arriva da OutSource... NO!
+			if(TEXT->rem[_tcslen(TEXT->rem)-1] != '\n')		// in certi casi...
+			  FO->put('\n');
+			}
+		else
+		  FO->put('\n');
     t=TEXT;
     TEXT=TEXT->next;
     if(t!=RootOut)
@@ -394,36 +455,6 @@ int Ccc::PROCObj(FILE *FO) {
 // OSCLI("SETTYPE "+B$+" &FE0")
 
   return 0;
-  }
-
-char *Ccc::FNTrasfNome(char *A) {
-  char *T,B[256];
-  
-  if(ANSI)
-    return A;
-  _tcscpy(B,A);
-  if(ACORN) {
-    T=strchr(B,'.');
-    if(T) { 
-      _tcscpy(A,T+1);
-      _tcscat(A,".");
-      strncat(A,B,T-B-1);
-      return A;
-      }
-    else 
-      return A;
-    }
-  if(GD) {
-    T=strchr(A,'.');
-    if(T) {   
-      *T='_';
-      return A;
-      }
-    else 
-      return A;
-    }      
-                    
-  return A;
   }
 
 int Ccc::PROCError(int Er, const char *a) {
@@ -466,6 +497,7 @@ int Ccc::PROCError(int Er, const char *a) {
 		delete FLst;
 		FLst=NULL;
 		}*/
+	// NON dovremmo uscire al primo errore... forse
 	bExit=1;
 
 	numErrors++;
@@ -512,40 +544,35 @@ int Ccc::PROCV(const char *n) {
   int i;
   char *B;
 	char myBuf[512];
-  CStdioFile FO;
+  COutputFile *FO;
   struct VARS *V;
   struct CONS *C;
   
-  B=FNTrasfNome((char *)n);
-  FO.Open(B,CFile::modeCreate | CFile::modeWrite);
+  B=CSourceFile::FNTrasfNome((char *)n);
+  FO=new COutputFile(B);
   if(!FO) 
     PROCError(1069,OUS);
 //  FO=stderr;  
   V=Var;
   while(V) {
-		sprintf(myBuf,"Ogg. %s\t\tTipo %lx\tLabel %s\tSize %d\tdi %s\n",
+		FO->printf("Ogg. %s\t\tTipo %x\tLabel %s\tSize %d\tdi %s\n",
 			V->name,V->type,V->label,V->size,V->func ? V->func->name : "");
-    FO.WriteString(myBuf);
-    sprintf(myBuf,"Blocco attuale: %d, blocco var: %d\n",InBlock,V->block);
-		FO.WriteString(myBuf);
+    FO->printf("Blocco attuale: %d, blocco var: %d\n",InBlock,V->block);
 		if(V->tag) {
-      sprintf(myBuf,"\tFa parte del TAG: %s\n",V->tag->label);
-		  FO.WriteString(myBuf);
+      FO->printf("\tFa parte del TAG: %s\n",V->tag->label);
 			}
 		if(V->hasTag) {
-      sprintf(myBuf,"\tIl suo TAG e': %s\n",V->hasTag->label);
-	    FO.WriteString(myBuf);
+      FO->printf("\tIl suo TAG e': %s\n",V->hasTag->label);
 			}
     V=V->next;
     }
-  FO.WriteString("\n");
+  FO->put('\n');
   C=Con;
   while(C) {
-    sprintf(myBuf,"Cost. %s\t\tLabel %s\n",C->name,C->label);
-    FO.WriteString(myBuf);
+    FO->printf("Cost. %s\t\tLabel %s\n",C->name,C->label);
     C=C->next;
     }
-  FO.Close();
+  delete FO;
   return 0;
   }
 
@@ -555,7 +582,7 @@ int Ccc::PROCT() {
   
   for(t=0; t<MaxTypes; t++) {
     myLog->print(1,"Tipo %s:\t\t%lx\t\tSize: %x\t\tTag: %s\n",
-			Types[t].s,Types[t].type,Types[t].size,Types[t].tag->label);
+			Types[t].s,Types[t].type,Types[t].size,Types[t].tag ? Types[t].tag->label : "");
     }
     
   return 0;
@@ -564,16 +591,16 @@ int Ccc::PROCT() {
 int Ccc::PROCD() {
   struct LINE_DEF *t;
   
-  t=RootDef;
+  t=m_CPre->RootDef;
   while(t) {
-    printf("%s \t\t\tè ",t->s);
+    printf("%s \t\t\tè %s",t->name,t->text);
     t=t->next;
     }
     
   return 0;
   }
   
-int Ccc::PROCVarList(CStdioFile *FO, struct VARS *func) {
+int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
   static int T=1;
   int I,i;
   char *p;
@@ -581,25 +608,22 @@ int Ccc::PROCVarList(CStdioFile *FO, struct VARS *func) {
   struct VARS *V;
   
   if(func) {
-    wsprintf(myBuf,"%s: variabili locali\n",func->name);
-    FO->WriteString(myBuf);
+    FO->printf("%s: variabili locali",func->name);
 		}
   else {
-    FO->WriteString("Variabili globali\n");
+    FO->println("Variabili globali");
 		}
   V=Var;
   while(V) {
     if(V->func==func) {
 			if(!(T % 60)) {
-				wsprintf(myBuf,"\f%32s%10s%14s%6s%10s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro");
-				FO->WriteString(myBuf);
+				FO->printf("\f%32s%10s%14s%6s%10s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro");
 				}
-			wsprintf(myBuf,"%32s",V->name);
-			FO->WriteString(myBuf);
+			FO->printf("%32s",V->name);
 	//    i=26-strlen(Var[T].name)/2;
 	//    while(i--)
-	//      fputc('.',FO);
-	//    fprintf(FO,"\t");
+	//      FO->put('.',FO);
+	//    FO->printf("\t");
 			switch(V->classe) {
 				case CLASSE_EXTERN:
 					p="extern";
@@ -611,7 +635,7 @@ int Ccc::PROCVarList(CStdioFile *FO, struct VARS *func) {
 					p="static";
 					break;
 				case CLASSE_AUTO:
-					i=*(int *)V->label;
+					i=MAKEPTROFS(V->label);
 					if(i<0)
 						p="auto";
 					else 
@@ -621,9 +645,8 @@ int Ccc::PROCVarList(CStdioFile *FO, struct VARS *func) {
 					p="register";
 					break;
 				}
-			wsprintf(myBuf,"%10s",p);
-			FO->WriteString(myBuf);
-	//	  fprintf(FO,"\t");
+			FO->printf("%10s",p);
+	//	  FO->printf("\t");
 			if(V->type & VARTYPE_ARRAY) 
 				p="array";
 			else if(V->type & VARTYPE_IS_POINTER) 
@@ -667,50 +690,47 @@ int Ccc::PROCVarList(CStdioFile *FO, struct VARS *func) {
 						}
 					}
 				}
-			wsprintf(myBuf,"%14s",p);
-			FO->WriteString(myBuf);
-	//	  fprintf(FO,"\t");
+			FO->printf("%14s",p);
+	//	  FO->printf("\t");
 			if(V->type & VARTYPE_FUNC)
 				p="***";
 			else {
 				p=myBuf;
 				if(V->type & VARTYPE_ARRAY)
-					sprintf(myBuf,"%d",V->dim*V->size);
+					sprintf(myBuf,"%d",FNGetArraySize(V));
 				else {
 					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION))
 						sprintf(myBuf,"%d",V->size);
 					else {
 						if(V->type & VARTYPE_IS_POINTER)
-							sprintf(myBuf,"%d",PTR_SIZE);
+							sprintf(myBuf,"%d",getPtrSize(V->type));
 						else
 							sprintf(myBuf,"%d",V->size);
 						}
 					}
 				}
-			wsprintf(myBuf,"%5s",p);
-			FO->WriteString(myBuf);
+			FO->printf("%5s",p);
 			if(V->classe==CLASSE_AUTO) {
 				p=myBuf;
-				I=*(int *)V->label;
+				I=MAKEPTROFS(V->label);
 				sprintf(myBuf,"%d",I);
 				}
 			else {
 				p="***";
   			}
-			wsprintf(myBuf,"%5s",p);
-			FO->WriteString(myBuf);
-			if(V->classe==4) {
+			FO->printf("%5s",p);
+			if(V->classe==CLASSE_REGISTER) {
 				_tcscpy(myBuf,(*Regs)[V]);
 				}
 			else
 				*myBuf=0;
-			FO->WriteString(myBuf);
-			FO->WriteString("\n");
+			FO->println(myBuf);
 			T++;
 			}
     V=V->next;
     }
-	FO->WriteString("\n");
+	FO->put('\n');
+	FO->put('\n');
   
   return 0;
   }

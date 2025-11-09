@@ -5,9 +5,8 @@
 #include <string.h>
 #include <ctype.h>
 
-extern int Optimize;
 
-int Ccc::OPComp(struct OP_DEF far *a, struct OP_DEF far *b) {
+int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
   
   if(a->mode != b->mode || a->ofs != b->ofs)
     return 1;
@@ -47,7 +46,7 @@ int Ccc::OPComp(struct OP_DEF far *a, struct OP_DEF far *b) {
   return 0;
   }
   
-struct LINE far *Ccc::GetNextNoRem(struct LINE far *r) {
+struct LINE *Ccc::GetNextNoRem(struct LINE *r) {
   
   while(r) {
     if(r->type)
@@ -57,19 +56,19 @@ struct LINE far *Ccc::GetNextNoRem(struct LINE far *r) {
   return 0;  
   }
   
-int Ccc::Ottimizza(struct LINE far *r) {
+int Ccc::Ottimizza(struct LINE *r) {
   register int j,i1,j1;
   register enum OPDEF_MODE i;
   int k;
   struct OP_DEF R[5][4];
-  struct LINE far *r1,far *r2,far *r3;
+  struct LINE *r1,*r2,*r3;
   char myBuf[128];
 
   if(Optimize) {
     r1=r;
     while(r) {
-      if(Optimize & 2) {           // common expr
-        if(r->type==1 || r->type==2 || r->type==3 || r->type==9) {   // una label o call distrugge tutto
+      if(Optimize & OPTIMIZE_SUBEXPR) {           // common expr
+        if(r->type==LINE_TYPE_LABEL || r->type==LINE_TYPE_DATA_DEF || r->type==LINE_TYPE_LABEL_CON_ISTRUZIONE || r->type==LINE_TYPE_JUMPC) {   // una label o call distrugge tutto
 delAll:       
 			    for(i1=0; i1<5; i1++)
 			      for(j=0; j<4; j++)
@@ -152,15 +151,15 @@ foundReg:
 					  
           }
         }
-      if(Optimize & 1) {           // salti
-        if(r->type == 8) {
-          if(r->s1.mode == 10)
+      if(Optimize & OPTIMIZE_JUMP) {           // salti
+        if(r->type == LINE_TYPE_JUMP) {
+          if(r->s1.mode == OPDEF_MODE_COSTANTE)
             _tcscpy(myBuf,r->s1.s.label);
-          else if(r->s1.mode == 9)
+          else if(r->s1.mode == OPDEF_MODE_VARIABILE)
             _tcscpy(myBuf,r->s1.s.v->label);
-          else if(r->s2.mode == 10)
+          else if(r->s2.mode == OPDEF_MODE_COSTANTE)
             _tcscpy(myBuf,r->s2.s.label);
-          else if(r->s2.mode == 9)
+          else if(r->s2.mode == OPDEF_MODE_VARIABILE)
             _tcscpy(myBuf,r->s2.s.v->label);
           else {
             printf("ecco: %d, %d\n",r->s1.mode,r->s2.mode);
@@ -189,7 +188,7 @@ foundReg:
 	                    r->s2=r2->s1;
 	                  }
 	                else {
-	                  if(r->s1.mode != 16)
+	                  if(r->s1.mode != OPDEF_MODE_CONDIZIONALE)
 	                    r->s1=r2->s2;
 	                  else  
 	                    r->s2=r2->s2;

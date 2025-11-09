@@ -97,17 +97,17 @@ int Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_DE
   return 0;
   }
  
-int Ccc::PROCOut1(FILE *f,const char *A, const char *A1, const char *A2, const char *A3) {
+int Ccc::PROCOut1(COutputFile *f,const char *A, const char *A1, const char *A2, const char *A3) {
   char myBuf[256];
   
-  fprintf(f,"%s",A);  
+  f->printf("%s",A);  
   if(A1)
-    fprintf(f,"%s",A1);  
+    f->printf("%s",A1);  
   if(A2)
-    fprintf(f,"%s",A2);  
+    f->printf("%s",A2);  
   if(A3)
-    fprintf(f,"%s",A3);  
-  fputc('\n',f);  
+    f->printf("%s",A3);  
+  f->put('\n');
   
   *myBuf=0;
   if(debug>2)
@@ -116,7 +116,8 @@ int Ccc::PROCOut1(FILE *f,const char *A, const char *A1, const char *A2, const c
   return 0;
   }
                          
-void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1, int o1, enum OPDEF_MODE m2, union SUB_OP_DEF *s2, int o2, const char *R) {
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1, int o1, 
+									 enum OPDEF_MODE m2, union SUB_OP_DEF *s2, int o2, const char *R) {
   struct OP_DEF a,b;
   
   a.mode=m1;
@@ -128,7 +129,10 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 			;
 	  a.ofs=o1;
     if(m2) {
-		  b.s=*s2;
+			if(s2)				// patch xche' a 16 bit funzionava cosi' e qui no!
+				b.s=*s2;
+			else
+				;
 		  b.ofs=o2;
 		  }
 	  }
@@ -149,7 +153,8 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
   PROCOut(n,A,&a,0,R);
   }
       
-void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, enum OPDEF_MODE m2, union SUB_OP_DEF *s2, int o2) {
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, enum OPDEF_MODE m2, 
+									 union SUB_OP_DEF *s2, int o2) {
   struct OP_DEF a,b;
 // usata soprattutto per condizionali    
   a.mode=m1;
@@ -168,7 +173,8 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
   PROCOut(n,A,&a,&b,NULL);
   }
       
-void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1, int o1, enum OPDEF_MODE m2, int s2) {
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1, int o1, 
+									 enum OPDEF_MODE m2, int s2) {
   struct OP_DEF a,b;
     
   a.mode=m1;
@@ -212,6 +218,16 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1) 
 	  a.ofs=0;
 	  }
   PROCOut(n,A,&a,0,NULL);
+  }
+      
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2) {
+
+  PROCOut(n,A,od1,od2,NULL);
+  }
+      
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1) {
+
+  PROCOut(n,A,od1,NULL,NULL);
   }
       
 int Ccc::PROCOutLab(const char *A,const char *A1,const char *A2) {

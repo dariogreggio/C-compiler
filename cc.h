@@ -39,15 +39,15 @@
 #if ARCHI
 #define __VER__ MAKEWORD(0,1)
 #elif Z80
-#define __VER__ MAKEWORD(4,2)
+#define __VER__ MAKEWORD(5,2)
 #elif I8086
-#define __VER__ MAKEWORD(1,2)
+#define __VER__ MAKEWORD(2,2)
 #elif I8051
-#define __VER__ MAKEWORD(0,1)
+#define __VER__ MAKEWORD(1,0)
 #elif MICROCHIP
-#define __VER__ MAKEWORD(1,1)
+#define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(0,1)
+#define __VER__ MAKEWORD(1,1)
 #endif
 
 enum {
@@ -57,6 +57,8 @@ enum {
 
 
 #define MAX_NAME_LEN 31
+#define MAX_DIM 4
+#define MAX_TIPI 50
 
 struct ERRORE {
   int t,l;
@@ -69,11 +71,16 @@ union SUB_OP_DEF {
   struct VARS *v;
   };
     
+typedef uint32_t O_TYPE;
+typedef uint16_t O_SIZE;
+typedef uint32_t O_DIM[MAX_DIM];		// max 5 dim!
+
 enum OPDEF_MODE {
 	OPDEF_MODE_NULLA=0,
 	OPDEF_MODE_REGISTRO=3,
 	OPDEF_MODE_REGISTRO16=3,		// FINIRE (per i8086/68000)
 	OPDEF_MODE_REGISTRO32=3,		// FINIRE (per i8086/68000)
+	OPDEF_MODE_REGISTRO8=3,			// ev.
 	OPDEF_MODE_REGISTRO_LOW8=1,
 	OPDEF_MODE_REGISTRO_HIGH8=2,
 	OPDEF_MODE_IMMEDIATO=4,
@@ -86,11 +93,11 @@ enum OPDEF_MODE {
 	OPDEF_MODE_STACKPOINTER=11,
 	OPDEF_MODE_CONDIZIONALE=16,
 	OPDEF_MODE_INDIRETTO=0x80,
-	OPDEF_MODE_REGISTRO_INDIRETTO=0x83,
+	OPDEF_MODE_REGISTRO_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_REGISTRO),
 	OPDEF_MODE_IMMEDIATO_INDIRETTO=0x86,
-	OPDEF_MODE_FRAMEPOINTER_INDIRETTO=0x88,
-	OPDEF_MODE_VARIABILE_INDIRETTO=0x89,
-	OPDEF_MODE_STACKPOINTER_INDIRETTO=0x8b
+	OPDEF_MODE_FRAMEPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_FRAMEPOINTER),
+	OPDEF_MODE_VARIABILE_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_VARIABILE),
+	OPDEF_MODE_STACKPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_STACKPOINTER),
 	};
 
 struct OP_DEF {
@@ -110,6 +117,10 @@ enum LINE_TYPE {
 	LINE_TYPE_JUMPC,
 	LINE_TYPE_CALL,
 	LINE_TYPE_ISTRUZIONE=16,
+	LINE_TYPE_READ=16,			// usare, per differenziare...
+	LINE_TYPE_WRITE=16,
+	LINE_TYPE_PUSH=16,
+	LINE_TYPE_POP=16,
 	};
 
 struct LINE {
@@ -119,46 +130,32 @@ struct LINE {
   char opcode[16];
   struct OP_DEF s1;
   struct OP_DEF s2;
-  char rem[64];
+  char rem[128];
   };
   
 struct LINE_DEF {
+	uint16_t used;
+	struct VARS *vars;
   struct LINE_DEF *next;
   struct LINE_DEF *prev;
-  char s[1];
+  char name[MAX_NAME_LEN+1];
+  char *text;
   };
-  
+
+enum {
+	OPTIMIZE_JUMP=1,
+	OPTIMIZE_SUBEXPR=2,
+	OPTIMIZE_INLINECALLS=4,
+	OPTIMIZE_CONST=16,
+	OPTIMIZE_SIZE=0x100,
+	OPTIMIZE_SPEED=0x200,
+	};
+
 union STR_LONG {
   char s[128];
   long l;
   };
 
-typedef int32_t NUM_TYPE;
-  
-struct SEGMENTED_VALUE {
-	NUM_TYPE v;
-	int16_t seg;
-	bool valid;
-	};
-
-struct OPERAND {
-	struct SEGMENTED_VALUE l;
-//	long l;
-	uint16_t S;
-// verificare...	enum ARITM_ELEM T;
-	int T;
-	struct VARS *var;
-//	enum VQ_ELEM V;
-	int8_t V;
-	int8_t op;
-	int8_t Ind;
-#if GD24032
-	int8_t preOp,postOp;
-	int8_t addr64;
-	int8_t reg2reg;
-#endif
-	};
-  
 // VARTYPE% BITS:
 // 0-3 = PTR,
 // 7=corpo FUNZ o VAR, 8=FUNZ., 9=FUNZ usata,
@@ -174,53 +171,63 @@ enum VAR_CLASSES {			// v. anche class Ccc
 	CLASSE_STATIC=2,
 	CLASSE_AUTO=3,
 	CLASSE_REGISTER=4,
-	CLASSE_INTERRUPT=0x10,
+
+	CLASSE_INTERRUPT=0x10,			// nello stesso ordine, shiftati di 4 rispetto ai MODIFIERS
 	CLASSE_PASCAL=0x20,
-	CLASSE_INLINE=0x40
+	// CLASSE_C
+	CLASSE_INLINE=0x80,
+	CLASSE_FASTCALL=0x100,
 	};
 enum VAR_MODIFIERS {		// v. anche class Ccc
 // 1 interrupt, 2 pascal, 4 C
 	FUNC_MODIF_INTERRUPT=1,
 	FUNC_MODIF_PASCAL=2,
 	FUNC_MODIF_C=4,
-	FUNC_MODIF_INLINE=8
+	FUNC_MODIF_INLINE=8,
+	FUNC_MODIF_FASTCALL=16
 	};
 enum VAR_TYPES {		// v. anche class Ccc
 // 0= label, 7=public defined, 8=FUNZ., 9=public, 10=extern, 11=STRUCT
+	VARTYPE_NOTYPE=-1,
 	VARTYPE_PLAIN_INT=0,
 	VARTYPE_POINTER=1,			//0..15
 	VARTYPE_2POINTER=2,			//**
 	VARTYPE_IS_POINTER=0xf,			//0..15
-	VARTYPE_NOT_A_POINTER=0xfffffff0L,			// mask
+	VARTYPE_NOT_A_POINTER=(uint32_t)(~(VARTYPE_IS_POINTER)),			// mask
 	VARTYPE_FUNC_BODY=0x80,
 	VARTYPE_FUNC=0x100,
 	VARTYPE_FUNC_USED=0x200,
 	VARTYPE_ARRAY=0x400,
 	VARTYPE_STRUCT=0x800,
 	VARTYPE_UNION=0x1000,
-	VARTYPE_FLOAT=0x2000,
+	VARTYPE_FLOAT=0x2000,		// per double metto size=8 opp. 4
 	VARTYPE_BITFIELD=0x4000,
 	VARTYPE_ENUM=0x10000,
-	VARTYPE_UNSIGNED=0x80000000L
+	VARTYPE_FAR=0x10000000L,
+	VARTYPE_SIGNED=0x00000000L,
+	VARTYPE_UNSIGNED=0x80000000L,
 #if MICROCHIP
-	,VARTYPE_ROM=0x40000000
+	VARTYPE_ROM=0x20000000,
+// in alcuni sarebbero la stessa cosa	VARTYPE_CONST=0x40000000
+#else
 #endif
+	VARTYPE_CONST=0x40000000
 	};
 struct VARS {
   char label[MAX_NAME_LEN+1];
   char name[MAX_NAME_LEN+1];
-  char classe;
+  enum VAR_CLASSES classe;
 // 0 extern, 1 global, 2 static, 3 auto, 4 register; 
-  char modif;
-// 1 interrupt, 2 pascal, 4 C
-  long type;
-  int  size;
-  char block;
+  uint8_t modif;
+// 1 interrupt, 2 pascal, 4 C ecc
+  O_TYPE type;
+  O_SIZE size;
+  uint8_t block;
   struct VARS *func;
   char *parm;
   struct TAGS *tag;         // se <>0, la var. è un membro della struct tag
   struct TAGS *hasTag;      // questo indica il tag di questa struct
-  int  dim;
+  O_DIM dim;							// dim TOTALE dell'array o aggr
   struct VARS *next;
   };
 
@@ -236,6 +243,20 @@ struct TAGS {
   struct TAGS *next;
   };  
    
+struct OPERAND {
+//	enum VQ_ELEM V;
+	int8_t Q;
+	O_SIZE size;
+// verificare...	enum ARITM_ELEM T;
+	O_TYPE type;
+	struct VARS *var;
+	union STR_LONG *cost;
+	struct TAGS *tag; 
+	uint8_t tipo_D0;			// flag usato per le operazioni indirette su puntatori
+	O_DIM dim;
+	uint8_t flag;					// usato ad es. per calcolare pos. array
+	};
+  
 struct OPERANDO {
   char *s;
   /*enum OPERANDI*/ int p;
@@ -243,10 +264,10 @@ struct OPERANDO {
 
 struct TIPI {
   char s[MAX_NAME_LEN+1];
-  int size;
-  long type;
+  O_SIZE size;
+  O_TYPE type;
   struct TAGS *tag;
-  int dim;
+  O_DIM dim;
   };
            
 struct BLOCK_PTR {
@@ -305,14 +326,14 @@ class CLogFile;
 		void RemoveLeft(int n) { CStringEx::operator=(Mid(n)); }
 		void RemoveRight(int n) { CStringEx::operator=(Mid(1,GetLength()-n)); }		// era un'idea per fare LEFT$ di tot char, ma Trimright c'è già anche se diversa...
 		void Trim() { CString::TrimLeft(); CString::TrimRight(); }	
-		static BOOL IsAlpha(char);
-		BOOL IsAlpha(int);
-		static BOOL IsAlnum(char);
-		BOOL IsAlnum(int);
-		static BOOL IsDigit(char);
-		BOOL IsDigit(int);
-		static BOOL IsPrint(char);
-		BOOL IsPrint(int);
+		static bool IsAlpha(char);
+		bool IsAlpha(int);
+		static bool IsAlnum(char);
+		bool IsAlnum(int);
+		static bool IsDigit(char);
+		bool IsDigit(int);
+		static bool IsPrint(char);
+		bool IsPrint(int);
 		int FindNoCase(CString substr,int start=0);
 		int ReverseFindNoCase(CString substr);
 		WORD GetAsciiLength();
@@ -345,10 +366,58 @@ private:
 
 extern const char *movString,*storString,*jmpString,*jmpCondString,*callString,*returnString,*incString,*decString,*pushString,*popString;
 
-#define MAX_DEFS 10
+class CSourceFile : public CFile {
+public:
+	CSourceFile(LPCTSTR);
+  static char *FNTrasfNome(char *);
+	static char *AddExt(char *n, const char *x);
+	int get();
+	char *FNLO(char *);
+	char *FNLA(char *);
+	bool Eof() { return GetPosition() >= GetLength(); }
+	void unget(char);
+// fare?? v. hex ecc	int scanf(const TCHAR *s,...);
+	int getInt();
+	int getHex();
+	int getOct();
+	void SavePosition();
+	void RestorePosition();
+	void RestorePosition(uint32_t);
+	uint32_t getLineFromPosition(long pos=-1);
+
+public:
+	uint32_t savedPosition[10];
+	uint16_t lineno;			// 65535 :)
+
+private:
+	uint16_t savedLineno;
+	uint8_t savedPositionIdx;
+
+	};
+
+class COutputFile : public CStdioFile {
+public:
+	COutputFile(LPCTSTR s);
+	COutputFile(FILE *f);
+	int printf(const TCHAR *s,...);
+	void print(const TCHAR *s);		// usata per NON espandere i %d ecc, tipo stringhe literal
+//	void println(const TCHAR *s);
+	void println(const TCHAR *s,...);
+	void put(char ch);
+	void write(const TCHAR *);
+	int get();
+	int getTotalLines() { return totLines; }
+
+private:
+	uint32_t totLines;
+
+	};
+
+class CCPreProcessor;
+
 class Ccc {
 public:
-	enum CLASSI {
+/*	enum VAR_CLASSES {
 		CLASSE_EXTERN=0,
 		CLASSE_GLOBAL=1,
 		CLASSE_STATIC=2,
@@ -357,14 +426,15 @@ public:
 		CLASSE_INTERRUPT=0x10,
 		CLASSE_PASCAL=0x20,
 		CLASSE_INLINE=0x40
-		};
+		};*/
 	enum {
 		FUNC_MODIF_INTERRUPT=1,
 		FUNC_MODIF_PASCAL=2,
 		FUNC_MODIF_C=4,
-		FUNC_MODIF_INLINE=8
+		FUNC_MODIF_INLINE=8,
+		FUNC_MODIF_FASTCALL=16
 		};
-	enum {
+/*	enum {
 		VARTYPE_PLAIN_INT=0,
 		VARTYPE_POINTER=1,			//0..15
 		VARTYPE_2POINTER=2,			//**
@@ -383,7 +453,7 @@ public:
 #if MICROCHIP
 		,VARTYPE_ROM=0x40000000
 #endif
-		};
+		};*/
 	enum OPERANDO_CONDIZIONALE {
 		CONDIZ_MINORE=0x80,
 		CONDIZ_MAGGIORE_UGUALE=0x81,
@@ -396,14 +466,41 @@ public:
 		CONDIZ_MINORE_UGUALE_UNSIGNED=0x88,
 		CONDIZ_MAGGIORE_UNSIGNED=0x89,
 		};
-	enum {
-		VALUE_IS_COSTANTE=8
+	enum VALUES {
+		VALUE_IS_0=0,					// forse se espressione a dx di =
+		VALUE_IS_ALTRO=1,			// boh... non ho ancora capito bene! forse proprio "altro" ossia espressione! tipo op. ? :
+		VALUE_IS_D0=2,
+		VALUE_IS_VARIABILE=3,
+		VALUE_IS_COSTANTE=8,
+		VALUE_IS_COSTANTEPLUS=8 | 1,
+
+//                V->Q |= 0x20;            // segnala ! condizionale  VERIFICARE! era anche usato per indicare condizione di tipo unsigned...
+//ma è usato anche come "condizione"...		VALUE_CONDITION_UNSIGNED=0x20,				// potrebbe non servire più, 2025 con le nuove condizioni per unsigned, ma è ancora usata in giro!
+		VALUE_HAS_CONDITION=0x40,
+		VALUE_IS_CONDITION=0x80,
+		VALUE_CONDITION_UP=0x0100,			// usata come mask... non so bene perché
+		VALUE_CONDITION_MASK=0x00ff			// e viceversa
 		};
+	enum OPERAND_MODES {
+		MODE_IS_OTHER=-1,
+		MODE_IS_VARIABLE=0,
+		MODE_IS_CONSTANT1=1,
+		MODE_IS_CONSTANT2=2,
+		};
+	enum ARITM_OP {
+		ARITM_IS_EOL=0,
+		ARITM_IS_COSTANTE=1,
+		ARITM_IS_VARIABILE=2,
+		ARITM_IS_OPERANDO=3,
+		ARITM_IS_UNKNOWN=-1,
+		};
+	friend class CCPreProcessor;
 
 protected:
 // Attributes
 	CWnd *myOutput;
 	CLogFile *myLog;
+	CCPreProcessor *m_CPre;
 
 public:
 	Ccc(const CWnd *p);
@@ -413,12 +510,13 @@ public:
 protected:
 	int bExit;
 	char buffer[128];
-  FILE *FPre,*FO1,*FO2,*FO3,*FO4,*FObj,*FIn,*FCod;
-	CStdioFile *FLst;
+  COutputFile *FPre;
+	CSourceFile *FIn;
+	COutputFile *FO1,*FO2,*FO3,*FO4;
+	COutputFile *FObj,*FCod;
+	COutputFile *FLst;
 	int Warning;
   struct LINE *RootOut,*LastOut,*StaticOut,*BSSOut;
-	struct LINE_DEF *RootDef,*LastDef;
-	uint8_t UNDEFD[MAX_DEFS];
 	struct VARS *Var;
 	struct VARS *LVars;   // root, used, last
 	struct VARS *CurrFunc;
@@ -429,13 +527,12 @@ protected:
 	//struct VARS *TAG;           
 	//int SX;
 	uint8_t InBlock; 			// LIVELLO DI BLOCCHI
-	uint8_t IfDefs;
-	int TempSize;
-	int MaxTypes;
+	uint32_t TempSize;
+	uint16_t MaxTypes;
 	int UseLMul,UseFMul,UseIRQ,UseTemp;
 	char *RootIn;
 	uint8_t Brack;				// usati da FNRev
-	int TempProg;				//
+	uint32_t TempProg;				//
 	struct LINE *GlblOut;	//
 
 	char NFS[256],OUS[256];
@@ -447,7 +544,7 @@ protected:
 	char __date__[11];
 	char __time__[11];
 	char TextSegm[64],DataSegm[64]; 
-	int Declaring,FuncCalled,SaveFP,ASM,AutoOff,PP;
+	int Declaring,FuncCalled,SaveFP,ASM,AutoOff;
 	uint8_t debug;
 	uint8_t PreProcOnly;          // PREPROCESSA SOLO SU stdout  -E
 	uint8_t CheckStack;            // INSERISCE LO STACK PROBE    -Gs
@@ -465,9 +562,10 @@ protected:
 	uint8_t NoMacro;              // DISABILITA MACRO PREDEF.    -u
 	uint8_t MultipleString;       // stringhe costanti uguali ripetute o compresse
 	uint8_t StorageDefault;				// storage class di default (finire)
-	int Optimize;
-	static struct TIPI Types[50];
-	static struct OPERANDO Op[46];
+	uint8_t StructPacking;				// packing delle struct
+	uint16_t Optimize;
+	static struct TIPI Types[MAX_TIPI];
+	static struct OPERANDO Op[];
 	uint16_t numErrors,numWarnings;
 
 // Operations
@@ -478,36 +576,36 @@ public:
 	char *AddExt(char *, char *);
 	int PROCBlock();
 	int PROCIsDecl();
-	int PROCDclVar(enum CLASSI, int, int, long, struct TAGS *, int, int);
+	int PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint8_t);
 	int subAsm(char *);
 	int FNIsStmt();
 	char *FNGetLabel(char *,uint8_t);
-	int PROCGenCondBranch(const char *, int, int *, int);
+	int PROCGenCondBranch(const char *, int, int8_t *VQ, O_SIZE );
 	int FNGetCondString(int, int);
-	int PROCAssignCond(int *, long *, int *, char *);
+	int PROCAssignCond(int8_t *VQ, O_TYPE *type, O_SIZE *size, char *);
 	int PROCReturn();
-	long FNGetConst(char *,int);
-	int PROCLoops(char *, char *, char *, struct LINE *);
+	long FNGetConst(char *,bool);
+	int PROCLoops(const char *, const char *, const char *, struct LINE *);
 	int FNRegFree();
 	struct VARS *FNCercaVar(const char *, uint8_t);
-	struct VARS *PROCAllocVar(const char *, long, enum CLASSI, int, int, struct TAGS *, int);
-	int PROCCast(long, uint8_t, long, uint8_t);
+	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE);
 #if MICROCHIP
-	int PROCReadD0(struct VARS *, long, uint8_t, uint8_t, uint8_t lh=0);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
 #else
-	int PROCReadD0(struct VARS *, long, uint8_t, uint8_t);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr);
 #endif
-	int PROCStoreD0(struct VARS *, int, struct VARS *, union STR_LONG *);
-	int PROCGetAdd(int, struct VARS  *, int);
-	int PROCUsaFun(struct VARS *,int,int);
-	struct CONS *FNAllocCost(const char *, uint8_t, long type=0);
+	int PROCStoreD0(struct VARS *, int, struct VARS *, union STR_LONG *, bool isPtr);
+	int PROCGetAdd(int8_t VQ, struct VARS  *, int ofs, bool asPtr);
+	int PROCUsaFun(struct VARS *,bool tosave1,bool tosave2);
+	struct CONS *FNAllocCost(const char *, uint8_t, O_TYPE type=0);
 	int PROCInit();
 	int subOfsD0(struct VARS *, int, int, int);
 	
-	void subEvEx(int, int *, char *,long *, int *, int *, struct VARS * *, union STR_LONG *, struct TAGS * *, int *);
-	int FNEvalExpr(int, char *);
- 	int FNEvalECast(char *, long *, int /*uint8_t*/ *);
-	int FNEvalCond(char *, char *, uint8_t);
+	void subEvEx(uint8_t, int16_t *cond, char *, struct OPERAND *);
+	uint16_t FNEvalExpr(uint8_t, char *);
+ 	int FNEvalECast(char *, O_TYPE *type, O_SIZE *size);
+	int FNEvalCond(char *, const char *, uint16_t cond);
 
 #if Z80 || MICROCHIP
 	void OpA(char *, struct OP_DEF *, int);
@@ -521,86 +619,93 @@ public:
 #endif  
 
 #if ARCHI
-	void subSpezReg(int, struct OP_DEF *);
+	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif Z80
-	void subSpezReg(int, struct OP_DEF *);
+	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif I8086  
-	void subSpezReg(int, struct OP_DEF *);
+	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif MC68000
-	void subSpezReg(int, struct OP_DEF *);
+	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif MICROCHIP
-	void subSpezReg(int, struct OP_DEF *);
+	void subSpezReg(uint8_t, struct OP_DEF *);
 #endif
 
-  int FNRev(int, int *, char *,long *, int *, int *, struct VARS * *, STR_LONG *, struct TAGS **, int *);
-  char *ConRecEval(char *, int, long *);
+  int FNRev(int8_t Pty,int16_t *cond,char *,struct OPERAND *);
+  char *ConRecEval(char *, uint8_t pty, long *);
   long EVAL(char *);
 
-	int subShift(uint8_t, int, long, uint8_t, long, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
-	int subAdd(int, int, int, struct VARS *, long *, int *, long, int, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,int);
-	int subMul(char, int, int, struct VARS *, long, uint8_t, int, long, uint8_t, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
-	int FNIs1Bit(int);
-	int subAOX(char, int *, int, int, struct VARS *, long, int, long, int, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
-	enum OPERANDO_CONDIZIONALE subCMP(const char *, int, int, int, struct VARS *, long, uint8_t, long, uint8_t, 
+	int subShift(uint8_t, int mode, int8_t VQ, struct VARS *, O_TYPE type, O_SIZE size, O_TYPE, union STR_LONG *, 
+		union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
+	int subAdd(bool, int mode, int8_t VQ, struct VARS *, O_TYPE * type1, O_SIZE * size1, int8_t RQ, O_TYPE type2, O_SIZE size2,
+		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
+	int subMul(char, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, O_TYPE type2, O_SIZE size2, 
+		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
+	uint8_t FNIs1Bit(uint32_t);
+	uint8_t FNIsPower2(uint32_t);
+	O_SIZE getPtrSize(O_TYPE t);
+	int subAOX(char, int16_t *cond, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, 
+		O_TYPE type2, O_SIZE size2, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *,
+		struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
+	enum OPERANDO_CONDIZIONALE subCMP(const char *, int code, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, 
+		int RQ, O_TYPE type2, O_SIZE size2, 
 		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
+	int subInc(bool, int16_t *cond, uint8_t T, int8_t VQ, struct VARS *, uint8_t qty, O_TYPE type, O_SIZE size, struct OP_DEF *, 
+		struct OP_DEF *);
 
-	char *FNGetParm(FILE *, char *);
-	char *FNParse(char *, int *, char *);
-	char *FNGrab(FILE *, char *);
-	char *FNGrab1(char *, int *, int *, char *);
-	struct LINE_DEF *FNDefined(const char *);
-	int PROCDefine(const char *, const char *);
-	char *FNGetNextPre(FILE *, int , char *);
-	char *FNPreProcess(FILE *, char *);
-	void bumpIfs(int8_t direction,uint8_t state,uint8_t level);
-	int FNLeggiFile(char *, FILE *, signed char);
-  
-	void subObj(FILE *,struct OP_DEF *);
-	int PROCObj(FILE *);
-  char *FNTrasfNome(char *);
+	void subObj(COutputFile *,struct OP_DEF *);
+	int PROCObj(COutputFile *);
   int PROCError(int, const char *s=NULL);
   int PROCWarn(int, const char *s=NULL);
   int PROCV(const char *);
 	int PROCT();
 	int PROCD();
-	int PROCVarList(CStdioFile *, struct VARS *);
+	int PROCVarList(COutputFile *, struct VARS *);
 
 	char *FNLO(char *);
 	char *FNLA(char *);
 	int FNGetEscape();
 	int FNGetOct(const char *);
-	int PROCCheck(const char *);
-	int PROCCheck(char);
+	bool PROCCheck(const char *);
+	bool PROCCheck(char);
 	long FNGetLine(long,char *);
+	unsigned int xtoi(const char *);
+  BYTE xtob(char );
+  unsigned int btoi(const char *);
+	char *itox(char *,unsigned int);
+	char *itob(char *,unsigned int);
 
 	int OPComp(struct OP_DEF *, struct OP_DEF *);
 	struct LINE *GetNextNoRem(struct LINE *);
 	int Ottimizza(struct LINE *);
+	void CHECKPOINTER();
 
   struct LINE *PROCInserLista(struct LINE *, struct LINE *, struct LINE *);
   struct LINE *PROCDelLista(struct LINE *, struct LINE *, struct LINE *);
 	void swap(struct LINE * *, struct LINE * *);
   int PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
-  int PROCOut1(FILE *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
+  int PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, union SUB_OP_DEF *, int);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, int);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, const char *R=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int s1=0);
+  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *);
+  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *);
   int PROCOutLab(const char *,const char *s1=NULL,const char *s2=NULL);
 
-	int FNGetAritElem(int *, char *, int *, struct VARS * *, long *, int *, union STR_LONG *, int);
-	int PROCGetType(int *, long *, struct TAGS **, int *, long);
+	enum ARITM_OP FNGetAritElem(int8_t *, char *, struct OPERAND *, int8_t);
+	int subGetType(O_TYPE *type, O_SIZE *size, O_DIM dim, long textpointer);
+	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, long textpointer);
 	long FNIsType(char *);
-	struct VARS *FNGetAggr(struct TAGS *, const char *, int, int *);
+	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
-	int StoreVar(struct VARS *,int, struct VARS *, union STR_LONG *);
+	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);
 	#if MICROCHIP
-	int ReadVar(struct VARS *,long,int,int,int lh);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t lh, bool asPtr);
 	#else
-	int ReadVar(struct VARS *,long,int,int);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr);
 	#endif
 
 	#if ARCHI
@@ -609,14 +714,15 @@ public:
 	#endif
 
 #if MICROCHIP
-	int PROCUseCost(int, long, uint8_t, union STR_LONG *,int lh);
+	int PROCUseCost(int8_tQ, O_TYPE type, O_SIZE size, union STR_LONG *,uint8_t lh,bool asPtr);
 #else
-	int PROCUseCost(int, long, uint8_t, union STR_LONG *);
+	int PROCUseCost(int8_t Q, O_TYPE type, O_SIZE size, union STR_LONG *,bool asPtr);
 #endif
 	int FNIsOp(const char *, int);
 	int FNIsClass(const char *);
-	uint8_t FNGetMemSize(long, uint8_t, uint8_t);
-	uint8_t FNGetMemSize(struct VARS *, uint8_t);
+	O_SIZE FNGetMemSize(O_TYPE type, O_SIZE size, O_DIM dim, uint8_t m);
+	O_SIZE FNGetMemSize(struct VARS *, uint8_t);
+	O_SIZE FNGetArraySize(struct VARS *);
 
 	static char *OpCond[16];
 	static char *StrOp[20];
@@ -629,6 +735,8 @@ public:
 // Implementation
 	};
 
+
+
 /////////////////////////////////////////////////////////////////////////////
 
 class REGISTRI {
@@ -638,14 +746,14 @@ private:
 #elif Z80 || I8086 || MC68000 || I8051 || MICROCHIP
 	const char *DT[16];                  // Nomi dei registri
 	long VType[16];
-	int VSize[16];
+	uint8_t VSize[16];
 	struct VARS *VVar[16];
 #endif  
-	int ToDec;                      // quanto decrementare (Inc, Dec)
-	int ToGet;											// quanto pop-are (Save, Get)
+	int8_t ToDec;                      // quanto decrementare (Inc, Dec)
+	int8_t ToGet;											// quanto pop-are (Save, Get)
 public:
-	int D;             
-	int MaxD,UserBase,MaxUser;     // in ordine crescente
+	int8_t D,P;					// registro per dato, registro per indirizzo
+	uint8_t MaxD,UserBase,MaxUser;     // in ordine crescente
 	const char *SpS;
 #if I8086 || MC68000 
 	const char *AbsS;
@@ -655,18 +763,67 @@ public:
 	Ccc *myCC;
 public:
 	REGISTRI(Ccc *);
-	int Inc(int );
-	void Dec(int );
-	const char *operator[](int );
+	int Inc(int8_t);
+	void Dec(int8_t);
+	const char *operator[](uint8_t);
 	const char *operator[](struct VARS *);
 	void Save();
-	void Save(int );
+	void Save(int8_t);
 	void Get();
+	void Reset();
 
 //	void Store(long , int , struct VARS *);
 //	int Comp(long , int , struct VARS *);
 
 		};
+
+
+struct LINE_NUMBER_IN_FILES {
+	uint16_t lineno;			// il #riga (0=inizio
+	uint32_t lineEndPos;	// la posizione in cui cambia ossia inizio nuova riga
+	};
+struct PROCESSED_FILES {
+	char nomeFile[116];
+	uint32_t begin,end;			// inizio e fine del file letto e processato, nel file uscente .i
+	LINE_NUMBER_IN_FILES lines[8192];			// fare dinamico...
+	};
+
+class CCPreProcessor {
+public:
+	enum {
+		MAX_DEFS=10
+		};
+	bool PP;
+	struct LINE_DEF *RootDef,*LastDef;
+	Ccc *m_Cc;
+	CLogFile *m_Log;
+
+private:
+	bool UNDEFD[MAX_DEFS];
+	uint8_t IfDefs;
+	uint8_t debug;
+	struct PROCESSED_FILES filesInfo[20];
+
+public:
+	CCPreProcessor(Ccc *p,uint8_t d);
+	~CCPreProcessor();
+  struct LINE_DEF *PROCInserLista(struct LINE_DEF *, struct LINE_DEF *, struct LINE_DEF *);
+  struct LINE_DEF *PROCDelLista(struct LINE_DEF *, struct LINE_DEF *, struct LINE_DEF *);
+	void swap(struct LINE_DEF * *l1, struct LINE_DEF * *l2);
+	char *FNGetParm(CSourceFile *, char *, bool UNDEFD[]);
+	char *FNParse(char *, int *, char *);
+	char *FNGrab(CSourceFile *, char *, bool UNDEFD[]);
+	char *FNGrab1(char *, int *, int *, char *);
+	char *FNGetLine(CSourceFile *, char *);
+	struct LINE_DEF *FNDefined(const char *);
+	int PROCDefine(const char *, const char *);
+	char *FNGetNextPre(CSourceFile *, bool, char *, bool UNDEFD[]);
+	char *FNPreProcess(CSourceFile *, char *, bool UNDEFD[]);
+	void bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *IfDefs);
+	int FNLeggiFile(char *, COutputFile *, uint8_t);
+	void setDebugLevel(uint8_t d) { debug=d; }
+	};
+
 
 
 class CTimeSpanEx : public CTimeSpan {
@@ -686,8 +843,8 @@ public:
 	static CString Num2Month3(int);
 	static CString Num2Day3(int);
 	static CString getNow(int ex=0);
-	static CString getNowGMT(BOOL bAddCR=TRUE);
-	static CString getNowGoogle(BOOL bAddCR=TRUE);
+	static CString getNowGMT(bool bAddCR=TRUE);
+	static CString getNowGoogle(bool bAddCR=TRUE);
 	static int getMonthFromString(const CString);
 	static int getMonthFromGMTString(const CString);
 	static CString getMese() { return Num2Giorno(GetCurrentTime().GetDay()); };
@@ -697,8 +854,8 @@ public:
 	static WORD GetDayOfYear();
 	static CTime parseGMTTime(const CString);
 	static CTime parseTime(const CString);
-	static BOOL isWeekend();
-	BOOL isWeekend(CTime);
+	static bool isWeekend();
+	bool isWeekend(CTime);
 	void AddMonths(int n=1);
 	int GetDaysOfMonth();
 	};
@@ -745,7 +902,7 @@ public:
 	char *getLine(int ,char *,UINT nMax=255);
 	DWORD getTotLines() const;
 	CString getIndexFileName();
-	BOOL GetStatus(CFileStatus &);
+	bool GetStatus(CFileStatus &);
 	int clearAll();
 	static char *getAsHex(const BYTE *,char *,UINT );
 

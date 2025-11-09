@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "cc.h"
 #include "..\OpenC.h"
-#include "..\openCdoc.h"
+//#include "..\openCdoc.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,18 +12,19 @@
 // QUOTE1% = TRUE SE NEGLI APICI '
 char *Ccc::FNLO(char *s) {
   register int ch;
-  int ch1,Exit=0,Q=0,Q1=0;
+  int ch1;
+	bool Exit=FALSE,Q=FALSE,Q1=FALSE;
   register char *p;
 
 	p=s;
 	*p=0;  
-  while((ch=getc(FIn)) <= ' ' /*|| ch==EOF*/) {
+  while((ch=FIn->get()) <= ' ' /*|| ch==EOF*/) {
     if(ch==EOF) {
       return s;
       }
     if(ch=='\n') {
 //      getc(FIn);
-      __line__++;
+//      __line__++;
       
 //  if(debug)
 //    printf("FNLO vuoto\n");
@@ -54,18 +55,29 @@ char *Ccc::FNLO(char *s) {
         }
       }
 //  PRINT CH%
-    if ((Q || Q1) && (ch=='\\')) {
-      ch=FNGetEscape();
+    if(Q || Q1) {
+			if(ch=='\n')
+				PROCError(2001);
+			else if(ch=='\\') {
+		    *p++='\\'; *p++='x';
+				ch=FNGetEscape();
+				sprintf(p,"%02x",ch);
+				p+=2;
+				ch=0;
+				}
       }
-    if((!Q) && (!Q1)) {
-      if(!__iscsym(ch)) {
+		else {
+      if(!__iscsym(ch))
         Exit=TRUE;
-        }
-      }        
-    *p++=ch;
+      }
+		if(ch)
+			*p++=ch;
     *p=0;
-    if(!Exit) 
-      ch=getc(FIn);
+    if(!Exit) {
+      ch=FIn->get();
+//	    if(ch=='\n')
+//	      __line__++;
+			}
     } while(!Exit);
 
 //  if(debug)
@@ -75,13 +87,19 @@ char *Ccc::FNLO(char *s) {
     if((ch != '\"') && (ch != '\'')) {
       p--;
       *p=0;
-      fseek(FIn,-1,SEEK_CUR);
+      FIn->unget(ch);		//Seek(-1,CFile::current);
+	    if(ch=='\n')
+				if(!*s)
+					__line__--;
       }
     }
     
   if((*s==ch) && !*(s+1)) {               // creo gli operatori a due caratteri
 rifo:  
-    switch(ch1=getc(FIn)) {
+    ch1=FIn->get();
+//    if(ch1=='\n')
+//      __line__++;
+    switch(ch1) {
       case '&':
       case '+':
       case '-':
@@ -96,37 +114,44 @@ Op3:
             goto rifo;
           }         
         else
-          fseek(FIn,-1,SEEK_CUR);
+					goto do_unget; 
         break;
       case '*':
         if(ch=='/') {
 			    for(;;) {
-			      ch=getc(FIn);
+			      ch=FIn->get();
 			      if(ch==EOF) {
 			        break;
 			        }
+/*				    if(ch=='\n')
+							__line__++;
+*/
+
 			      if(ch=='*') {
-			        ch1=getc(FIn);
+			        ch1=FIn->get();
 			        if(ch1=='/')
 			          break;
-			        else
-			          ungetc(ch1,FIn);  
+							else {
+			          FIn->unget(ch1);  
+/*								if(ch1=='\n')
+									__line__++;*/
+								}
 			        }
 			      } 
 //          *s=0;
 					FNLO(s);
           }
         else
-          fseek(FIn,-1,SEEK_CUR);
+					goto do_unget; 
         break;
       case '/':
         if(ch=='/') {             // per commenti nuovi
-			    while(((ch=getc(FIn)) != '\n') && ch!=EOF);
+			    while(((ch=FIn->get()) != '\n') && ch!=EOF);
 //          *s=0;
 					FNLO(s);
           }
         else
-          fseek(FIn,-1,SEEK_CUR);
+					goto do_unget; 
         break;
       case '=':
         if(strchr("!<=>+-*/%&|^",ch)) {
@@ -134,7 +159,7 @@ Op3:
           *p=0;
           }         
         else
-          fseek(FIn,-1,SEEK_CUR);
+					goto do_unget; 
         break; 
       case '>':
         if(ch=='-' || ch=='>') {
@@ -144,22 +169,30 @@ Op3:
             goto rifo;
           }
         else
-          fseek(FIn,-1,SEEK_CUR);
+					goto do_unget; 
         break;
       default:
-        fseek(FIn,-1,SEEK_CUR);
+do_unget:
+	      FIn->unget(ch1);			//FIn->Seek(-1,CFile::current);
+		    if(ch1=='\n')
+					if(!*s)
+						__line__--;
         break;
       }
     }
 
   if(isdigit(*s)) {               // creo numeri floating
-    if((ch1=getc(FIn)) == '.') {
+    if((ch1=FIn->get()) == '.') {
       *p++=ch1;
       *p=0;
       FNLO(p);
       }
-    else
-      fseek(FIn,-1,SEEK_CUR);
+    else {
+      FIn->unget(ch1);			//FIn->Seek(-1,CFile::current);
+			if(ch1=='\n')
+				if(!*s)
+					__line__--;
+			}
     }
       
   if(debug) {
@@ -174,10 +207,12 @@ char *Ccc::FNLA(char *s) {
   int ol;
   
   ol=__line__;
-  l=ftell(FIn);
+  l=FIn->GetPosition();
+	FIn->SavePosition();
   FNLO(s);
-  fseek(FIn,l,SEEK_SET);    
-  __line__=ol;
+//  FIn->Seek(l,CFile::begin);
+	FIn->RestorePosition(l);
+//  __line__=ol;
   
   return s;
   }
@@ -186,7 +221,7 @@ int Ccc::FNGetEscape() {
   int ch;              
   char A[128];
  
-  switch(ch=getc(FIn)) {
+  switch(ch=FIn->get()) {
     case 'a':
       return 7;
       break;
@@ -224,16 +259,16 @@ int Ccc::FNGetEscape() {
     case '5':
     case '6':
     case '7':
-      fseek(FIn,-1,SEEK_CUR);
+      FIn->unget(ch);			//FIn->Seek(-1,CFile::current);
       ch=FNGetOct(FNLO(A));
-      fseek(FIn,-1,SEEK_CUR);
+      FIn->unget(ch);			//FIn->Seek(-1,CFile::current);
       return ch;
       break;
     case 'X':
     case 'x':
 //      getc(FIn);
 //      FNLO(A);
-      fscanf(FIn,"%x",&ch);
+      ch=FIn->getHex();
 //      fseek(FIn,-1,SEEK_CUR);
       return ch;
       break;
@@ -251,27 +286,77 @@ int Ccc::FNGetOct(const char *a) {
   register int t,s=0;
   
   while(*a) {
-    t=*a-48;
-    if((t>=0) && (t<8)) {
+    t=*a-'0';
+    if((t>=0) && (t<8))
       s=s*8+t;
-      }
-    else {
+    else
       return s;
-      }
     a++;
     }
   return 0;
   }
       
-int Ccc::PROCCheck(const char *s) {
+unsigned int Ccc::xtoi(const char *p) {
+  unsigned int n=0;
+  BYTE c;
+	
+  while(c=*p++) {
+    if(((c>='0') && (c<='9')) || ((c>='A') && (c<='F')) ||((c>='a') && (c<='f')))
+			;
+		else
+      break;
+    n <<= 4;
+    n |= xtob(c);
+    }
+	return n;
+	}
+
+BYTE Ccc::xtob(char c) {
+  
+  if(isdigit(c))
+    return c-'0';
+  else if(toupper(c) >='A' && toupper(c) <='F')
+    return toupper(c)-'A'+10;
+  }
+
+unsigned int Ccc::btoi(const char *p) {
+  unsigned int n=0;
+  BYTE c;
+	
+  while(c=*p++) {
+    n <<= 1;
+    n |= (c == '1' ? 1 : 0);
+    }
+	return n;
+	}
+
+char *Ccc::itox(char *p,unsigned int n) {
+	
+  *p = '\0';
+	do {
+		*(--p) = "0123456789ABCDEF"[n & 0x0F];
+		} while ((n >>= 4) > 0);
+	return p;
+	}
+
+char *Ccc::itob(char *p,unsigned int n) {
+	
+  *p = '\0';
+	do {
+		*(--p) = "01"[n & 1];
+		} while ((n >>= 1) > 0);
+	return p;
+	}
+
+bool Ccc::PROCCheck(const char *s) {
   char myBuf[64];
 
   if(_tcscmp(s,FNLO(myBuf)))
     PROCError(2054,s); 
-  return 0;
+  return FALSE;
   }
 
-int Ccc::PROCCheck(char t) {
+bool Ccc::PROCCheck(char t) {
   char myBuf[64];
 
   if(*FNLO(myBuf) != t) {
@@ -279,38 +364,41 @@ int Ccc::PROCCheck(char t) {
     *(myBuf+1)=0;
     PROCError(2054,myBuf); 
     }
-  return 0;
+  return FALSE;
   }
 
 long Ccc::FNGetLine(long p,char *s) {
   int i;
   register int ch;
   long l,l2;
+	long ol;
   
-  l=ftell(FIn);
-  fseek(FIn,p,SEEK_SET);
+  l=FIn->GetPosition();
+  FIn->Seek(p,CFile::begin);
+	ol=__line__;
+	FIn->SavePosition();
 rifo:
   do {
-    ch=getc(FIn);
+    ch=FIn->get();
     } while(/*ch != '\n' &&*/ ch!=EOF && ch<=' ');
   while(ch == '/') {
-    ch=getc(FIn);
+    ch=FIn->get();
     if(ch == '/') {
 			while(ch != '\n' && ch!=EOF)
-			  ch=getc(FIn);
+			  ch=FIn->get();
 			goto rifo;  
 			}  
     if(ch == '*') {
       do {
-			  ch=getc(FIn);
+			  ch=FIn->get();
 			  if(ch=='*') {
-				  ch=getc(FIn);
+				  ch=FIn->get();
 				  if(ch=='/') {
 //				    ch=getc(FIn);
 				    break;
 				    }
 				  else
-				    ungetc(ch,FIn);  
+				    FIn->unget(ch);
 				  }
 			  } while(ch!=EOF);
 			goto rifo;  
@@ -320,13 +408,15 @@ rifo:
   *s=0;
   while(ch != '\n' && ch!=EOF && i<126) {
     s[i++]=ch;                           
-    ch=getc(FIn);
+    ch=FIn->get();
     }
   s[i]=0;
 //  __line__++;
   
-  l2=ftell(FIn);
-  fseek(FIn,l,SEEK_SET);
+  l2=FIn->GetPosition();
+//  FIn->Seek(l,CFile::begin);
+	FIn->RestorePosition(l);
+//	__line__=ol;
   return l2;
   }
 

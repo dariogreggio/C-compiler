@@ -5,15 +5,17 @@
 #include <stdlib.h>
 #include <conio.h>
 #include <ctype.h>
+#include <mmsystem.h>
 
-char *Ccc::FNGetParm(FILE *FI, char *s) {
-  int T=0,Go=0,i;
+char *CCPreProcessor::FNGetParm(CSourceFile *FI, char *s,bool UNDEFD[]) {
+  int T=0;
+	bool Go=FALSE;
   char TS[128],*A;
   char *p;
                 
   p=s;             
   do {
-    FNGrab(FI,TS);
+    FNGrab(FI,TS,UNDEFD);
 	  switch(*TS) {
 	    case ')':
 	      if(T)
@@ -40,8 +42,10 @@ char *Ccc::FNGetParm(FILE *FI, char *s) {
   return s;
   }
 
-char *Ccc::FNParse(char *A, int *I, char *s) {
-  int B=0,Q=0,Go=0,i,ch;
+char *CCPreProcessor::FNParse(char *A, int *I, char *s) {
+  int B=0;
+	char ch;
+	bool Go=FALSE,Q=FALSE;
   char *p;
               
   p=s;          
@@ -74,21 +78,22 @@ char *Ccc::FNParse(char *A, int *I, char *s) {
   return s;            
   }
 
-char *Ccc::FNGrab(FILE *FI, char *s) {
-  int Q=0,Go=0,W=0,Q1=0;
+char *CCPreProcessor::FNGrab(CSourceFile *FI, char *s, bool UNDEFD[]) {
+	bool W=FALSE,Go=FALSE,Q=FALSE,Q1=FALSE;
   register int ch;
 //  char MyBuf[200];
   char *p;
 
   p=s;
 	do {
-	  ch=getc(FI);
+	  ch=FI->get();
     if(ch==EOF) {
       ch=0;
       Q=Q1=0;
-//      Go=TRUE;
+      Go=TRUE;
+			W=0;
       }
-    if(ch==10 || ch==13) {
+    else if(ch=='\n' /*|| ch==13*/) {
       Q=Q1=0;
       }
 	  *p++=ch;
@@ -107,22 +112,22 @@ char *Ccc::FNGrab(FILE *FI, char *s) {
 	    }
 	  } while(!Go);
 	if(W) {
-	  fseek(FI,-1,SEEK_CUR);
+		FI->unget(ch);
 	  p--;
 	  } 
 	*p=0;
 	if(!UNDEFD[IfDefs]) {
 	  if(PP) {
 //	    strcpy(MyBuf,s);
-	    FNPreProcess(FI,s);
+	    FNPreProcess(FI,s,UNDEFD);
 	    }
 	  }
 	    
   return s;
   }
 
-char *Ccc::FNGrab1(char *A, int *K, int *I, char *s) {
-  int Q=0,Q1=0,Go=0,W=0,i;
+char *CCPreProcessor::FNGrab1(char *A, int *K, int *I, char *s) {
+	bool W=FALSE,Go=FALSE,Q=FALSE,Q1=FALSE;
   register int ch;
   char *p;
     
@@ -154,89 +159,175 @@ char *Ccc::FNGrab1(char *A, int *K, int *I, char *s) {
   return s;                             
   }
 
-struct LINE_DEF *Ccc::FNDefined(const char *A) {
+char *CCPreProcessor::FNGetLine(CSourceFile *FI, char *s) {
+
+	// NON va ancora bene, bisogna gestire i #defined / Grab ecc
+
+	bool Go=FALSE;
+  register int ch;
+  char *p;
+
+  p=s;
+	do {
+	  ch=FI->get();
+    if(ch==EOF) {
+      ch=0;
+      Go=TRUE;
+      }
+    else if(ch=='\n' /*|| ch==13*/) {
+      Go=TRUE;
+      }
+	  *p++=ch;
+	  } while(!Go);
+	*p=0;
+	    
+  return s;
+  }
+
+struct LINE_DEF *CCPreProcessor::FNDefined(const char *A) {
   char *I;   
   struct LINE_DEF *T;
   
   T=RootDef;
   while(T) {
-    I=strchr(T->s,'(');
+    I=_tcschr(T->name,'(');
     if(I) {              
-      if(_tcslen(A) == (I-T->s)) {
-        if(!strncmp(T->s,A,I-(T->s))) { 
+      if(_tcslen(A) == (I-T->name)) {
+        if(!strncmp(T->name,A,I-(T->name))) { 
           return T;
           }  
         }
       }
     else {
-      if(!_tcscmp(T->s,A)) {
+      if(!_tcscmp(T->name,A)) {
         return T;
         }
       }
     T=T->next;
-//    T=T->next;
     }
   return 0;
   }
 
-int Ccc::PROCDefine(const char *A, const char *B) {    
+int CCPreProcessor::PROCDefine(const char *A, const char *B) {    
   struct LINE_DEF *New;
+	char *p,*apici=NULL;
   int i;
+	long l1,l2;
   
-#pragma warning FARE COME IN AS86 2025!!
 
+	l1=_tcslen(A);
 
-  i=_tcslen(A)+_tcslen(B);
-//  myLog->print(0,"define %s!%s\n",A,B);
-  New=(struct LINE_DEF *)GlobalAlloc(GPTR,i+sizeof(struct LINE_DEF)+4);
+	// dovrebbe spezzare B, se ci sono spazi, ma non dentro apici
+	if(p=strstr(B,"##")) {			// concatena stringhe... verificare
+		struct LINE_DEF *d1;
+		*p=0;
+		d1=FNDefined(B);
+		if(d1) {
+	    l2=_tcslen(d1->name);
+			}
+		else
+			l2=_tcslen(B);
+
+		if(apici=_tcschr(p+2,'\"'))		// PATCH urfida, spezzare meglio i token, tra apici e non!
+			*apici=0;
+
+		d1=FNDefined(p+2);
+		if(d1) {
+	    l2+=_tcslen(d1->text);
+			}
+		else
+			l2+=_tcslen(p+2);
+		if(apici)		// lo rimetterò sotto
+			l2++;
+		*p='#';		// ripristino
+		}
+	else {
+		l2=_tcslen(B);
+		}
+
+//  m_Log->print(0,"define %s!%s\n",A,B);
+  New=(struct LINE_DEF*)GlobalAlloc(GPTR,sizeof(struct LINE_DEF));
   if(!New) {
-    PROCError(1001,"Fine memoria DEFINE");
+    m_Cc->PROCError(1001,"Fine memoria DEFINE");
     }
   if(RootDef)
-    LastDef=(struct LINE_DEF *)PROCInserLista((struct LINE *)RootDef,(struct LINE *)LastDef,(struct LINE *)New);
+    LastDef=(struct LINE_DEF *)PROCInserLista((struct LINE_DEF *)RootDef,(struct LINE_DEF *)LastDef,(struct LINE_DEF *)New);
   else                                          
-    RootDef=LastDef=(struct LINE_DEF *)PROCInserLista((struct LINE *)RootDef,(struct LINE *)LastDef,(struct LINE *)New);  
-  strcpy(New->s,A);
-  i=_tcslen(New->s);
-  strcpy(New->s+i+1,B);
+    RootDef=LastDef=(struct LINE_DEF *)PROCInserLista((struct LINE_DEF *)RootDef,(struct LINE_DEF *)LastDef,(struct LINE_DEF *)New);  
+  _tcscpy(New->name,A);
+	New->text=(char*)GlobalAlloc(GPTR,l2+1);
+  _tcscpy(New->text,B);
+	New->used=0;
+	New->vars=NULL;
+
+
+	// dovrebbe spezzare B, se ci sono spazi, ma non dentro apici
+	if(p=strstr(B,"##")) {			// concatena stringhe... verificare
+		struct LINE_DEF *d1;
+		*p=0;
+		d1=FNDefined(B);
+		if(d1) {
+			_tcscat(New->text,d1->text);
+			}
+		else
+			_tcscpy(New->text,B);
+
+		if(_tcschr(p+2,'\"'))		// PATCH urfida, spezzare meglio i token, tra apici e non!
+			*_tcschr(p+2,'\"')=0;
+
+		d1=FNDefined(p+2);
+		if(d1) {
+			_tcscat(New->text,d1->text);
+			}
+		else
+			_tcscat(New->text,p+2);
+		if(apici)
+			_tcscat(New->text,"\"");
+		}
+	else {
+		_tcscpy(New->text,B);
+		}
   
-  return 0;
+  return 1;
   }
 
-char *Ccc::FNGetNextPre(FILE *FI, int F, char *s) {
-  char A[200];
-  int Go=0,i;
+char *CCPreProcessor::FNGetNextPre(CSourceFile *FI, bool avoidSpaces, char *s, bool UNDEFD[]) {
+  char A[256];
+  bool Go=FALSE;
+	char ch;
   char *p,*p1;
 
 //  i=0;
   p=s;
-  FNGrab(FI,A);
-  while(*A == ' ') {
-    FNGrab(FI,A);
+  FNGrab(FI,A,UNDEFD);
+  while(*A == ' ') {		// isspace ??
+    FNGrab(FI,A,UNDEFD);
     }
   do {
     switch(*A) {
-      case 13:
-      case 10:
+//      case 13:
+      case '\n':
       case '\t':
         Go=TRUE;
         break;
       case ' ':
-        if(F)
+        if(avoidSpaces)
           Go=TRUE;
         else 
           *p++=' ';
         break;
       case '\\':
-        getc(FI);
-        getc(FI);                       // permette a-capo con backslash
+        ch=FI->get();                      // permette a-capo con backslash
+				// controllare che sia \n ??
         *A=0;
         break;
       case '/':
-        i=getc(FI);
-        fseek(FI,-2,SEEK_CUR);
-        if(i=='/' || i=='*')
+        ch=FI->get();
+        if(ch=='/' || ch=='*') {
+//					FI->Seek(-2,CFile::current);
+				  FI->unget(ch);
           Go=TRUE;
+					}
         else
           goto myDef;
         break;
@@ -248,61 +339,78 @@ myDef:
         break;
       }
     if(!Go)
-      FNGrab(FI,A);
+      FNGrab(FI,A,UNDEFD);
     } while(!Go);
-  fseek(FI,-1,SEEK_CUR);
-  *p=0;
+  FI->Seek(-_tcslen(A),CFile::current);
+//  FI->Seek(-1,CFile::current);
+//  FI->unget(ch);		// NO! vedere quale carattere fu letto x ultimo...
+
+  *p--=0;
+	while(*p==' ' || *p=='\t'  /*isspace*/)		
+		// se ci sono degli spazi dopo, li tolgo (tipo come quando c'è un commento a seguire
+		//	(se avoidSpace era falso
+		*p--=0;
   return s;
   }
 
-char *Ccc::FNPreProcess(FILE *FI, char *s) {
-  int J1,ch,J,i;
-  char *I;
+char *CCPreProcessor::FNPreProcess(CSourceFile *FI, char *s,bool UNDEFD[]) {
+  int J1,J,i;
+  char ch,*I;
   struct LINE_DEF *p;
-  char JS[200],TS[128],T1S[128];
-  char MyBuf[200];
+  char JS[256],TS[128],T1S[128];
+  char MyBuf[256];
 
   p=FNDefined(s);
   if(p) {
-//     myLog->print(0,"FORM da trovare %s\n",s);
-    strcpy(s,p->s);
-    i=_tcslen(p->s);
+//     m_Log->print(0,"FORM da trovare %s\n",s);
+    _tcscpy(s,p->name);
 //    p=p->next;
-    strcpy(JS,p->s+i+1);
-	  I=strchr(s,'(');
+    _tcscpy(JS,p->text);
+	  I=_tcschr(s,'(');
 	  if(I) {
 	    i=I-s;
-      if(*FNGrab(FI,MyBuf)=='(') {
+      if(*FNGrab(FI,MyBuf,UNDEFD)=='(') {
 	      do {
 	        J=0;                            
 	        FNParse(s,&i,TS);
 	        if(debug>1)
-						myLog->print(0,"FORM %s\n",TS);
+						m_Log->print(0,"FORM %s\n",TS);
 	        ch=*(s+i);
-	        if(!*TS) 
-	          PROCError(2010);
-	        FNGetParm(FI,T1S);
+	        FNGetParm(FI,T1S,UNDEFD);
+					if(!*TS)  {		// se non ci sono parametri nella definizione macro...
+						if(*T1S)
+							m_Cc->PROCError(2010);
+						}
+					if(!*T1S)  {		// e viceversa!
+						if(*TS)
+							m_Cc->PROCError(2010);
+						}
 	        if(debug>1)
-	          myLog->print(0,"ATT %s\n",T1S);
+	          m_Log->print(0,"ATT %s\n",T1S);
 	        if(!ch)
-	          PROCError(2010);
+	          m_Cc->PROCError(2010);
 	        do {
 	          J1=J;
 	          FNGrab1(JS,&J1,&J,MyBuf);
 	          if(!_tcscmp(TS,MyBuf)) {
 	//             J$=LEFT$(J$,J1%-1)+T1$+MIDS(J$,J%);
-	            strcpy(MyBuf,JS+J);
-	            strcpy(JS+J1,T1S);
-	            strcat(JS,MyBuf);
+	            _tcscpy(MyBuf,JS+J);
+	            _tcscpy(JS+J1,T1S);
+							if(*MyBuf)
+								_tcscat(JS,MyBuf);
+							else {								// questo, quando la macro è chiamata con 0 parm
+								_tcscat(JS,")");
+								break;
+								}
 	            J=J1+_tcslen(T1S);
 	            }
 	          } while((J < _tcslen(JS)) && J);
 	        } while(ch != ')');
 	      }
 	    else
-	      PROCError(2010);
+	      m_Cc->PROCError(2010);
 	    }
-    strcpy(s,JS);
+    _tcscpy(s,JS);
     }
 //  else {
 //    strcpy(s,A);
@@ -310,121 +418,148 @@ char *Ccc::FNPreProcess(FILE *FI, char *s) {
   return s;
   }
 
-int Ccc::FNLeggiFile(char *F, FILE *FO, signed char level) {
-  unsigned char Go=0,First=0;
-  unsigned char IfDefs=0,LstIfs=0;            // per gestire le nidificazioni, metto in Lst il livello
-  FILE *FI;
-  char A[200],B[200];
+int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
+  bool Go=FALSE,First=FALSE;
+  int8_t IfDefs=0;            // per gestire le nidificazioni, metto in Lst il livello
+  CSourceFile *FI;
+  char A[256],B[256],oldfile[256];
   struct LINE_DEF *L;
 
-  FI=fopen(FNTrasfNome(F),"rb");
+	FI=new CSourceFile(CSourceFile::FNTrasfNome(F));
   if(!FI) {
-    PROCError(level ? 1024 : 1023,F);
+    m_Cc->PROCError(level ? 1024 : 1023,F);
 		goto fine;
 		}
-  strcpy(__file__,F);
+  _tcscpy(oldfile,m_Cc->__file__);
+  _tcscpy(m_Cc->__file__,F);
+	_tcscpy(filesInfo[level].nomeFile,F);
+
+    if(debug)
+      m_Log->print(0,"%u: PreProcess %s\n",timeGetTime(),F);
+
   First=TRUE;
-  __line__=1;
-  while(!feof(FI)) {
+  m_Cc->__line__=1;
+  while(!FI->Eof()) {
     if(debug) {
-      myLog->print(0,"Linea: %d\n",__line__);
+      m_Log->print(0,"Linea: %d\n",m_Cc->__line__);
 //      while(!kbhit());
       }
-    FNGrab(FI,A);
+    FNGrab(FI,A,UNDEFD);
     if(debug) 
-      myLog->print(0,"Grab: %s...\n",A);
+      m_Log->print(0,"Grab: %s...\n",A);
     if(*A=='/') {
       if(!UNDEFD[IfDefs])
-        fputs(A,FO);
-      FNGrab(FI,B);
+        FO->print(A);
+      FNGrab(FI,B,UNDEFD);
       if(!UNDEFD[IfDefs])
-        fputs(B,FO);
+        FO->print(B);
       if(*B == '/') {
+gotoEOL:
         do {
-          *A=getc(FI);
+          *A=FI->get();
   	      if(!UNDEFD[IfDefs])
-	          fputc(*A,FO);
-          } while(*A && *A!=10 && *A!=13);
+	          FO->put(*A);
+          } while(*A && *A!='\n'/* && *A!=13*/);
+				First=TRUE;
         }
       else if(*B == '*') {
         do {
-          *A=getc(FI);
+          *A=FI->get();
 rifo:         
           if(!UNDEFD[IfDefs])
-	          fputc(*A,FO);
+	          FO->put(*A);
           } while(*A && *A!='*');
         if(*A=='*') {
-          *A=getc(FI);
+          *A=FI->get();
           if(*A != '/')
             goto rifo;
           else {
             if(!UNDEFD[IfDefs])
-	            fputc(*A,FO);
+	            FO->put(*A);
 	          }  
           }  
         }
       }
     else {
 	    if((*A=='#') && First) {
-	      FNGrab(FI,A);
-	//      myLog->print(0,"... e poi Grab: %s\n",A);
+				// errore 2012 invalid char se segue roba dopo #else ecc
+	      FNGrab(FI,A,UNDEFD);
+	//      m_Log->print(0,"... e poi Grab: %s\n",A);
 	      if(!_tcscmp(A,"endif")) {
-	//              myLog->print(0,"ENDIF: IFS %d\n",IfDefs);
+	//              m_Log->print(0,"ENDIF: IFS %d\n",IfDefs);
 	        if(!IfDefs)
-	          PROCError(1020);
+	          m_Cc->PROCError(1020);
 	        IfDefs--;
-	        if(!UNDEFD[IfDefs] || (IfDefs==(LstIfs-1))) {
-		        LstIfs=IfDefs;
-						bumpIfs(-1,UNDEFD[IfDefs-1],IfDefs);
+	        if(!UNDEFD[IfDefs]) {
+						bumpIfs(UNDEFD,-1,UNDEFD[IfDefs],&IfDefs);
 		        if(!IfDefs)
 		          UNDEFD[IfDefs]=FALSE;
 		        }
 	        }
 	      else if(!_tcscmp(A,"else")) {
 	        if(!IfDefs)
-	          PROCError(1019);
-//          myLog->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d\n",UNDEFD[IfDefs],IfDefs,LstIfs);
-	        if(!UNDEFD[IfDefs-1] /*|| (IfDefs==LstIfs)*/)
+	          m_Cc->PROCError(1019);
+//          m_Log->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d\n",UNDEFD[IfDefs],IfDefs,LstIfs);
+	        if(!UNDEFD[IfDefs-1])
 //	          UNDEFD[IfDefs-1] = ! UNDEFD[IfDefs-1];
-						bumpIfs(0,!UNDEFD[IfDefs],IfDefs);
-	        }
-	      else if(!_tcscmp(A,"elif")) {
+						bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
 		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B);
+		      FNGetNextPre(FI,TRUE,B,UNDEFD);
+		      PP=TRUE;
+	        }
+	      else if(!_tcscmp(A,"elif")) {		// GESTIRE espressioni anche qua! defined ecc
+		      PP=FALSE;
+		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        if(!IfDefs)
-	          PROCError(1018);
-	        if(!UNDEFD[IfDefs-1] /*|| (IfDefs==LstIfs)*/) {
-		        LstIfs=IfDefs;
+	          m_Cc->PROCError(1018);
+	        if(!UNDEFD[IfDefs-1]) {
 	          if(FNDefined(B))
-							bumpIfs(0,!UNDEFD[IfDefs],IfDefs);
+							bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
 	          else 
-							bumpIfs(0,!UNDEFD[IfDefs],IfDefs);
-						goto ifdef;
+							bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
+//						goto ifdef;
 	          }  
 	        }
 	      else if(!_tcscmp(A,"if")) {
+					bool bInvert=FALSE;
+					uint32_t OL=FI->GetPosition();
 //		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B);
+		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 //		      PP=TRUE;
 	        IfDefs++;
 	        if(!UNDEFD[IfDefs-1]) {
-		        LstIfs=IfDefs;
-						if(!_tcsncmp(B,"defined",7)) {
-							char *B1=B+7;
+						char *B1;
+						if(*B=='!') {
+							bInvert=TRUE;
+							B1=B+1;
 							while(*B1 && !iscsym(*B1))
 								B1++;
+				      _tcscpy(B,B1);
+//			      FNGetNextPre(FI,TRUE,B,UNDEFD);		// SERVE SPEZZARE ev. operatori come ! attaccato alla parola che segue
+							}
+						if(!_tcsncmp(B,"defined",7)) {
+							B1=B+7;
+							while(*B1 && !iscsym(*B1))
+								B1++;
+							if(B1[_tcslen(B1)-1]==')')
+								B1[_tcslen(B1)-1]=0;
 							if(atoi(B1) /* patch per MACRO definite che diventano altro! */ || FNDefined(B))
-								bumpIfs(1,0,IfDefs);
+								bumpIfs(UNDEFD,1,bInvert ? TRUE : FALSE,&IfDefs);
 							else 
-								bumpIfs(1,1,IfDefs);
+								bumpIfs(UNDEFD,1,bInvert ? FALSE : TRUE,&IfDefs);
 							}
 						else {
-							if(EVAL(B))
-								bumpIfs(1,0,IfDefs);
+
+//							FI->Seek(OL,CFile::begin);
+//							FNGetLine(FI,B);
+// NON va ancora bene, bisogna gestire i #defined anche là, o dentro EVAL
+
+							if(m_Cc->EVAL(B))
+								bumpIfs(UNDEFD,1,FALSE,&IfDefs);
 	//		          UNDEFD[IfDefs]=FALSE;
 							else
-								bumpIfs(1,1,IfDefs);
+								bumpIfs(UNDEFD,1,TRUE,&IfDefs);
 							}
 //		          UNDEFD[IfDefs]=TRUE;   
 /*							    if(!UNDEFD[IfDefs])
@@ -434,17 +569,16 @@ rifo:
 		        }  
 	        }
 	      else if(!_tcscmp(A,"ifdef")) {
-ifdef:
+//ifdef:
 		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B);
+		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        IfDefs++;
 	        if(!UNDEFD[IfDefs-1]) {
-		        LstIfs=IfDefs;
 	          if(FNDefined(B))
-							bumpIfs(1,0,IfDefs);
+							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
 	          else
-							bumpIfs(1,1,IfDefs);
+							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
 /*							    if(!UNDEFD[IfDefs])
 										bumpIfs(1,!o1.l.v,IfDefs);
 									else
@@ -453,129 +587,223 @@ ifdef:
 	        }
 	      else if(!_tcscmp(A,"ifndef")) {
 		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B);
+		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        IfDefs++;
 	        if(!UNDEFD[IfDefs-1]) {
-		        LstIfs=IfDefs;
 	          if(FNDefined(B))
-							bumpIfs(1,1,IfDefs);
+							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
 	          else 
-							bumpIfs(1,0,IfDefs);
+							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
 /*							    if(!UNDEFD[IfDefs])
 										bumpIfs(1,!o1.l.v,IfDefs);
 									else
 										bumpIfs(1,1,IfDefs);*/
 	          }  
-	//          myLog->print(0,"Qui A è %s, B è %s e UNDEF %d e IFS %d\n",A,B,UNDEFD[IfDefs],IfDefs);
+	//          m_Log->print(0,"Qui A è %s, B è %s e UNDEF %d e IFS %d\n",A,B,UNDEFD[IfDefs],IfDefs);
 	        }
 	      else {
 	        if(!UNDEFD[IfDefs]) {
 			      PP=FALSE;
-			      FNGetNextPre(FI,TRUE,B);
+			      FNGetNextPre(FI,TRUE,B,UNDEFD);
 			      PP=TRUE;
 	          if(!_tcscmp(A,"include")) {
 	            switch(*B) {
-	              case 34:
+	              case '\"':
 	                break;
-	              case 60:
+	              case '<':
 	                break;
 	              default :
-	                PROCError(2012);
+	                m_Cc->PROCError(2012);
 	                break;
 	              }
+							if(B[_tcslen(B)-1] != ((*B == '<') ? '>' : '\"'))
+								m_Cc->PROCError(2059,B);		// controllo char di chiusura... :)
 	            B[_tcslen(B)-1]=0;
-							{int oldLine=__line__;
+							{int oldLine=m_Cc->__line__;
 	            if(!FNLeggiFile(B+1,FO,level+1))
 								goto fine;
-							__line__=oldLine;
+							m_Cc->__line__=oldLine;
 							}
 	            }
 	          else if(!_tcscmp(A,"define")) {
 	            L=FNDefined(B);
 	            if(L) {
-	              PROCWarn(4005,B);
+	              m_Cc->PROCWarn(4005,B);
 //	              New=L->next;
-	              LastDef=(struct LINE_DEF *)PROCDelLista((struct LINE *)RootDef,(struct LINE *)LastDef,(struct LINE *)L);
+	              LastDef=(struct LINE_DEF *)PROCDelLista((struct LINE_DEF *)RootDef,(struct LINE_DEF *)LastDef,(struct LINE_DEF *)L);
 //	              LastDef=PROCDelLista(RootDef,New);
 	              }
-	            FNGetNextPre(FI,FALSE,A);
-	            PROCDefine(B,A) ;
+	            FNGetNextPre(FI,FALSE/*TRUE NO! gli spazi ci possono essere, ok*/,A,UNDEFD);
+	            PROCDefine(B,A);
 	            }
 	          else if(!_tcscmp(A,"undef")) {
 	            L=FNDefined(B);
 	            if(L) {
 //	              New=L->next;
-	              LastDef=(struct LINE_DEF *)PROCDelLista((struct LINE *)RootDef,(struct LINE *)LastDef,(struct LINE *)L);
+	              LastDef=(struct LINE_DEF *)PROCDelLista((struct LINE_DEF *)RootDef,(struct LINE_DEF *)LastDef,(struct LINE_DEF *)L);
 //	              LastDef=PROCDelLista(RootDef,New);
 	              }
 	            else {
-	              PROCWarn(2065,B);
+	              m_Cc->PROCWarn(2065,B);
 	              }
 	            }
 	          else if(!_tcscmp(A,"pragma")) {
 	          // lo gestiamo come comando...
-    	        fprintf(FO,"%s %s ",A,B);
+    	        FO->printf("%s %s ",A,B);
 	            }
 						else if(!_tcscmp(A,"warning")) {
-    					fprintf(FO,"%s %s ",A,B);
+    					FO->printf("%s %s ",A,B);
 							}
 	          else if(!_tcscmp(A,"line")) {
-	            sscanf(B,"%u",&__line__);
+	            sscanf(B,"%u",&m_Cc->__line__);
 	            }
+/*	          else if(!_tcscmp(A,"#")) {	
+// per concatenazione stringhe in macro... NO MA NON PASSA DI QUA!! va gestito dentor #define
+    					FO->printf("%s%s ",A,B);		// finire!!
+	            }*/
 	          else {
-	            PROCError(1021,A);
+	            m_Cc->PROCError(1021,A);
 	            }
 	          }
-	        getc(FI);
+					{char ch=FI->get();
+	        if(ch != '\n')
+						FI->unget(ch);
+					}
 	        }
 	      }
 	    else {
-	//       myLog->print(0,"Sto per scrivere: A %s, e UNDEFD %d\n",A,UNDEFD[IfDefs]);
-	      if(!UNDEFD[IfDefs] || *A=='\n') {
-	        fputs(A,FO);
+	//       m_Log->print(0,"Sto per scrivere: A %s, e UNDEFD %d\n",A,UNDEFD[IfDefs]);
+	      if(!UNDEFD[IfDefs] /*|| *A=='\r'*/) {		// butto fuori cmq le righe vuote, per non incasinare il #riga... BEH CAZZATA cmq!
+	        FO->print(A);
 	        }
-		    if(*A=='\n') {
+		    if(*A=='\n') {		// arrivano così CR con modeText... NO non funziona quindi faccio io ;) v. get()
+//					if(First)
+//						FO->put('\n');
 		      First=TRUE;
-			    __line__++;
+			    m_Cc->__line__++;
 		      }
 		    else {
-		      if((*A != ' ') && (*A != 9)) {		// isprint
+		      if((*A != ' ') && (*A != '\t')) {		// isprint
 		        First=FALSE;
 		        }
 		      }
 	      }
       }
     }
-  fclose(FI);
+//  FI->Close();
+	delete FI; FI=NULL;
   if(IfDefs>0)
-    PROCError(1022);
+    m_Cc->PROCError(1022);
 //  PRINT LEN A$; ">>>"A$"<<<"
+  _tcscpy(m_Cc->__file__,oldfile);
   return TRUE;
 fine:
 	return FALSE;
   }
 
 
-void Ccc::bumpIfs(int8_t direction,uint8_t state,uint8_t level) {
+void CCPreProcessor::bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *IfDefs) {
 	uint8_t i;
 
 	if(direction>0) {
-		IfDefs++;
-		if(IfDefs>MAX_DEFS)
-			PROCError(1017);
+//		(*IfDefs)++;
+		if(*IfDefs>=MAX_DEFS)
+			m_Cc->PROCError(1017);
 		}
 	else if(direction<0) {
-		if(!IfDefs)
-			PROCError(1020);
-		IfDefs--;
+		if(*IfDefs<0)
+			m_Cc->PROCError(1020);
+//		(*IfDefs)--;
 		}
 	else {
-		if(!IfDefs)
-			PROCError(1020);
+		if(!*IfDefs)
+			m_Cc->PROCError(1020);
 		}
 
-  for(i=IfDefs; i<MAX_DEFS; i++)
+  for(i=*IfDefs; i<MAX_DEFS; i++)
 		UNDEFD[i]=state;
 	}
+
+
+CCPreProcessor::CCPreProcessor(Ccc *p,uint8_t d) : m_Cc(p),debug(d) {
+	int i;
+
+	RootDef=LastDef=NULL;
+	IfDefs=0;
+	for(i=0; i<MAX_DEFS; i++)
+		UNDEFD[i]=0;
+	}
+
+CCPreProcessor::~CCPreProcessor() {
+
+  while(RootDef) {
+    LastDef=RootDef->next;
+    GlobalFree(RootDef);
+    RootDef=LastDef;
+    }
+	}
+
+
+struct LINE_DEF *CCPreProcessor::PROCInserLista(struct LINE_DEF *Root, struct LINE_DEF *Last, struct LINE_DEF *New) {
+  struct LINE_DEF *A;      
+ 
+  if(Root) {
+    New->next=Last->next;
+    Last->next=New;
+    New->prev=Last;
+    if(New->next) {
+      A=New->next;
+      A->prev=New;
+      }      
+    }
+  else {
+    Root=New;
+    Root->next=NULL;
+    Root->prev=NULL;
+    }
+  Last=New;   
+   
+  return Last;
+  }
+ 
+struct LINE_DEF *CCPreProcessor::PROCDelLista(struct LINE_DEF *Root, struct LINE_DEF *Last, struct LINE_DEF *l) {
+  struct LINE_DEF *A;
+  
+  if(l==Root) {
+    A=Root->next;
+    if(A)
+      A->prev=0;
+    }
+  else {
+    A=l->prev;
+    A->next=l->next;
+    if(l->next) {
+      A=l->next;
+      A->prev=l->prev;
+      }
+//    else
+    A=l->prev;
+    }
+/*	PERCHE'?? while(l->next) {
+		struct LINE_DEF *l2=l->next;
+		GlobalFree(l);
+		l=l2;
+		}*/
+  GlobalFree(l->text);
+  GlobalFree(l);
+  if(l==Last)
+    return A;
+  else
+    return Last;
+  }
+ 
+void CCPreProcessor::swap(struct LINE_DEF * *l1, struct LINE_DEF * *l2) {
+  struct LINE_DEF *t;
+  
+  t=*l1;
+  *l1=*l2;
+  *l2=t;
+  }                         
+    
 
