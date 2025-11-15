@@ -13,6 +13,7 @@ struct ERRORE Errs[]={
   1002,1,"unsupported:",
   1004,1,"unexpected EOF",
   1016,1,"#if[n]def expected an identifier",
+  1017,1,"unexpected chars",
   1018,1,"unexpected #elif",
   1019,1,"unexpected #else",
   1020,1,"unexpected #endif",
@@ -25,7 +26,11 @@ struct ERRORE Errs[]={
   1065,1,"out of tags space",
   1068,1,"cannot open file",
   1069,1,"write error on file",
+#if MC68000
+  1126,1,"automatic allocation exceeds size (32768)" ,
+#else
   1126,1,"automatic allocation exceeds size (128)" /*anche 2127*/,
+#endif
   2001,1,"newline in constant",
   2007,1,"#define syntax",
   2010,1,"invalid formal list",
@@ -51,6 +56,7 @@ struct ERRORE Errs[]={
   2050,1,"non-integral switch expression",
   2051,1,"case expression not constant",
   2052,1,"case expression not integral",
+  2053,1,"case expression too large for switch variable",
   2054,1," expected",
   2057,1,"expected constant expression",
   2058,1,"divide by zero",
@@ -87,10 +93,12 @@ struct ERRORE Errs[]={
   2153,1,"hex constant must have at least one digit",
   2156,1,"pragma must be outside function",
   2200,1,"warning treated as error",
+  2205,1,"cannot initialize extern variable",
   2221,1,"'.' left operand points to struct/union, use ->",/*anche 2231*/
   2222,1,"'->' left operand has struct/union type, use .",/*anche 2232*/
   2223,1,"left operand must point to struct/union type",/*anche 2227*/
   2224,1,"left operand must have struct/union type",/*anche 2228*/
+  2297,1,"operand is illegal (not integer)",
   2371,1,"redefinition (different basic types):",/*anche altri*/
   2599,1,"local functions are not supported",
    3001,1,"interrupt function returning a value",
@@ -98,16 +106,19 @@ struct ERRORE Errs[]={
   4002,1,"ignoring unknown flag",/*Microsoft D4002*/
   4005,1,"macro redefinition",
   4013,3,"function undefined; assuming extern returning int",
+  4018,3,"signed/unsigned mismatch",
   4035,1,"function with no return value",
   4042,1,"bad storage class",
   4047,1,"different levels of indirection",
   4049,1,"indirection to different types",
+  4068,1,"#pragma o attributo sconosciuto",
   4098,1,"void function returning a value",
   4099,1,"void type invalid",
   4101,3,"unreferenced local variable",
   4102,3,"unreferenced label",
   4127,4,"conditional expression is constant",/*anche 4727*/
   4131,4,"old-style declaration",
+  4244,3,"conversion, truncation, possible loss of data",
   4701,3,"local variable used without initialization",
   4705,4,"statement has no effect",
   4761,3,"integral size mismatch in argument; conversion supplied",
@@ -276,21 +287,28 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #if I8086
 //      FO->printf("%s PTR %s","BYTE",s->s.v->label);
       FO->printf("%s",s->s.v->label);
+      if(s->ofs)
+        FO->printf("%+d",s->ofs);
 #elif MC68000
-			if(MemoryModel & 0x80) {
-				FO->printf("%s-%s(%s)",s->s.v->label,"__BaseAbs",Regs->AbsS);
+			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
+		    if(s->ofs)
+					FO->printf("%s%+d-%s(%s)",s->s.v->label,s->ofs,"__BaseAbs",Regs->AbsS);
+				else
+					FO->printf("%s-%s(%s)",s->s.v->label,"__BaseAbs",Regs->AbsS);
 				}
 			else {
 				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
 					FO->printf("#%s",s->s.v->label);
 				else
 					FO->printf("%s",s->s.v->label);
+				if(s->ofs)
+					FO->printf("%+d",s->ofs);
 				}
 #else
       FO->printf("%s",s->s.v->label);
-#endif  
       if(s->ofs)
         FO->printf("%+d",s->ofs);
+#endif  
       break;
     case OPDEF_MODE_COSTANTE:
 #if I8086
@@ -366,7 +384,7 @@ int Ccc::PROCObj(COutputFile *FO) {
       case LINE_TYPE_COMMENTO:
 				if(TEXT->s1.mode != OPDEF_MODE_NULLA) {
 					subObj(FO,&TEXT->s1);
-					FO->put('\n');
+					FO->putcr();
 					}
         break;
       case LINE_TYPE_LABEL:
@@ -443,14 +461,15 @@ int Ccc::PROCObj(COutputFile *FO) {
       }
     if(TEXT->type == LINE_TYPE_COMMENTO) {		// c'è già nella riga che arriva da OutSource... NO!
 			if(TEXT->rem[_tcslen(TEXT->rem)-1] != '\n')		// in certi casi...
-			  FO->put('\n');
+			  FO->putcr();
 			}
 		else
-		  FO->put('\n');
+		  FO->putcr();
     t=TEXT;
     TEXT=TEXT->next;
     if(t!=RootOut)
       LastOut=PROCDelLista(RootOut,LastOut,t);
+		//ev. PROCDelLastLine(t);
     }
 // OSCLI("SETTYPE "+B$+" &FE0")
 
@@ -473,6 +492,8 @@ int Ccc::PROCError(int Er, const char *a) {
  	  else  
  	    wsprintf(myBuf,".");
 		_tcscat(errBuf,myBuf);
+		if(FErr)
+			FErr->println(errBuf);
 	  if(debug) {
 	    PROCV("vartmp.map");
 //	    PROCT();
@@ -529,6 +550,8 @@ int Ccc::PROCWarn(int Er, const char *a) {
 				_tcscpy(p,errBuf);
 				myOutput->PostMessage(WM_ADDTEXT,2,(LPARAM)p);
 				}
+				if(FErr)
+					FErr->println(errBuf);
 		    if(Warning<0)
 		      PROCError(2200,NULL);
 			  }
@@ -566,7 +589,7 @@ int Ccc::PROCV(const char *n) {
 			}
     V=V->next;
     }
-  FO->put('\n');
+  FO->putcr();
   C=Con;
   while(C) {
     FO->printf("Cost. %s\t\tLabel %s\n",C->name,C->label);
@@ -601,14 +624,14 @@ int Ccc::PROCD() {
   }
   
 int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
-  static int T=1;
+  /*static ??*/ int T=0;
   int I,i;
   char *p;
   char myBuf[256];
   struct VARS *V;
   
   if(func) {
-    FO->printf("%s: variabili locali",func->name);
+    FO->printf("%s: variabili locali\n",func->name);
 		}
   else {
     FO->println("Variabili globali");
@@ -617,9 +640,11 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
   while(V) {
     if(V->func==func) {
 			if(!(T % 60)) {
-				FO->printf("\f%32s%10s%14s%6s%10s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro");
+				FO->printf("\f\n%32s%10s%16s%10s%12s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro");
+				//spostare FormFeed prima/fuori...
 				}
 			FO->printf("%32s",V->name);
+
 	//    i=26-strlen(Var[T].name)/2;
 	//    while(i--)
 	//      FO->put('.',FO);
@@ -647,69 +672,83 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				}
 			FO->printf("%10s",p);
 	//	  FO->printf("\t");
-			if(V->type & VARTYPE_ARRAY) 
+
+			if(V->type & VARTYPE_FUNC) {
+				if(V->type & VARTYPE_FUNC_POINTER)
+					p="funct/ptr";
+				else
+					p="function";
+				}
+			// VA TUTTO RIVISTO, i tipi possono miscelarsi...
+
+			else if(V->type & VARTYPE_ARRAY) 
 				p="array";
 			else if(V->type & VARTYPE_IS_POINTER) 
 				p="pointer";
 			else {
-				if(V->type & VARTYPE_FUNC) 
-					p="function";
-				else {
-					if(V->type & (VARTYPE_UNION | VARTYPE_STRUCT | VARTYPE_ARRAY))
-						p="struct/array";
-					else if(V->type & VARTYPE_FLOAT)
-						p="float";
-					else if(V->type & VARTYPE_BITFIELD)
-						p="bitfield";
-					else {             
-						p=myBuf;
-						if(V->type & VARTYPE_UNSIGNED)
-							_tcscpy(myBuf,"unsigned ");
-						else
-							*myBuf=0;
-						if(V->size == INT_SIZE) {
-							_tcscat(myBuf,"int ");
-							}
-						else {  
-							switch(V->size) {
-								case 1:
-									_tcscat(myBuf,"char ");
-									break;
-								case 2:
-									_tcscat(myBuf,"short ");
-									break;
-								case 4:
-									_tcscat(myBuf,"long ");
-									break;
-								} 
-							}
-#if MICROCHIP
-						if(V->type & VARTYPE_ROM)
-							_tcscat(myBuf,"rom ");
-#endif
+
+				if(V->type & (VARTYPE_UNION | VARTYPE_STRUCT | VARTYPE_ARRAY))
+					p="struct/array";
+				else if(V->type & VARTYPE_FLOAT)
+					p="float";
+				else if(V->type & VARTYPE_BITFIELD)
+					p="bitfield";
+				else {             
+					p=myBuf;
+					if(V->type & VARTYPE_UNSIGNED)
+						_tcscpy(myBuf,"unsigned ");
+					else
+						*myBuf=0;
+					if(V->size == INT_SIZE) {
+						_tcscat(myBuf,"int ");
 						}
+					else {  
+						switch(V->size) {
+							case 1:
+								_tcscat(myBuf,"char ");
+								break;
+							case 2:
+								_tcscat(myBuf,"short ");
+								break;
+							case 4:
+								_tcscat(myBuf,"long ");
+								break;
+							} 
+						}
+					if(V->type & VARTYPE_FAR)
+						_tcscat(myBuf,"far ");
+#if MICROCHIP
+					if(V->type & VARTYPE_ROM)
+						_tcscat(myBuf,"rom ");
+#endif
 					}
+
 				}
-			FO->printf("%14s",p);
+			FO->printf("%16s",p);
+
 	//	  FO->printf("\t");
-			if(V->type & VARTYPE_FUNC)
-				p="***";
+			if(V->type & VARTYPE_FUNC) {
+				p=myBuf;
+//				p="***";
+				sprintf(myBuf,"%u %c",V->size,V->type & VARTYPE_POINTER ? '*' : ' ');
+				}
 			else {
 				p=myBuf;
 				if(V->type & VARTYPE_ARRAY)
-					sprintf(myBuf,"%d",FNGetArraySize(V));
+					sprintf(myBuf,"%u",FNGetArraySize(V));
 				else {
 					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION))
-						sprintf(myBuf,"%d",V->size);
+						sprintf(myBuf,"%u",V->size);
 					else {
 						if(V->type & VARTYPE_IS_POINTER)
-							sprintf(myBuf,"%d",getPtrSize(V->type));
+							sprintf(myBuf,"%u",getPtrSize(V->type));
 						else
-							sprintf(myBuf,"%d",V->size);
+							sprintf(myBuf,"%u",V->size);
 						}
 					}
 				}
-			FO->printf("%5s",p);
+			FO->printf("%9s",p);
+
 			if(V->classe==CLASSE_AUTO) {
 				p=myBuf;
 				I=MAKEPTROFS(V->label);
@@ -718,19 +757,21 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 			else {
 				p="***";
   			}
-			FO->printf("%5s",p);
+			FO->printf("%7s",p);
+
 			if(V->classe==CLASSE_REGISTER) {
 				_tcscpy(myBuf,(*Regs)[V]);
 				}
 			else
 				*myBuf=0;
+
 			FO->println(myBuf);
 			T++;
 			}
     V=V->next;
     }
-	FO->put('\n');
-	FO->put('\n');
+	FO->putcr();
+	FO->putcr();
   
   return 0;
   }

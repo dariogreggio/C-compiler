@@ -39,7 +39,7 @@
 #if ARCHI
 #define __VER__ MAKEWORD(0,1)
 #elif Z80
-#define __VER__ MAKEWORD(5,2)
+#define __VER__ MAKEWORD(6,2)
 #elif I8086
 #define __VER__ MAKEWORD(2,2)
 #elif I8051
@@ -47,7 +47,7 @@
 #elif MICROCHIP
 #define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(1,1)
+#define __VER__ MAKEWORD(10,1)
 #endif
 
 enum {
@@ -150,6 +150,14 @@ enum {
 	OPTIMIZE_SIZE=0x100,
 	OPTIMIZE_SPEED=0x200,
 	};
+enum {
+	MEMORY_MODEL_SMALL=0,
+	MEMORY_MODEL_COMPACT=0,		// finire
+	MEMORY_MODEL_MEDIUM=0,		// finire
+	MEMORY_MODEL_LARGE=1,
+	MEMORY_MODEL_ABSOLUTE=0,
+	MEMORY_MODEL_RELATIVE=0x80,
+	};
 
 union STR_LONG {
   char s[128];
@@ -194,15 +202,19 @@ enum VAR_TYPES {		// v. anche class Ccc
 	VARTYPE_2POINTER=2,			//**
 	VARTYPE_IS_POINTER=0xf,			//0..15
 	VARTYPE_NOT_A_POINTER=(uint32_t)(~(VARTYPE_IS_POINTER)),			// mask
+
+	VARTYPE_FUNC_POINTER=0x40,
 	VARTYPE_FUNC_BODY=0x80,
 	VARTYPE_FUNC=0x100,
 	VARTYPE_FUNC_USED=0x200,
-	VARTYPE_ARRAY=0x400,
+
+	VARTYPE_ARRAY=0x400,		// questo IMPLICA 1 ossia POINTER
 	VARTYPE_STRUCT=0x800,
 	VARTYPE_UNION=0x1000,
 	VARTYPE_FLOAT=0x2000,		// per double metto size=8 opp. 4
 	VARTYPE_BITFIELD=0x4000,
 	VARTYPE_ENUM=0x10000,
+
 	VARTYPE_FAR=0x10000000L,
 	VARTYPE_SIGNED=0x00000000L,
 	VARTYPE_UNSIGNED=0x80000000L,
@@ -259,7 +271,7 @@ struct OPERAND {
   
 struct OPERANDO {
   char *s;
-  /*enum OPERANDI*/ int p;
+  /*enum OPERANDI*/ int8_t p;
   };
 
 struct TIPI {
@@ -269,18 +281,20 @@ struct TIPI {
   struct TAGS *tag;
   O_DIM dim;
   };
-           
+
 struct BLOCK_PTR {
   struct LINE *TX;   // CONTIENE I PUNTATORI PENDENTI LastOut AL FILE OUT
-  char T[20];    // CONTIENE I NOMI DEI FINE-BLOCCHI, # SE DO, & SE SWITCH,% SE if
-  char C[20];   // CONTIENE LE LABEL PER continue
-  char B[20];   // CONTIENE LE LABEL PER break
+  char T[32];    // CONTIENE I NOMI DEI FINE-BLOCCHI, # SE DO, & SE SWITCH,% SE if
+  char C[32];   // CONTIENE LE LABEL PER continue
+  char B[32];   // CONTIENE LE LABEL PER break
+	char **gotos;		// usare, per memorizzare e controllare le label definite!
   char *parm;
+	int8_t flag;		// usato per segnalare cose, tipo "default" già uscito in switch(
   };
    
 
 #define MAKEPTRREG(s) (*(uint8_t*)s)
-#define MAKEPTROFS(s) (*(int*)s)
+#define MAKEPTROFS(s) (*(uint32_t*)s)
 
 class COpenCDoc;
 class COpenCView2;
@@ -293,6 +307,8 @@ class CLogFile;
 	extern int CPU86;               // 0 8086, 1 80186, 2 80286, 3 80386, 4 80486, 5 Pentium, 6 Pentium2, 7 Pentium3
 #elif MICROCHIP
 	extern int CPUPIC,CPUEXTENDEDMODE,stackLarge;              // 0=12; 1=16; 2=18; 3=24; 4=30/33; 5=32
+#elif MC68000
+	extern int CPU68;
 #endif
 
 
@@ -404,6 +420,7 @@ public:
 //	void println(const TCHAR *s);
 	void println(const TCHAR *s,...);
 	void put(char ch);
+	void putcr() { put('\n'); }
 	void write(const TCHAR *);
 	int get();
 	int getTotalLines() { return totLines; }
@@ -454,32 +471,35 @@ public:
 		,VARTYPE_ROM=0x40000000
 #endif
 		};*/
-	enum OPERANDO_CONDIZIONALE {
-		CONDIZ_MINORE=0x80,
-		CONDIZ_MAGGIORE_UGUALE=0x81,
-		CONDIZ_MINORE_UGUALE=0x82,
-		CONDIZ_MAGGIORE=0x83,
-		CONDIZ_UGUALE=0x84,
-		CONDIZ_DIVERSO=0x85,
-		CONDIZ_MINORE_UNSIGNED=0x86,
-		CONDIZ_MAGGIORE_UGUALE_UNSIGNED=0x87,
-		CONDIZ_MINORE_UGUALE_UNSIGNED=0x88,
-		CONDIZ_MAGGIORE_UNSIGNED=0x89,
-		};
 	enum VALUES {
 		VALUE_IS_0=0,					// forse se espressione a dx di =
-		VALUE_IS_ALTRO=1,			// boh... non ho ancora capito bene! forse proprio "altro" ossia espressione! tipo op. ? :
-		VALUE_IS_D0=2,
-		VALUE_IS_VARIABILE=3,
+		VALUE_IS_EXPR=1,			// boh... non ho ancora capito bene! forse proprio "altro" ossia espressione! tipo op. ? :
+		VALUE_IS_EXPR_FUNC=2,
+		VALUE_IS_D0=3,
+		VALUE_IS_VARIABILE=4,
 		VALUE_IS_COSTANTE=8,
-		VALUE_IS_COSTANTEPLUS=8 | 1,
+		VALUE_IS_COSTANTEPLUS=8 + 1,
 
 //                V->Q |= 0x20;            // segnala ! condizionale  VERIFICARE! era anche usato per indicare condizione di tipo unsigned...
 //ma è usato anche come "condizione"...		VALUE_CONDITION_UNSIGNED=0x20,				// potrebbe non servire più, 2025 con le nuove condizioni per unsigned, ma è ancora usata in giro!
+		VALUE_CONDITION_UNSIGNED=0x10,		// non più usata 2025 cmq (creati valori espliciti per unsigned
+		VALUE_IS_CONDITION=0x20,					// è una condizione < > == ecc
 		VALUE_HAS_CONDITION=0x40,
-		VALUE_IS_CONDITION=0x80,
+		VALUE_IS_CONDITION_VALUE=0x80,		// significa che usiamo un'expr come vero o falso
 		VALUE_CONDITION_UP=0x0100,			// usata come mask... non so bene perché
 		VALUE_CONDITION_MASK=0x00ff			// e viceversa
+		};
+	enum OPERANDO_CONDIZIONALE {
+		CONDIZ_MINORE=VALUE_IS_CONDITION | 0,
+		CONDIZ_MAGGIORE_UGUALE=VALUE_IS_CONDITION | 1,
+		CONDIZ_MINORE_UGUALE=VALUE_IS_CONDITION | 2,
+		CONDIZ_MAGGIORE=VALUE_IS_CONDITION | 3,
+		CONDIZ_UGUALE=VALUE_IS_CONDITION | 4,
+		CONDIZ_DIVERSO=VALUE_IS_CONDITION | 5,
+		CONDIZ_MINORE_UNSIGNED=VALUE_IS_CONDITION | 6,
+		CONDIZ_MAGGIORE_UGUALE_UNSIGNED=VALUE_IS_CONDITION | 7,
+		CONDIZ_MINORE_UGUALE_UNSIGNED=VALUE_IS_CONDITION | 8,
+		CONDIZ_MAGGIORE_UNSIGNED=VALUE_IS_CONDITION | 9,
 		};
 	enum OPERAND_MODES {
 		MODE_IS_OTHER=-1,
@@ -508,13 +528,13 @@ public:
 
 
 protected:
-	int bExit;
+	int8_t bExit;
 	char buffer[128];
   COutputFile *FPre;
 	CSourceFile *FIn;
-	COutputFile *FO1,*FO2,*FO3,*FO4;
+	COutputFile *FO1,*FO2,*FO3,*FO4,*FO5;
 	COutputFile *FObj,*FCod;
-	COutputFile *FLst;
+	COutputFile *FLst,*FErr;
 	int Warning;
   struct LINE *RootOut,*LastOut,*StaticOut,*BSSOut;
 	struct VARS *Var;
@@ -529,7 +549,7 @@ protected:
 	uint8_t InBlock; 			// LIVELLO DI BLOCCHI
 	uint32_t TempSize;
 	uint16_t MaxTypes;
-	int UseLMul,UseFMul,UseIRQ,UseTemp;
+	int8_t UseLMul,UseIRQ,UseTemp,UseFloat;
 	char *RootIn;
 	uint8_t Brack;				// usati da FNRev
 	uint32_t TempProg;				//
@@ -580,8 +600,8 @@ public:
 	int subAsm(char *);
 	int FNIsStmt();
 	char *FNGetLabel(char *,uint8_t);
-	int PROCGenCondBranch(const char *, int, int8_t *VQ, O_SIZE );
-	int FNGetCondString(int, int);
+	int PROCGenCondBranch(const char *, int T, int8_t *VQ, O_SIZE );
+	int FNGetCondString(uint8_t , uint8_t);
 	int PROCAssignCond(int8_t *VQ, O_TYPE *type, O_SIZE *size, char *);
 	int PROCReturn();
 	long FNGetConst(char *,bool);
@@ -591,12 +611,12 @@ public:
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE);
 #if MICROCHIP
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, uint8_t asPtr, uint8_t lh=0);
 #else
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, uint8_t asPtr);
 #endif
-	int PROCStoreD0(struct VARS *, int, struct VARS *, union STR_LONG *, bool isPtr);
-	int PROCGetAdd(int8_t VQ, struct VARS  *, int ofs, bool asPtr);
+	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, uint8_t isPtr);
+	int PROCGetAdd(int8_t VQ, struct VARS *, int ofs, bool asPtr);
 	int PROCUsaFun(struct VARS *,bool tosave1,bool tosave2);
 	struct CONS *FNAllocCost(const char *, uint8_t, O_TYPE type=0);
 	int PROCInit();
@@ -630,7 +650,7 @@ public:
 	void subSpezReg(uint8_t, struct OP_DEF *);
 #endif
 
-  int FNRev(int8_t Pty,int16_t *cond,char *,struct OPERAND *);
+  int8_t FNRev(int8_t Pty,int16_t *cond,char *,struct OPERAND *);
   char *ConRecEval(char *, uint8_t pty, long *);
   long EVAL(char *);
 
@@ -650,7 +670,7 @@ public:
 		int RQ, O_TYPE type2, O_SIZE size2, 
 		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
 	int subInc(bool, int16_t *cond, uint8_t T, int8_t VQ, struct VARS *, uint8_t qty, O_TYPE type, O_SIZE size, struct OP_DEF *, 
-		struct OP_DEF *);
+		struct OP_DEF *,uint8_t isPtr);
 
 	void subObj(COutputFile *,struct OP_DEF *);
 	int PROCObj(COutputFile *);
@@ -681,6 +701,7 @@ public:
 
   struct LINE *PROCInserLista(struct LINE *, struct LINE *, struct LINE *);
   struct LINE *PROCDelLista(struct LINE *, struct LINE *, struct LINE *);
+	void PROCDelLastLine(struct LINE *);
 	void swap(struct LINE * *, struct LINE * *);
   int PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
   int PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
@@ -701,11 +722,11 @@ public:
 	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
-	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);
+	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, uint8_t isPtr);
 	#if MICROCHIP
-	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t lh, bool asPtr);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t lh, uint8_t asPtr);
 	#else
-	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t asPtr);
 	#endif
 
 	#if ARCHI
@@ -720,6 +741,7 @@ public:
 #endif
 	int FNIsOp(const char *, int);
 	int FNIsClass(const char *);
+	O_SIZE FNGetSize(uint32_t);
 	O_SIZE FNGetMemSize(O_TYPE type, O_SIZE size, O_DIM dim, uint8_t m);
 	O_SIZE FNGetMemSize(struct VARS *, uint8_t);
 	O_SIZE FNGetArraySize(struct VARS *);

@@ -50,6 +50,16 @@ struct LINE *Ccc::PROCDelLista(struct LINE *Root, struct LINE *Last, struct LINE
     return Last;
   }
  
+void Ccc::PROCDelLastLine(struct LINE *l) {		// mah da usare per eliminare l'ultima riga mandata ad Out... verificare se serve
+
+  if(l != RootOut)
+    LastOut=PROCDelLista(RootOut,LastOut,l);
+	else {
+		PROCDelLista(RootOut,LastOut,l);
+    LastOut=RootOut=NULL;
+		}
+  }
+
 void Ccc::swap(struct LINE * *l1, struct LINE * *l2) {
   struct LINE *t;
   
@@ -107,7 +117,7 @@ int Ccc::PROCOut1(COutputFile *f,const char *A, const char *A1, const char *A2, 
     f->printf("%s",A2);  
   if(A3)
     f->printf("%s",A3);  
-  f->put('\n');
+  f->putcr();
   
   *myBuf=0;
   if(debug>2)

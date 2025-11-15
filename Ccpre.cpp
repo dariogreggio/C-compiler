@@ -439,7 +439,7 @@ int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
 
   First=TRUE;
   m_Cc->__line__=1;
-  while(!FI->Eof()) {
+  while(!FI->Eof() && !Go) {
     if(debug) {
       m_Log->print(0,"Linea: %d\n",m_Cc->__line__);
 //      while(!kbhit());
@@ -487,8 +487,10 @@ rifo:
 	//      m_Log->print(0,"... e poi Grab: %s\n",A);
 	      if(!_tcscmp(A,"endif")) {
 	//              m_Log->print(0,"ENDIF: IFS %d\n",IfDefs);
-	        if(!IfDefs)
+					if(!IfDefs) {
 	          m_Cc->PROCError(1020);
+						Go=TRUE;
+						}
 	        IfDefs--;
 	        if(!UNDEFD[IfDefs]) {
 						bumpIfs(UNDEFD,-1,UNDEFD[IfDefs],&IfDefs);
@@ -497,22 +499,30 @@ rifo:
 		        }
 	        }
 	      else if(!_tcscmp(A,"else")) {
-	        if(!IfDefs)
+					if(!IfDefs) {
 	          m_Cc->PROCError(1019);
+						Go=TRUE;
+						}
 //          m_Log->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d\n",UNDEFD[IfDefs],IfDefs,LstIfs);
 	        if(!UNDEFD[IfDefs-1])
 //	          UNDEFD[IfDefs-1] = ! UNDEFD[IfDefs-1];
 						bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
 		      PP=FALSE;
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
+					if(*B) {
+	          m_Cc->PROCError(1017,B);
+						Go=TRUE;
+						}
 		      PP=TRUE;
 	        }
 	      else if(!_tcscmp(A,"elif")) {		// GESTIRE espressioni anche qua! defined ecc
 		      PP=FALSE;
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
-	        if(!IfDefs)
+					if(!IfDefs) {
 	          m_Cc->PROCError(1018);
+						Go=TRUE;
+						}
 	        if(!UNDEFD[IfDefs-1]) {
 	          if(FNDefined(B))
 							bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
@@ -614,11 +624,14 @@ rifo:
 	              case '<':
 	                break;
 	              default :
-	                m_Cc->PROCError(2012);
+	                m_Cc->PROCError(2012,B);
+									Go=TRUE;
 	                break;
 	              }
-							if(B[_tcslen(B)-1] != ((*B == '<') ? '>' : '\"'))
+							if(B[_tcslen(B)-1] != ((*B == '<') ? '>' : '\"')) {
 								m_Cc->PROCError(2059,B);		// controllo char di chiusura... :)
+								Go=TRUE;
+								}
 	            B[_tcslen(B)-1]=0;
 							{int oldLine=m_Cc->__line__;
 	            if(!FNLeggiFile(B+1,FO,level+1))
@@ -651,6 +664,9 @@ rifo:
 	          else if(!_tcscmp(A,"pragma")) {
 	          // lo gestiamo come comando...
     	        FO->printf("%s %s ",A,B);
+
+							m_Cc->PROCWarn(4068,A);		// finire :)
+
 	            }
 						else if(!_tcscmp(A,"warning")) {
     					FO->printf("%s %s ",A,B);
@@ -659,13 +675,19 @@ rifo:
 	            sscanf(B,"%u",&m_Cc->__line__);
 	            }
 /*	          else if(!_tcscmp(A,"#")) {	
-// per concatenazione stringhe in macro... NO MA NON PASSA DI QUA!! va gestito dentor #define
+// per concatenazione stringhe in macro... NO MA NON PASSA DI QUA!! va gestito dentro #define
     					FO->printf("%s%s ",A,B);		// finire!!
 	            }*/
 	          else {
 	            m_Cc->PROCError(1021,A);
+							Go=TRUE;
 	            }
-	          }
+	          }		// if !UNDEFD
+
+					if(0)	{	// dovrebbe dare errore se #nonvalida e undefd... COME FARE? ricontrollarle tutte?
+	          m_Cc->PROCError(1021,A);
+						Go=TRUE;
+						}
 					{char ch=FI->get();
 	        if(ch != '\n')
 						FI->unget(ch);
