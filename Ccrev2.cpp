@@ -5,7 +5,9 @@
 #include <string.h>
 #include <math.h>
 
-extern struct VARS GVPtr,GRPtr;
+//extern struct VARS GVPtr,GRPtr;
+extern int8_t isRValue;
+
 #if Z80
 void IncOp(struct OP_DEF *);
 void DecOp(struct OP_DEF *);
@@ -1150,7 +1152,7 @@ int Ccc::subAdd(bool isAdd, int Mode, int8_t VQ, struct VARS *VVar, O_TYPE *VTyp
 //					printf("\aecco Dr %s e DSl %s\n",Dr,Regs->DSl);
 					if(i>=1 && i<=3) {
 					  while(i--) {
-						  if(m)
+						  if(isAdd)
 						    PROCOper(LINE_TYPE_ISTRUZIONE,incString,u[0].mode,&u[0].s,u[0].ofs);
 						  else  
 						    PROCOper(LINE_TYPE_ISTRUZIONE,decString,u[0].mode,&u[0].s,u[0].ofs);
@@ -1230,7 +1232,7 @@ int Ccc::subAdd(bool isAdd, int Mode, int8_t VQ, struct VARS *VVar, O_TYPE *VTyp
 //					printf("\aecco Dr %s e DSl %s\n",Dr,Regs->DSl);
 					if(i>=1 && i<=3) {
 					  while(i--) {
-						  if(m)
+						  if(isAdd)
 						    PROCOper(LINE_TYPE_ISTRUZIONE,incString,u[0].mode,&u[0].s,u[0].ofs);
 						  else  
 						    PROCOper(LINE_TYPE_ISTRUZIONE,decString,u[0].mode,&u[0].s,u[0].ofs);
@@ -4834,7 +4836,7 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
             PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar,0);
             if(prePost==1)
 	            PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_VARIABILE/*_INDIRETTO*/,(union SUB_OP_DEF *)&VVar,0,OPDEF_MODE_REGISTRO,Regs->D);
-            if(prePost==2)
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,Regs->D);			// per flag qua...
 						break;
 	        case 2:  
@@ -4843,10 +4845,10 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
             PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar,0);
             if(prePost==1)
 	            PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_VARIABILE/*_INDIRETTO*/,(union SUB_OP_DEF *)&VVar,0,OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 4:
             if(prePost==2)
@@ -4854,10 +4856,11 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
             PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar,0);
             if(prePost==1)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_VARIABILE/*_INDIRETTO*/,(union SUB_OP_DEF *)&VVar,0,OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+						// se LValue verrà copiato da Dn in An dopo
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 8:
 	          break;
@@ -5111,7 +5114,7 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
             PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i);
             if(prePost==1)
  	            PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i,OPDEF_MODE_REGISTRO,Regs->D);
-            if(prePost==2)
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,Regs->D);
 	          break;
 	        case 2:
@@ -5121,10 +5124,10 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
             PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i);
  	          if(prePost==1)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i,OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 4:
             if(prePost==2)
@@ -5133,10 +5136,11 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
 //                            PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i);
  	          if(prePost==1)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,i,OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+						// se LValue verrà copiato da Dn in An dopo
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 8: 
 	          break;
@@ -5251,7 +5255,7 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
 		        PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
             if(prePost==1)
 	            PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label),OPDEF_MODE_REGISTRO,Regs->D);
-            if(prePost==2)
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,Regs->D);			// per flag qua...
 						break;
 	        case 2:  
@@ -5260,10 +5264,10 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
 		        PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
             if(prePost==1)
 	            PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label),OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 4:
             if(prePost==2)
@@ -5271,10 +5275,11 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
 		        PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_IMMEDIATO,qty,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
             if(prePost==1)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label),OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
-            if(prePost==2)
+								(isPtr && isRValue) ? Regs->P :	Regs->D);	// per flag qua...
+						// se LValue verrà copiato da Dn in An dopo
+            if(prePost==2 && isRValue)
 	 	          PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
-								isPtr ? (Regs->P+isPtr-1) :	Regs->D);	// per flag qua...
+								isPtr ? Regs->P :	Regs->D);	// per flag qua...
 	          break;
 	        case 8:
 	          break;

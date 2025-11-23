@@ -6,32 +6,33 @@
 #include <ctype.h>
 #include <math.h>
 
-static int8_t isRValue;
+/*static */int8_t isRValue,isPtrUsed;
 
 void Ccc::subEvEx(uint8_t Pty, int16_t *cond, char *Clabel, struct OPERAND *V) {
 
-  isRValue=0;
+  isRValue=isPtrUsed=0;
+	Regs->Reset();
   FNRev(Pty,cond,Clabel,V);
 	if((V->Q & VALUE_IS_CONDITION) && Pty>=14)		// se condizionale e livello + esterno, esco 2025
 		return;
   if(V->Q == VALUE_IS_D0) {
 #if MICROCHIP
-    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,V->cost->l,0,0);
+    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE,0);
 #elif MC68000
 		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua..
-	    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,V->cost->l,0);
+	    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE);
 #else
-    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,V->cost->l,0);
+    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE);
 #endif
 		}
   else if(V->Q == VALUE_IS_VARIABILE) {
 #if MICROCHIP
-    ReadVar(V->var,0,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,0,0);
+    ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE,0);
 #elif MC68000
 		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua..
-	    ReadVar(V->var,0,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,0);
+	    ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE);
 #else
-    ReadVar(V->var,0,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,0);
+    ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE);
 #endif
 		}
   else if(V->Q & VALUE_IS_COSTANTE) {
@@ -93,26 +94,27 @@ int Ccc::FNEvalECast(char *C, O_TYPE *T, O_SIZE *S) {
 	V.cost=(union STR_LONG *)C;
   TempProg=0;
   i=0;
-	isRValue=0;
+  isRValue=isPtrUsed=0;
+	Regs->Reset();
   FNRev(15,&i,Clabel,&V);
   if(*S) {                    // se ho newSize, faccio cast...
 		if(V.Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-	    ReadVar(V.var,*T,*S,0,0,0);		//FINIRE
+	    ReadVar(V.var,*T,*S,0,FALSE,0);		//FINIRE
 #else
-	    ReadVar(V.var,*T,*S,0,0);
+	    ReadVar(V.var,*T,*S,0,FALSE);
 #endif
 			}
 		else if(V.Q==VALUE_IS_D0) {
 #if MICROCHIP
-	    PROCReadD0(V.var,*T,*S,0,0,0,0);
+	    PROCReadD0(V.var,*T,*S,0,0,FALSE,0);
 #else
-	    PROCReadD0(V.var,*T,*S,0,0,0);
+	    PROCReadD0(V.var,*T,*S,0,0,FALSE);
 #endif
 			}
 		else if(V.Q & VALUE_IS_COSTANTE) {
 #if MICROCHIP
-	    PROCUseCost(V.Q,*T,*S,(union STR_LONG *)C,0,FALSE);		// FINIRE
+	    PROCUseCost(V.Q,*T,*S,(union STR_LONG *)C,FALSE,0);		// FINIRE
 #else
 	    PROCUseCost(V.Q,*T,*S,(union STR_LONG *)C,FALSE);
 #endif
@@ -123,21 +125,21 @@ int Ccc::FNEvalECast(char *C, O_TYPE *T, O_SIZE *S) {
 	else {                      // altrimenti no cast e ritorno i valori T & S
 		if(V.Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-	    ReadVar(V.var,V.type,V.size,0,0,0);	// FINIRE
+	    ReadVar(V.var,V.type,V.size,0,FALSE,0);	// FINIRE
 #else
-	    ReadVar(V.var,V.type,V.size,0,0);
+	    ReadVar(V.var,V.type,V.size,0,FALSE);
 #endif
 			}
 		else if(V.Q==VALUE_IS_D0) {
 #if MICROCHIP
-	    PROCReadD0(V.var,V.type,V.size,0,0,0,0);
+	    PROCReadD0(V.var,V.type,V.size,0,0,FALSE,0);
 #else
-	    PROCReadD0(V.var,V.type,V.size,0,0,0);
+	    PROCReadD0(V.var,V.type,V.size,0,0,FALSE);
 #endif
 			}
 		else if(V.Q & VALUE_IS_COSTANTE) {
 #if MICROCHIP
-	    PROCUseCost(V.Q,V.type,V.size,(union STR_LONG *)C,0,FALSE);		// FINIRE
+	    PROCUseCost(V.Q,V.type,V.size,(union STR_LONG *)C,FALSE,0);		// FINIRE
 #else
 	    PROCUseCost(V.Q,V.type,V.size,(union STR_LONG *)C,FALSE);
 #endif
@@ -586,6 +588,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	O_TYPE T1;
 	uint32_t T;
 	int8_t v;
+	uint32_t attrib;
   int AR,reg2,SavedR;
 	int8_t OP,oOP,Co=0;
 	bool Exit=FALSE;
@@ -637,8 +640,12 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 //		isWhat=0;			// DEBUG BREAK
 		ol=0;
 		}
-				if(OP==14)
+				if(Pty==14)
 					isRValue--;
+				if(isPtrUsed) {
+//					Regs->DecP();
+//					isPtrUsed--;
+					}
         break;
       case ARITM_IS_COSTANTE:
         V->tag=NULL;
@@ -700,15 +707,15 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
                       V->type=VARTYPE_PLAIN_INT;
                       V->size=0;
 											ZeroMemory(V->var,sizeof(struct VARS));
-                      PROCGetType(&V->type,&V->size,&V->tag,d,l1);
+                      PROCGetType(&V->type,&V->size,&V->tag,d,&attrib,l1);
                       PROCCheck(')');
                       i2=0;
 										  FNRev(2,&i2,Rlabel,&R);
 										  if(R.Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-										    ReadVar(R.var,V->type,V->size,0,0,V->type & VARTYPE_IS_POINTER ? (isRValue ? 2 : 1) : 0);		//FINIRE
+										    ReadVar(R.var,V->type,V->size,0,V->type & VARTYPE_IS_POINTER ? TRUE : FALSE,0);		//FINIRE
 #else
-												ReadVar(R.var,V->type,V->size,0,V->type & VARTYPE_IS_POINTER ? (isRValue ? 2 : 1) : 0);
+												ReadVar(R.var,V->type,V->size,0,V->type & VARTYPE_IS_POINTER ? TRUE : FALSE);
 #endif
 										    V->Q=VALUE_IS_EXPR;
 										    }
@@ -718,9 +725,9 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
                       	}
 										  else if(R.Q==VALUE_IS_D0) {
 #if MICROCHIP
-                      	PROCReadD0(R.var,V->type,V->size,0,0,0,0);
+                      	PROCReadD0(R.var,V->type,V->size,0,0,FALSE,0);
 #else
-                      	PROCReadD0(R.var,V->type,V->size,0,0,0);
+                      	PROCReadD0(R.var,V->type,V->size,0,0,FALSE);
 #endif
 										    V->Q=VALUE_IS_EXPR;
 										    }
@@ -772,15 +779,19 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
                   v=0;               // flag per ReadD0
                   T=0;               // 1 quando leggo la base-array
                   T1=V->type;
+									isPtrUsed++;
+//									Regs->IncP();
 									R.flag = (V->type & VARTYPE_IS_POINTER)-1;			// livelli di indirezione, ricorsivi a cascata; -1 perché array han sempre 1 ptr
                   if(V->Q==VALUE_IS_VARIABILE || V->Q==VALUE_IS_COSTANTEPLUS) {		// per consentire uso di stringhe come array, credo...
                     T1 |= VARTYPE_ARRAY;
                     }  
+									I=T1;
                   for(;;) {
-	                  if(T1 & VARTYPE_IS_POINTER) {
+	                  if(I & VARTYPE_IS_POINTER) {
 											R.type=T1;	// verrà usato per gli indici a seguire, se ci sono
 //	                    T1=(T1 & VARTYPE_NOT_A_POINTER) | ((T1 & VARTYPE_IS_POINTER) -1); messo DOPO per memsize
 											// v. anche R.flag
+	                    I=(I & VARTYPE_NOT_A_POINTER) | ((I & VARTYPE_IS_POINTER) -1); // per controllo #dim
 
 
 
@@ -792,7 +803,9 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	  	                j=*cond;
 		                  *cond = VALUE_CONDITION_UP;
 	//                    *cond=0;
+									Regs->IncP();
 	                    FNRev(15,cond,Rlabel,&R);
+									Regs->DecP();
 	                    if(!i)
 	                      Regs->Dec((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
 		                  if(!T && (R.Q>=VALUE_IS_EXPR && R.Q<=VALUE_IS_VARIABILE)) {
@@ -807,9 +820,9 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 						                  reg2=MAKEPTRREG(V->var->label);
 														else {
 #if MICROCHIP
-															ReadVar(V->var,0,0,0,0,isRValue ? 2 : 1);		// FINIRE
+															ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE,0);		// FINIRE
 #else
-			                        ReadVar(V->var,0,0,0,isRValue ? 2 : 1);
+			                        ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE);
 #endif
 															}
 			                      }
@@ -817,7 +830,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 			                    }
 			                  else if(V->Q == VALUE_IS_COSTANTEPLUS) {		// cose tipo "abcd"[1]
 #if MICROCHIP
-											    PROCUseCost(V->Q,V->type,V->size,V->cost,0,TRUE);		// FINIRE
+											    PROCUseCost(V->Q,V->type,V->size,V->cost,TRUE,0);		// FINIRE
 #else
 											    PROCUseCost(V->Q,V->type,V->size,V->cost,TRUE);
 #endif
@@ -829,6 +842,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 
 	                    i=Regs->Inc((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
 // NON fare se costante su 68000! spostare sotto idem v.sopra
+									Regs->IncP();
 
 
 
@@ -841,6 +855,8 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 
 													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
 														;
+
+													// OTTIMIZZARE con ASL ;) se multiplo di 2 tipo PTR
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
 															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),OPDEF_MODE_REGISTRO,Regs->D);// (multidim)
@@ -856,9 +872,9 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 
 	                      case VALUE_IS_D0:
 #if MICROCHIP
-													PROCReadD0(R.var,VARTYPE_UNSIGNED,INT_SIZE,*cond & VALUE_CONDITION_MASK,0,0,isRValue ? 2 : 1);
+													PROCReadD0(R.var,VARTYPE_UNSIGNED,INT_SIZE,*cond & VALUE_CONDITION_MASK,0,FALSE,0);
 #else
-											    PROCReadD0(R.var,VARTYPE_UNSIGNED,INT_SIZE,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);
+											    PROCReadD0(R.var,VARTYPE_UNSIGNED,INT_SIZE,*cond & VALUE_CONDITION_MASK,0,FALSE);
 #endif
 													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
 														;
@@ -876,9 +892,9 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	                        break;
 	                      case VALUE_IS_VARIABILE:
 #if MICROCHIP
-	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,0,isRValue ? 2 : 1);			// FINIRE
+	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE,0);			// FINIRE
 #else
-	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,isRValue ? 2 : 1);
+	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE);
 #endif
 													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
 														;
@@ -915,6 +931,7 @@ R.cost->l=0;
 		                      PROCError(1035);
 	                        break;
 	                      }  
+									Regs->DecP();
                       if(R.Q>=VALUE_IS_EXPR && R.Q<=VALUE_IS_VARIABILE) {
 #if ARCHI                       
                       if(R.size>1) {
@@ -994,9 +1011,11 @@ R.cost->l=0;
 	                    if(!i)
 	                      Regs->Dec((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
 
+//											isPtrUsed=0;		// o decrementare per ogni quadra chiusa...
+
 											R.flag--;
 	                    PROCCheck(']');
-	                    }
+	                    }		// se ancora array/ptr
 	                  else
 	                    PROCError(2109);
 										FNLA(MyBuf);
@@ -1018,15 +1037,17 @@ R.cost->l=0;
 				                  reg2=MAKEPTRREG(V->var->label);
 												else  {
 #if MICROCHIP
-	                        ReadVar(V->var,0,0,0,0,isRValue ? 2 : 1);			// FINIRE
+	                        ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE,0);			// FINIRE
 #else
-	                        ReadVar(V->var,0,0,0,isRValue ? 2 : 1);
+	                        ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE);
 #endif
 													if(l) {
 #if MC68000
-				                    PROCOper(LINE_TYPE_ISTRUZIONE,"adda.w",OPDEF_MODE_IMMEDIATO16,l,OPDEF_MODE_REGISTRO16,Regs->P);
+				                    PROCOper(LINE_TYPE_ISTRUZIONE,"adda.w",OPDEF_MODE_IMMEDIATO16,l,OPDEF_MODE_REGISTRO16,
+															Regs->P);
 #else
-				                    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_IMMEDIATO16,l,OPDEF_MODE_REGISTRO16,Regs->P);
+				                    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_IMMEDIATO16,l,OPDEF_MODE_REGISTRO16,
+															Regs->P);
 #endif
 														l=0;
 														}
@@ -1036,7 +1057,7 @@ R.cost->l=0;
 	                    }
 	                  else if(V->Q == VALUE_IS_COSTANTEPLUS) {		// cose tipo "abcd"[1]
 #if MICROCHIP
-									    PROCUseCost(V->Q,V->type,V->size,V->cost,0,TRUE);		// FINIRE
+									    PROCUseCost(V->Q,V->type,V->size,V->cost,TRUE,0);		// FINIRE
 #else
 									    PROCUseCost(V->Q,V->type,V->size,V->cost,TRUE);
 #endif
@@ -1067,8 +1088,8 @@ R.cost->l=0;
 #ifdef MC68000
 										if(!(V->type & VARTYPE_ARRAY) && Pty<=14) {		// solo se era puntatore usato come array, altrimenti sono a posto (INEVITABILE un passaggio in più in registro...
 											if(!(*cond & VALUE_CONDITION_MASK))			// qua non serve, lo faccio da EvalCond (v.
-												PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0 /*R.Q == VALUE_IS_COSTANTE ? R.cost->l : 0  in effetti l'ho già messo sopra!*/,
-													0);
+												PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0 /*R.Q == VALUE_IS_COSTANTE ? R.cost->l : 0  in effetti l'ho già messo sopra!*/,
+													FALSE);
 											}
 #endif
 										V->type=T1;
@@ -1079,7 +1100,7 @@ R.cost->l=0;
 										V->var->func=(struct VARS *)reg2;
 										V->var->parm=(char *)l;
 										memcpy(V->dim,R.dim,sizeof(O_DIM));
-										V->flag=/*R.flag+*/1;
+										V->flag=1; // v & 2 ? 1 : 0 /*R.flag+*/;		// (CMQ se indice tutto costante, NON devo poi mettere Dn in An
 								    memcpy(V->cost,R.cost,sizeof(union STR_LONG));
 //											myLog->print(0,"array esce con ofs %d\n",l);
                     V->Q=VALUE_IS_D0;
@@ -1113,9 +1134,9 @@ R.cost->l=0;
                     else {
                       if(V->type & VARTYPE_IS_POINTER) {
 #if MICROCHIP
-                        PROCReadD0(V->var,0,0,0,0,0,0);		//FINIRE
+                        PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);		//FINIRE
 #else
-                        PROCReadD0(V->var,0,0,0,0,0);
+                        PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 												}
                       else 
@@ -1132,9 +1153,9 @@ R.cost->l=0;
                     else {
                       if(V->type & VARTYPE_IS_POINTER) {
 #if MICROCHIP
-	                        ReadVar(V->var,0,0,0,0,isRValue ? 2 : 1);			// FINIRE
+	                        ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE,0);			// FINIRE
 #else
-	                        ReadVar(V->var,0,0,0,isRValue ? 2 : 1);
+	                        ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,TRUE);
 #endif
 													}
                       else 
@@ -1157,9 +1178,10 @@ R.cost->l=0;
 									V->var->func=(struct VARS *)Regs->D;
 									V->var->parm=(char *)reg2;
                   V->tag=R.var->tag;
+//									V->flag= ??  0 per copiare ev. Dn in An, v.array e ptr
 									memcpy(V->dim,R.dim,sizeof(O_DIM));
                   V->Q=VALUE_IS_D0;
-							    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);
+							    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE);
                   break;
                 default:
                   break;
@@ -1220,27 +1242,31 @@ LBinaryMinus:
                     }
 #endif
 									V->Q=subInc(*TS=='+',cond,T,V->Q,V->var,I,V->type,V->size,&u[1],&u[2],
-										V->type & VARTYPE_IS_POINTER ? (isRValue ? 2 : 1) : 0);		// non va tipo se prima c'era * ...
+										V->type & VARTYPE_IS_POINTER ? (TRUE) : 0);		// non va tipo se prima c'era * ...
 	                break;
 
 	              case '*':
 	                i=*cond;
 	                *cond = VALUE_CONDITION_UP;
+									isPtrUsed++;
+//									Regs->IncP();
 								  FNRev(2,cond,Clabel,&R);
+//									isPtrUsed--;
+//									Regs->DecP();
 						      reg2=Regs->D;
 								  if(R.Q==VALUE_IS_VARIABILE) {
 								    if(R.var->classe == CLASSE_REGISTER) {
 #if MC68000
-											ReadVar(R.var,0,0,*cond & VALUE_CONDITION_MASK,isRValue ? 2 : 1);	// Pty<=14 ? TRUE : FALSE ...
+											ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,TRUE);	// Pty<=14 ? TRUE : FALSE ...
 #else
 			                reg2=MAKEPTRREG(R.var->label);		// beh ri-verificare gli altri!
 #endif
 											}								      
 								    else {
 #if MICROCHIP
-											ReadVar(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);		// FINIRE
+											ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,TRUE,0);		// FINIRE
 #else
-											ReadVar(R.var,0,0,*cond & VALUE_CONDITION_MASK,isRValue ? 2 : 1);	// Pty<=14 ? TRUE : FALSE ...
+											ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,TRUE);	// Pty<=14 ? TRUE : FALSE ...
 #endif
 #if MC68000
 // ????											if(Pty<=14)		// se NON per Store (ossia se r-value
@@ -1251,27 +1277,34 @@ LBinaryMinus:
 								    }
 									else if(R.Q==VALUE_IS_D0) {
 #if MICROCHIP
-								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,0,isRValue ? 2 : 1);
+								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE,0);
 #elif MC68000
 										if(Pty<14)			// solo se non assegnazione (altrimenti ci pensa dopo
-									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);
+									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #else
-								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);
+								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #endif
 										}
 									else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) {
 #if MICROCHIP
-								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,0,isRValue ? 2 : 1);
+								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE,0);
 #elif MC68000
-										if(Pty<14)			// solo se non-assegnazione (altrimenti ci pensa dopo   
-									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);
+										if(Pty<14 /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
+											}
+										if(!isRValue /*Pty<14*/ /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+											/// in certi casi rimane una doppia move, tipo se segue ++/--
+								  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
+												Regs->P);	
+											CHECKPOINTER();
+											}
 #else
-								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,isRValue ? 2 : 1);
+								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #endif
 										}
 									else if(R.Q & VALUE_IS_COSTANTE) {
 #if MICROCHIP
-								    PROCUseCost(R.Q,R.type,R.size,R.cost,0,TRUE);		// FINIRE
+								    PROCUseCost(R.Q,R.type,R.size,R.cost,TRUE,0);		// FINIRE
 #else
 								    PROCUseCost(R.Q,R.type,R.size,R.cost,TRUE);
 #endif
@@ -1292,7 +1325,7 @@ LBinaryMinus:
 									V->var->func=(struct VARS *)reg2;		// credo cazzata, 2025, di sicuro per 68000 sopra (perché poi leggo da A0
 									V->var->parm=(char*)reg2;
 									V->tag=R.tag;
-									V->flag=0;
+									V->flag= (R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) ? 0 : 1;		// indica se devo caricare Dn in An, dopo
 									memcpy(V->dim,R.dim,sizeof(O_DIM));
 							    memcpy(V->cost,R.cost,sizeof(union STR_LONG));
 
@@ -1303,6 +1336,8 @@ LBinaryMinus:
 									else
 										V->Q=VALUE_IS_0;*/
 									V->Q=VALUE_IS_D0;
+//									Regs->IncP();
+//									isPtrUsed=0;
 	                break;
 
 	              case '&':
@@ -1312,6 +1347,7 @@ LBinaryMinus:
 	                  case VALUE_IS_EXPR:
 	                  case VALUE_IS_EXPR_FUNC:
 	                    PROCError(2101);
+											break;
 	                  case VALUE_IS_D0:
 #if ARCHI	                      
 	                    t=LastOut;
@@ -1330,19 +1366,20 @@ LBinaryMinus:
 	                    else
 	                      _tcscpy(t->s,";");
 #elif Z80 || I8086 || MC68000 || MICROCHIP
-											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,Pty==2 ? TRUE : 0);
+											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,(isPtrUsed && Brack==0) ? TRUE : FALSE);
+											// non è il massimo, ma serve per... a=*(((unsigned short *)&c5)+1);
 #endif	                    
   	                  break;
 	                  case VALUE_IS_VARIABILE:
-	                    PROCGetAdd(VALUE_IS_VARIABILE,R.var,0,Pty==2 ? TRUE : 0);
+	                    PROCGetAdd(VALUE_IS_VARIABILE,R.var,0,(isPtrUsed && Brack==0) ? TRUE : FALSE);
 	                    break;
 	                  case VALUE_IS_COSTANTEPLUS:		// boh, 2025...serve??
-	                    PROCGetAdd(VALUE_IS_COSTANTEPLUS,R.var,0,Pty==2 ? TRUE : 0);
+	                    PROCGetAdd(VALUE_IS_COSTANTEPLUS,R.var,0,(isPtrUsed && Brack==0) ? TRUE : FALSE);
 	                    break;
 	                  default:
 	                    break;
 	                  }
-	                V->Q=VALUE_IS_EXPR;
+									V->Q=(isPtrUsed && Brack==0) ? VALUE_IS_D0 : VALUE_IS_EXPR;
 	                V->type=VARTYPE_UNSIGNED | VARTYPE_POINTER;
 		              V->size=getPtrSize(V->type);
 		              break;
@@ -1356,7 +1393,7 @@ LBinaryMinus:
 		                  break;
 		                case VALUE_IS_COSTANTEPLUS:		// 9
 #if MICROCHIP
-		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,0,FALSE);		// FINIRE
+		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
 		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,FALSE);
 #endif
@@ -1386,16 +1423,16 @@ LBinaryMinus:
 		                default:
 											if(V->Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-												ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);		// FINIRE
+												ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
 #else
-												ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0);
+												ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);
 #endif
 												}
 											if(V->Q==VALUE_IS_D0) {
 #if MICROCHIP
-										    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE,0);
 #else
-										    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE);
 #endif
 												}
 											if(V->Q & VALUE_IS_CONDITION_VALUE) {
@@ -1506,16 +1543,16 @@ LBinaryMinus:
 	                else {
 										if(V->Q==VALUE_IS_D0) {
 #if MICROCHIP
-									    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE,0);
 #else
-									    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE);
 #endif
 											}
 										else if(V->Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-	                    ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);		// FINIRE
+	                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
 #else
-	                    ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0);
+	                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);
 #endif
 											}
 										else if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC) {
@@ -1650,7 +1687,7 @@ LUnaryMinus:
 	                    break;
 	                  case VALUE_IS_COSTANTEPLUS:
 #if MICROCHIP
-		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,0,FALSE);		// FINIRE
+		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
 		                  PROCUseCost(VALUE_IS_COSTANTE /*era-2*/,V->type,V->size,V->cost,FALSE);
 #endif
@@ -1681,16 +1718,16 @@ LUnaryMinus:
 	                  default:
 											if(V->Q==VALUE_IS_D0) {
 #if MICROCHIP
-										    PROCReadD0(V->var,0,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #else
-										    PROCReadD0(V->var,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 												}
 											if(V->Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-	                      ReadVar(V->var,0,0,0,0,0);			// FINIRE
+	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);			// FINIRE
 #else
-	                      ReadVar(V->var,0,0,0,0);
+	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 												}
 #if ARCHI
@@ -1814,7 +1851,7 @@ LUnaryMinus:
 	                FNLO(TS);
 	                if(FNIsType(TS) != VARTYPE_NOTYPE) {
 										I=0;
-	                  PROCGetType(&R.type,(uint16_t*)&T,&R.tag,(uint32_t*)&R.dim,l1);
+	                  PROCGetType(&R.type,(uint16_t*)&T,&R.tag,(uint32_t*)&R.dim,&attrib,l1);
 	                  }
 	                else {
 //										FIn->Seek(l1,CFile::begin);
@@ -1829,7 +1866,7 @@ LUnaryMinus:
 		                  T=getPtrSize(R.type);
 	                  }
 									if(*FNLA(TS) == ')')
-	                  while(*FNLO(MyBuf) != ')');
+										PROCCheck(')');
 	                V->cost->l=LOWORD(T);		// anche >65536??
 	                V->Q=VALUE_IS_COSTANTE;
 									// sarebbe carino accorpare con ev. costante che segue...
@@ -1851,6 +1888,11 @@ LUnaryMinus:
 	          case 10:
 							if(!Co /*isWhat==2*/)
 								PROCError(2059,TS);
+//							if(isPtrUsed)
+//								isPtrUsed--;
+//									Regs->DecP();
+							if(isPtrUsed)
+								Regs->IncP();
 	            reg2=0;
 	            subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0),u);
 	            ROut=LastOut;
@@ -1905,6 +1947,10 @@ LUnaryMinus:
                   Regs->Dec((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
 //                myLog->print(0,"Dec 1: %d\n",Regs->D);
                 }
+
+							if(isPtrUsed>0)
+								Regs->DecP();
+
               reg2=reg2 && (LastOut!=ROut);            // lo uso dopo...
 	            if((V->Q & VALUE_IS_COSTANTE) && (R.Q & VALUE_IS_COSTANTE)) {
 							  switch(*TS) {
@@ -1989,9 +2035,9 @@ LUnaryMinus:
 			              if(reg2)
 		                  swap(&ROut,&LastOut);
 #if MICROCHIP
-                    PROCReadD0(V->var,0,0,0,0,isRValue ? 2 : 1,0);
+                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,TRUE,0);
 #else
-                    PROCReadD0(V->var,0,0,0,0,isRValue ? 2 : 1);
+                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,TRUE);
 #endif
 										V->Q=VALUE_IS_EXPR;
 		                break;  
@@ -2026,7 +2072,7 @@ LUnaryMinus:
 	                case VALUE_IS_COSTANTEPLUS:
 myUVcost:	                
 #if MICROCHIP
-	                  PROCUseCost(V->Q,V->type,V->size,V->cost,0,FALSE);		// FINIRE
+	                  PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
 		                PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
 #endif
@@ -2040,9 +2086,9 @@ myUVvar:
 					              if(reg2)
 				                  swap(&ROut,&LastOut);
 #if MICROCHIP
-	                      ReadVar(V->var,0,0,0,0,0);			// FINIRE
+	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);			// FINIRE
 #else
-	                      ReadVar(V->var,0,0,0,0);
+	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 	                      break;
 	                    case CLASSE_REGISTER:
@@ -2130,6 +2176,14 @@ myUVvar:
 	              j=(V->size > 4) ? 2 : 1;  
 #endif
 		            subSpezReg(2,u+j);
+
+
+								if(isPtrUsed)
+									Regs->IncP();
+
+
+
+
 	              switch(R.Q) {
 	                case 0:
 	                case VALUE_IS_EXPR:
@@ -2137,9 +2191,9 @@ myUVvar:
 	                  break;
 	                case VALUE_IS_D0:
 #if MICROCHIP
-                    PROCReadD0(R.var,0,0,0,0,0,0);
+                    PROCReadD0(R.var,0,0,0,0,FALSE,0);
 #else
-                    PROCReadD0(R.var,0,0,0,0,0);
+                    PROCReadD0(R.var,0,0,0,0,FALSE);
 #endif
 	                  break;
 	                case VALUE_IS_COSTANTE:
@@ -2180,7 +2234,7 @@ myUVvar:
 	                case VALUE_IS_COSTANTEPLUS:
 myURcost:	 
 #if MICROCHIP
-	                  PROCUseCost(R.Q,R.type,R.size,R.cost,0,FALSE);		// FINIRE
+	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE,0);		// FINIRE
 #else
 	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #endif
@@ -2191,13 +2245,13 @@ myURcost:
                       case CLASSE_GLOBAL:
                       case CLASSE_STATIC:
 #if ARCHI || Z80  || I8051 
-	                      ReadVar(R.var,0,0,0,0);
+	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif I8086
-	                      ReadVar(R.var,0,0,0,0);
+	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MC68000
-	                      ReadVar(R.var,0,0,0,0);
+	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MICROCHIP
-	                      ReadVar(R.var,0,0,0,0,0);		// FINIRE
+	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #endif
       									break;
 	                    case CLASSE_REGISTER:
@@ -2211,9 +2265,9 @@ myURcost:
 		                      }
 												else   {
 #if MICROCHIP
-	 	                      ReadVar(R.var,0,0,0,0,0);		// FINIRE
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 													}
 	                      // dovremmo riuscire a usare le istruzioni ADD IX ecc.
@@ -2224,7 +2278,7 @@ myURcost:
 		                      T=-1;  
 		                      }
 		                    else  
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MC68000
 	                      if(OP==4 || OP==8 || OP==9 || OP==10) {			// solo su +- /|^ posso usare registro direttamente (poi volendo qualcosa si potrebbe ancora limare...
 		                      u[j].mode=OPDEF_MODE_REGISTRO;
@@ -2232,12 +2286,12 @@ myURcost:
 		                      T=-1;  
 		                      }
 		                    else  
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 	                      break;
 											case CLASSE_AUTO:
 #if ARCHI
- 	                      ReadVar(R.var,0);
+ 	                      ReadVar(R.var,VARTYPE_PLAIN_INT);
 #elif Z80	|| I8051 || MICROCHIP
 		                    if(/*!(V->type & 0x1d0f) && */ (T==0 && (OP==4 || OP>=8))/* || (OP==6 || OP==7)*/) {
 		                    // dovrebbe prendere anche i char *...
@@ -2254,9 +2308,9 @@ myURcost:
 		                      }
 												else {
 #if MICROCHIP
-	 	                      ReadVar(R.var,0,0,0,0,0);		// FINIRE
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 													}
 #elif I8086
@@ -2274,11 +2328,11 @@ myURcost:
 	                      	T=-1;
 		                      }
 	                      else 
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MC68000
 												// tolto qua tutto quel controllo... non so bene a cosa servisse, forse per ottimizzare
 
-	 	                      ReadVar(R.var,0,0,0,0);
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 												break;
 	                    }
@@ -2377,13 +2431,24 @@ myURcost:
   								if(!v)
     								v=PROCAllocVar("_fcvti",VARTYPE_FUNC | VARTYPE_FUNC_USED,CLASSE_EXTERN,4,0,0,0);	
 									if(R.Q==VALUE_IS_VARIABILE)
-		                ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0);
+#if MICROCHIP
+		                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
+#else
+		                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);		// FINIRE
+#endif
 									else if(R.Q==VALUE_IS_COSTANTE)
-								    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
+#if MICROCHIP
+								    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
+#else
+								    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);		// FINIRE
+#endif
 									else if(R.Q==VALUE_IS_D0)
-                    PROCReadD0(R.var,0,0,0,0,0);
+                    PROCReadD0(R.var,0,0,0,0,FALSE);
       						PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v,0);
 									}
+
+								if(isPtrUsed>0)
+									Regs->DecP();
 
                 switch(OP) {
                   case 3:
@@ -2445,16 +2510,16 @@ myURcost:
               T=1;
 							if(V->Q==VALUE_IS_D0) {
 #if MICROCHIP
-						    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0,0);
+						    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE,0);
 #else
-						    PROCReadD0(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);
+						    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0,FALSE);
 #endif
 								}
               else if(V->Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-                ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0,0);		// FINIRE
+                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
 #else
-                ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0);
+                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);
 #endif
 								}
               else if(V->Q & VALUE_IS_COSTANTE) {   // auto ottim. costanti (forza T=0)
@@ -2489,11 +2554,19 @@ myURcost:
   							if(!v)
     							v=PROCAllocVar("_fcvti",VARTYPE_FUNC | VARTYPE_FUNC_USED,CLASSE_EXTERN,4,0,0,0);	
 								if(R.Q==VALUE_IS_VARIABILE)
-		              ReadVar(V->var,0,0,*cond & VALUE_CONDITION_MASK,0);
+#if MICROCHIP
+	                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
+#else
+	                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);
+#endif
 								else if(R.Q==VALUE_IS_COSTANTE)
-								  PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
+#if MICROCHIP
+							    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
+#else
+							    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
+#endif
 								else if(R.Q==VALUE_IS_D0)
-                  PROCReadD0(R.var,0,0,0,0,0);
+                  PROCReadD0(R.var,0,0,0,0,FALSE);
       					PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v,0);
 								}
 
@@ -2552,7 +2625,7 @@ skippa_condbranch: ;
 	              T1=1;
 
 /*	              if(RQ==3) {
-	                ReadVar(R.var,0,0,*cond & 0xff);
+	                ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & 0xff);
 //	                RQ=0x85;
 	                }
 	              if(RQ & 8) {
@@ -2605,22 +2678,22 @@ skippa_condbranch: ;
 								PROCError(2059,TS);
 							if(V->Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
-		            ReadVar(V->var,0,0,1,0,0);		// FINIRE
+		            ReadVar(V->var,VARTYPE_PLAIN_INT,0,1,FALSE,0);		// FINIRE
 #else
-		            ReadVar(V->var,0,0,1,0);
+		            ReadVar(V->var,VARTYPE_PLAIN_INT,0,1,FALSE);
 #endif
 								}
 							else if(V->Q==VALUE_IS_D0) {
 #if MICROCHIP
-						    PROCReadD0(V->var,0,0,1,0,0,0);
+						    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,1,0,FALSE,0);
 #else
-						    PROCReadD0(V->var,0,0,1,0,0);
+						    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,1,0,FALSE);
 #endif
 								}
 //		          if(*V->Q<0) {
 		          else if(V->Q & VALUE_IS_COSTANTE) {      // boh autoottimizza cost..
 #if MICROCHIP
-						    PROCUseCost(V->Q,V->type,V->size,V->cost,0,FALSE);		// FINIRE
+						    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
 						    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
 #endif
@@ -2678,6 +2751,9 @@ skippa_condbranch: ;
 
 		        case 14:
 							isRValue++;
+							if(isPtrUsed)
+								Regs->IncP();
+
 //							if(isWhat==2)
 //								PROCError(2059,TS);
               if(Pty<14 || (V->Q & OPDEF_MODE_FRAMEPOINTER_INDIRETTO))           // bloccare le expr e cost a sinistra (a+3=b)
@@ -2709,61 +2785,61 @@ skippa_condbranch: ;
 		            }
 		          *cond=0;
 		          if(FNRev(14,cond,Rlabel,&R) < 0)
-								/*PROCError(2059)*/;
+								/*PROCError(2059) no... finire*/;
 		          if(R.Q==VALUE_IS_VARIABILE && (V->Q != VALUE_IS_VARIABILE || V->var->classe != CLASSE_REGISTER)) {   // store in registri a parte...
                 switch(R.var->classe) {
 	                case CLASSE_EXTERN:
                   case CLASSE_GLOBAL:
                   case CLASSE_STATIC:
 #if MICROCHIP
-                    ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0);		// FINIRE
+                    ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE,0);		// FINIRE
 #elif MC68000
 //										if(Pty>14)
-											ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+											ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #else
-                    ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+                    ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #endif
                     T=0;
   									break;
                   case CLASSE_REGISTER:
 #if MICROCHIP
-	  			          ReadVar(R.var,0,0,0,0,0);		// FINIRE
+	  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 //										if(Pty>14)
 										if(*TS != '=')
-		  			          ReadVar(R.var,0,0,0,0);
+		  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #else
-	  			          ReadVar(R.var,0,0,0,0);
+	  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
                     T=0;
                     break;
 									case CLASSE_AUTO:
 #if MICROCHIP
 									  if(*TS == '=' /*|| *TS=='*' || *TS=='/' || *TS=='%'  && *V->Q==3 && V->var->classe<3*/) {
-		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0);		// FINIRE
+		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE,0);		// FINIRE
 									    T=0;
 		  			          }
 		  			        else {
-//                      ReadVar(R.var,0,FNGetMemSize(V->type,V->size,1),0);
+//                      ReadVar(R.var,VARTYPE_PLAIN_INT,FNGetMemSize(V->type,V->size,1),0);
 		  			          T=1;
 		  			          }
 #elif MC68000
 										if(*TS == '=' || *TS=='+' || *TS=='-') {
 //											if(Pty>14)
-		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 									    T=0;
 		  			          }
 		  			        else {
-//                      ReadVar(R.var,0,FNGetMemSize(V->type,V->size,1),0);
+//                      ReadVar(R.var,VARTYPE_PLAIN_INT,FNGetMemSize(V->type,V->size,1),0);
 		  			          T=1;
 		  			          }
 #else
 									  if(*TS == '=' /*|| *TS=='*' || *TS=='/' || *TS=='%'  && *V->Q==3 && V->var->classe<3*/) {
-		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 									    T=0;
 		  			          }
 		  			        else {
-//                      ReadVar(R.var,0,FNGetMemSize(V->type,V->size,1),0);
+//                      ReadVar(R.var,VARTYPE_PLAIN_INT,FNGetMemSize(V->type,V->size,1),0);
 		  			          T=1;
 		  			          }
 #endif
@@ -2774,6 +2850,8 @@ skippa_condbranch: ;
 #if MC68000
 								if(V->Q == VALUE_IS_VARIABILE && V->var->classe == CLASSE_REGISTER)		// v.sopra: qua mi serve... forse anche altri
 	                T=1;
+								else 
+									T=0;
 #else
                 T=0;
 #endif
@@ -2786,7 +2864,7 @@ skippa_condbranch: ;
 			        else if(R.Q==VALUE_IS_COSTANTEPLUS) {             // tratto le costanti int. a parte
 	              R.size=V->size;
 #if MICROCHIP
-	              PROCUseCost(R.Q,R.type,R.size/*cioè V->size*/,R.cost,0,FALSE);		// FINIRE
+	              PROCUseCost(R.Q,R.type,R.size/*cioè V->size*/,R.cost,FALSE,0);		// FINIRE
 #elif MC68000
 								// questo le può usare direttamente!
 #else
@@ -2796,15 +2874,18 @@ skippa_condbranch: ;
 						  else if(R.Q==VALUE_IS_D0) {
 //						  myLog->print(0,"Read D0: %lx\n",R.var);
 #if MICROCHIP
-						    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0,0);
+						    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE,0);
 #elif MC68000
-								if(0    && !R.flag) {		// era puntatore e NON array (dovrebbe andare   mmm NO... esce anche se non deve...
+								if(!R.flag) {		// era puntatore e NON array o expr 
 						  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
-										isRValue ? Regs->P+1 : Regs->P);	// qua è ok così
+										Regs->P);	// qua è ok così
 									CHECKPOINTER();
+//							    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
 									}
+//								else
+//							    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
 #else
-						    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0);
+						    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
 #endif
 						    }
               else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC)
@@ -2827,6 +2908,13 @@ skippa_condbranch: ;
 		              Regs->Dec(getPtrSize(V->type));
 #endif
 		            }
+
+							if(isPtrUsed) {
+								isPtrUsed--;
+//								if(isPtrUsed)		// specialmente se c'è puntatore (non array) a dx dell '='
+									Regs->DecP();
+								}
+
 		          switch(*TS) {
 		            case '=':        // OCCHIO: fa casino se assegno dentro una cond...
 				          if((R.type & (VARTYPE_UNION | VARTYPE_STRUCT)) && (V->type & (VARTYPE_UNION | VARTYPE_STRUCT)) && (!(R.type & VARTYPE_IS_POINTER)) && (!(V->type & VARTYPE_IS_POINTER))) {
@@ -2838,9 +2926,9 @@ skippa_condbranch: ;
   				              PROCError(2106);   // dovrebbe bloccare i non lvalue a sinistra
 											else {
 #if MICROCHIP
-  				              ReadVar(V->var,0,0,0,0,0);		// FINIRE
+  				              ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-  				              ReadVar(V->var,0,0,0,0);
+  				              ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 												}
 				              }
@@ -2864,6 +2952,7 @@ skippa_condbranch: ;
 				            PROCOper(LINE_TYPE_ISTRUZIONE,"rep movsb",OPDEF_MODE_NULLA,0);
 #elif MC68000
 				            PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,2,OPDEF_MODE_IMMEDIATO16,R.size);
+										//fare!
 				            PROCOper(LINE_TYPE_ISTRUZIONE,"rep movsb",OPDEF_MODE_NULLA,0);
 #elif MICROCHIP
 				            FNGetLabel(TS,2);
@@ -2883,7 +2972,7 @@ skippa_condbranch: ;
 												!((V->type | R.type) & (VARTYPE_STRUCT | VARTYPE_UNION | VARTYPE_ARRAY | VARTYPE_IS_POINTER | VARTYPE_FUNC /*0x1d0f*/)))  // integrali di diff. grandezza
 				                PROCWarn(4761);
 				              }
-				            if(V->Q & OPDEF_MODE_FRAMEPOINTER_INDIRETTO || V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC)
+				            if(V->Q & VALUE_IS_COSTANTE || V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC)
 				              PROCError(2106);
 				            else if(V->Q==VALUE_IS_VARIABILE) {
 				              if(!(V->var->type & VARTYPE_IS_POINTER) && (V->var->type & (VARTYPE_STRUCT | VARTYPE_UNION | VARTYPE_ARRAY | VARTYPE_FUNC /*0x1d00*/))) 
@@ -2911,7 +3000,7 @@ skippa_condbranch: ;
 // da togliere in alcuni casi!!
 
 
-											PROCStoreD0(V->var,R.Q,R.var,R.cost,isRValue ? 1 : 0);
+											PROCStoreD0(V->var,R.Q,R.var,R.cost,isPtrUsed ? TRUE : FALSE);
 		    		          V->Q=VALUE_IS_EXPR;
 											}
 				            }
@@ -2973,7 +3062,7 @@ skippa_condbranch: ;
 	                    j=2;
 										else {
 											V->Q=subInc(*TS=='+',cond,0,V->Q,V->var,LOBYTE(LOWORD(R.cost->l)),V->type,V->size,&u[1],&u[2],
-												V->type & VARTYPE_IS_POINTER ? (isRValue ? 2 : 1) : 0);
+												V->type & VARTYPE_IS_POINTER ? (TRUE) : 0);
 	                    j=0;
 											}
 #else
@@ -2984,11 +3073,20 @@ skippa_condbranch: ;
                     j=0;
                     if(R.Q==VALUE_IS_COSTANTEPLUS) {
 #if MICROCHIP
-   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,0,FALSE);		// FINIRE
+   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE,0);		// FINIRE
 #elif MC68000
  											PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #else
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
+#endif
+											}
+										else if(R.Q==VALUE_IS_D0 || R.Q==VALUE_IS_EXPR) {
+#if MICROCHIP
+										    PROCReadD0(R.var,0,0,0,0,FALSE,0);
+#elif MC68000
+										    PROCReadD0(R.var,0,0,0,0,FALSE);
+#else
+												// vedere altri...
 #endif
 											}
                     }
@@ -3018,9 +3116,9 @@ my_add:
 														V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
 													if(Pty==14) {             // ritorna expr in hl/d0 se serve
 #if MICROCHIP
-	  												ReadVar(V->var,0,0,0,0,0);		// FINIRE
+	  												ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-														ReadVar(V->var,0,0,0,0);
+														ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 														}
 													break;
@@ -3041,9 +3139,9 @@ my_add:
   			                  V->Q=subAdd(*TS=='+',j,V->Q,V->var,&V->type,&V->size,R.Q,R.type,R.size,V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
 													if(Pty==14) {             // ritorna expr in hl/d0 se serve
 #if MICROCHIP
-  													ReadVar(V->var,0,0,0,0,0);		// FINIRE
+  													ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-														ReadVar(V->var,0,0,0,0);
+														ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 														}
 
@@ -3132,11 +3230,12 @@ my_add:
 												&u[0],&u[1],&u[2],&u[3],TRUE);
 											if(Pty==14) {              // ritorna expr in hl se serve
 #if MICROCHIP
-										    PROCReadD0(V->var,0,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #else
-										    PROCReadD0(V->var,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 												}
+		    		          V->Q=VALUE_IS_EXPR;
 				              break;
 										case VALUE_IS_EXPR:
 										case VALUE_IS_EXPR_FUNC:
@@ -3157,12 +3256,12 @@ my_add:
 			            switch(V->Q) {
 			              case VALUE_IS_VARIABILE:
 #if MICROCHIP
-											ReadVar(V->var,0,0,0,0,0);		// FINIRE
+											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 // mah no											PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);		// me ne frego della size!
-											ReadVar(V->var,0,0,0,0);
+											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #else
-											ReadVar(V->var,0,0,0,0);
+											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 					            i=Regs->Inc((int8_t)FNGetMemSize(V->type,V->size,0,0));
 											if(R.Q & VALUE_IS_COSTANTE) {
@@ -3181,12 +3280,12 @@ my_add:
 												}
 											else {
 #if MICROCHIP
-												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0);		// FINIRE
+												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE,0);		// FINIRE
 #elif MC68000
 						// siamo già a posto...
-												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #else
-												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #endif
 												j=0;
 												}
@@ -3199,24 +3298,25 @@ my_add:
 											break;
 										case VALUE_IS_D0:  		                   // non finito...
 #if MICROCHIP
-									    PROCReadD0(V->var,0,0,0,0,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #else
-									    PROCReadD0(V->var,0,0,0,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 											if(R.Q & VALUE_IS_COSTANTE)
 												j=2;
 	// 	                    PROCUseCost(RQ,R.type,R.size,&R.cost);
 											else {
 #if MICROCHIP
-			                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,0);		// FINIRE
+			                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE,0);		// FINIRE
 #else
-			                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0);
+			                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #endif
 												j=0;
 												}
 											V->Q=subMul(*TS,j,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,
 												V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
-											PROCStoreD0(V->var,V->Q,V->var,V->cost,isRValue ? 1 : 0);
+											PROCStoreD0(V->var,V->Q,V->var,V->cost,isPtrUsed ? TRUE : FALSE);
+		    		          V->Q=VALUE_IS_EXPR;
 											break;
 										default:  
 											PROCError(1001,"*=");
@@ -3240,7 +3340,7 @@ my_add:
                     j=0;
                     if(R.Q==VALUE_IS_COSTANTEPLUS) {
 #if MICROCHIP
-   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,0,FALSE);		// FINIRE
+   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE,0);		// FINIRE
 #else
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #endif
@@ -3258,7 +3358,7 @@ my_add:
 												if(j==2 && V->size==2 && R.cost->l==1) {
 													}
 												else
-			                    ReadVar(V->var,0,0,0,0);
+			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #else
     		                if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 2) {
 				                  u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
@@ -3270,9 +3370,9 @@ my_add:
 													&u[0],&u[1],&u[2],&u[3],TRUE);
 												if(Pty==14) {              // ritorna expr in hl se serve
 #if MICROCHIP
-			                    ReadVar(V->var,0,0,0,0,0);		// FINIRE
+			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #else
-			                    ReadVar(V->var,0,0,0,0);
+			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 													}
 #if MC68000
@@ -3288,10 +3388,10 @@ my_add:
 //							          if(RQ != 8)
 //							            i=Regs->Inc(FNGetMemSize(V->type,V->size,0));
 #if MICROCHIP
-		                    ReadVar(V->var,0,0,0,0,0);		// FINIRE
+		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 #else
-		                    ReadVar(V->var,0,0,0,0);
+		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 #if MC68000
 												u[0].s.n=MAKEPTRREG(V->var->label);
@@ -3318,15 +3418,15 @@ my_add:
 //							          if(RQ != 8)
 //							            i=Regs->Inc(FNGetMemSize(V->type,V->size,0));
 #if MICROCHIP
-		                    ReadVar(V->var,0,0,0,0,0);		// FINIRE
+		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 												// (in teoria se lo shift è 1, costante, e la var 16bit, si può fare DIRETTAMENTE operazione
 												if(j==2 && V->size==2 && R.cost->l==1) {
 													}
 												else
-			                    ReadVar(V->var,0,0,0,0);
+			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #else
-		                    ReadVar(V->var,0,0,0,0);
+		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 //							          if(RQ != 8) {
 			                  // passo INVERTITI Dr e Dr1 (e h)
@@ -3416,12 +3516,13 @@ my_add:
 											&u[0],&u[1],&u[2],&u[3],TRUE);
 										if(Pty==14) {             // ritorna expr in hl se serve
 #if MICROCHIP
-									    PROCReadD0(V->var,0,0,0,0,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #elif MC68000
 #else
-									    PROCReadD0(V->var,0,0,0,0,0);
+									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 											}
+	    		          V->Q=VALUE_IS_EXPR;
 									  break;  
 			            default:  
 			              PROCError(1001,"<<=");
@@ -3450,7 +3551,7 @@ my_add:
                     j=0;
                     if(R.Q==VALUE_IS_COSTANTEPLUS) {
 #if MICROCHIP
-   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,0,FALSE);		// FINIRE
+   	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE,0);		// FINIRE
 #else
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #endif
@@ -3488,10 +3589,10 @@ my_aox:
 														V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
 													if(Pty==14) {             // ritorna expr in hl se serve
 #if MICROCHIP
-				                    ReadVar(V->var,0,0,0,0,0);		// FINIRE
+				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 #else
-				                    ReadVar(V->var,0,0,0,0);
+				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 														}
 													break;
@@ -3500,10 +3601,10 @@ my_aox:
 //							          if(RQ != 8)
 //							            i=Regs->Inc(FNGetMemSize(V->type,V->size,0));
 #if MICROCHIP
-				                    ReadVar(V->var,0,0,0,0,0);		// FINIRE
+				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
 #else
-				                    ReadVar(V->var,0,0,0,0);
+				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 													i2=0;
 													V->Q=subAOX(*TS,&i2,j,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,
@@ -3524,14 +3625,15 @@ my_aox:
 												V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
 											if(Pty==14) {              // ritorna expr in hl se serve
 #if MICROCHIP
-										    PROCReadD0(V->var,0,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #elif MC68000
-										    PROCReadD0(V->var,0,0,0,0,0);			// SERVE?? verificare 7/11/25
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);			// SERVE?? verificare 7/11/25
 #else
-										    PROCReadD0(V->var,0,0,0,0,0);
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 												}
 											}
+		    		          V->Q=VALUE_IS_EXPR;
 											break;  
 										default:  
 											PROCError(1001,"<<=");
@@ -3539,6 +3641,10 @@ my_aox:
 										}
 			            break;
 			          }
+
+							if(isPtrUsed>0)
+								Regs->DecP();
+
 		          break;
 		        case 15:
 //		          subEvEx(14,cond,&R.type,&R.size,&RQ,&RVar,R.cost,&RTag,&RDim);     inutile

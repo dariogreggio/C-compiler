@@ -158,10 +158,15 @@ enum {
 	MEMORY_MODEL_ABSOLUTE=0,
 	MEMORY_MODEL_RELATIVE=0x80,
 	};
+enum {
+	TIPO_SPECIALE=1,		// output speciale, tipo Easy68K
+	TIPO_EMBEDDED=2,		// copia Initialized in Const, affinché possano essere copiati in RAM alla partenza
+	};
 
 union STR_LONG {
   char s[128];
   long l;
+	uint64_t l64;		// VA GESTITO IN MOLTI POSTI! e serve ulltoa(
   };
 
 // VARTYPE% BITS:
@@ -194,6 +199,15 @@ enum VAR_MODIFIERS {		// v. anche class Ccc
 	FUNC_MODIF_INLINE=8,
 	FUNC_MODIF_FASTCALL=16
 	};
+enum VAR_ATTRIBUTES {		// __attribute__ 
+	FUNC_ATTRIB_NORETURN=1,
+	FUNC_ATTRIB_NAKED=2,
+	FUNC_ATTRIB_WEAK=4,			// in teoria anche variabili, ma raro
+	VAR_ATTRIB_FIXED=0x100,
+	VAR_ATTRIB_UNUSED=0x200,
+	VAR_ATTRIB_PACKED=0x400,
+	// poi volendo ci sono ripetuti i vari interrupt, const e altro
+	};
 enum VAR_TYPES {		// v. anche class Ccc
 // 0= label, 7=public defined, 8=FUNZ., 9=public, 10=extern, 11=STRUCT
 	VARTYPE_NOTYPE=-1,
@@ -214,6 +228,8 @@ enum VAR_TYPES {		// v. anche class Ccc
 	VARTYPE_FLOAT=0x2000,		// per double metto size=8 opp. 4
 	VARTYPE_BITFIELD=0x4000,
 	VARTYPE_ENUM=0x10000,
+
+	VARTYPE_VOLATILE=0x8000000L,
 
 	VARTYPE_FAR=0x10000000L,
 	VARTYPE_SIGNED=0x00000000L,
@@ -240,7 +256,17 @@ struct VARS {
   struct TAGS *tag;         // se <>0, la var. è un membro della struct tag
   struct TAGS *hasTag;      // questo indica il tag di questa struct
   O_DIM dim;							// dim TOTALE dell'array o aggr
+  uint8_t attrib;
   struct VARS *next;
+  };
+
+struct VARS2 {
+  uint32_t value;
+  O_TYPE type;
+  O_SIZE size;
+  struct VARS *func;
+  uint8_t block;
+  struct VARS2 *next;
   };
 
 struct CONS {
@@ -248,11 +274,17 @@ struct CONS {
   char name[128];
   struct CONS *next;
   };  
-   
+#pragma message USARE vars2 ANCHE PER STRUCT *********************
 struct TAGS {
   char label[MAX_NAME_LEN+1];
-  struct VARS *member;
+  struct VARS *member;		
   struct TAGS *next;
+  };  
+   
+struct ENUMS {
+  char name[MAX_NAME_LEN+1];
+  struct VARS2 var;
+  struct ENUMS *next;
   };  
    
 struct OPERAND {
@@ -415,6 +447,7 @@ class COutputFile : public CStdioFile {
 public:
 	COutputFile(LPCTSTR s);
 	COutputFile(FILE *f);
+//	COutputFile();
 	int printf(const TCHAR *s,...);
 	void print(const TCHAR *s);		// usata per NON espandere i %d ecc, tipo stringhe literal
 //	void println(const TCHAR *s);
@@ -423,10 +456,12 @@ public:
 	void putcr() { put('\n'); }
 	void write(const TCHAR *);
 	int get();
+	bool eof() { return GetPosition() >= GetLength(); }
 	int getTotalLines() { return totLines; }
 
 private:
 	uint32_t totLines;
+//	CMemFile *mF;
 
 	};
 
@@ -542,6 +577,8 @@ protected:
 	struct VARS *CurrFunc;
 	struct CONS *Con;
 	struct CONS *LCons;
+  struct ENUMS *LEnums;
+	struct ENUMS *Enums;
 	struct TAGS *StrTag;
 	struct TAGS *LTag;
 	//struct VARS *TAG;           
@@ -596,7 +633,7 @@ public:
 	char *AddExt(char *, char *);
 	int PROCBlock();
 	int PROCIsDecl();
-	int PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint8_t);
+	int PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint32_t attrib, bool isparm);
 	int subAsm(char *);
 	int FNIsStmt();
 	char *FNGetLabel(char *,uint8_t);
@@ -607,18 +644,20 @@ public:
 	long FNGetConst(char *,bool);
 	int PROCLoops(const char *, const char *, const char *, struct LINE *);
 	int FNRegFree();
-	struct VARS *FNCercaVar(const char *, uint8_t);
+	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+  struct ENUMS *FNCercaEnum(const char *,const char *,bool);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE);
 #if MICROCHIP
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, uint8_t asPtr, uint8_t lh=0);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
 #else
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, uint8_t asPtr);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr);
 #endif
-	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, uint8_t isPtr);
+	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, bool isPtr);
 	int PROCGetAdd(int8_t VQ, struct VARS *, int ofs, bool asPtr);
 	int PROCUsaFun(struct VARS *,bool tosave1,bool tosave2);
 	struct CONS *FNAllocCost(const char *, uint8_t, O_TYPE type=0);
+	struct ENUMS *FNAllocEnum(const char *tag, const char *name, uint32_t value, O_SIZE Size);
 	int PROCInit();
 	int subOfsD0(struct VARS *, int, int, int);
 	
@@ -693,6 +732,7 @@ public:
   unsigned int btoi(const char *);
 	char *itox(char *,unsigned int);
 	char *itob(char *,unsigned int);
+	int lltoa(uint64_t num, char *str, /*int len, */uint8_t base);
 
 	int OPComp(struct OP_DEF *, struct OP_DEF *);
 	struct LINE *GetNextNoRem(struct LINE *);
@@ -715,18 +755,18 @@ public:
   void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *);
   int PROCOutLab(const char *,const char *s1=NULL,const char *s2=NULL);
 
-	enum ARITM_OP FNGetAritElem(int8_t *, char *, struct OPERAND *, int8_t);
+	enum ARITM_OP FNGetAritElem(int8_t *OP, char *, struct OPERAND *, int8_t Co);
 	int subGetType(O_TYPE *type, O_SIZE *size, O_DIM dim, long textpointer);
-	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, long textpointer);
+	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, uint32_t *attrib,long textpointer);
 	long FNIsType(char *);
 	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
-	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, uint8_t isPtr);
+	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);
 	#if MICROCHIP
-	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t lh, uint8_t asPtr);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr,uint8_t lh);
 	#else
-	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,uint8_t asPtr);
+	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr);
 	#endif
 
 	#if ARCHI
@@ -735,7 +775,7 @@ public:
 	#endif
 
 #if MICROCHIP
-	int PROCUseCost(int8_tQ, O_TYPE type, O_SIZE size, union STR_LONG *,uint8_t lh,bool asPtr);
+	int PROCUseCost(int8_t Q, O_TYPE type, O_SIZE size, union STR_LONG *,bool asPtr,uint8_t lh);
 #else
 	int PROCUseCost(int8_t Q, O_TYPE type, O_SIZE size, union STR_LONG *,bool asPtr);
 #endif
@@ -752,7 +792,7 @@ public:
 
   class REGISTRI *Regs;
           
-	int Reg;
+	int8_t Reg;
 
 // Implementation
 	};
@@ -785,8 +825,10 @@ public:
 	Ccc *myCC;
 public:
 	REGISTRI(Ccc *);
-	int Inc(int8_t);
+	int8_t Inc(int8_t);
 	void Dec(int8_t);
+	int8_t IncP();
+	void DecP();
 	const char *operator[](uint8_t);
 	const char *operator[](struct VARS *);
 	void Save();

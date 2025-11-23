@@ -73,7 +73,7 @@ struct ERRORE Errs[]={
   2084,1,"funtion already has a body:",
   2086,1,"redefinition:",/*anche 2011?*/
   2087,1,"missing subscript",
-  2093,1,"cannot use address of automatic variable as static init",
+  2093,1,"can't use address of automatic variable as static init",
   2094,1,"label undefined",
   2097,1,"illegal initialization",
   2100,1,"illegal indirection",
@@ -93,7 +93,7 @@ struct ERRORE Errs[]={
   2153,1,"hex constant must have at least one digit",
   2156,1,"pragma must be outside function",
   2200,1,"warning treated as error",
-  2205,1,"cannot initialize extern variable",
+  2205,1,"can't initialize extern variable",
   2221,1,"'.' left operand points to struct/union, use ->",/*anche 2231*/
   2222,1,"'->' left operand has struct/union type, use .",/*anche 2232*/
   2223,1,"left operand must point to struct/union type",/*anche 2227*/
@@ -112,6 +112,7 @@ struct ERRORE Errs[]={
   4047,1,"different levels of indirection",
   4049,1,"indirection to different types",
   4068,1,"#pragma o attributo sconosciuto",
+  4069,1,"ignorato: ",
   4098,1,"void function returning a value",
   4099,1,"void type invalid",
   4101,3,"unreferenced local variable",
@@ -297,7 +298,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 					FO->printf("%s-%s(%s)",s->s.v->label,"__BaseAbs",Regs->AbsS);
 				}
 			else {
-				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
+				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
 					FO->printf("#%s",s->s.v->label);
 				else
 					FO->printf("%s",s->s.v->label);
@@ -438,7 +439,7 @@ int Ccc::PROCObj(COutputFile *FO) {
 #endif
 						FO->put(',');
 #ifdef MC68000
-					if(TEXT->s2.mode == OPDEF_MODE_VARIABILE_INDIRETTO && TipoOut)		// cagate di Easy68k, se no mi esce il cancelletto a dx! - v. anche sopra
+					if(TEXT->s2.mode == OPDEF_MODE_VARIABILE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, se no mi esce il cancelletto a dx! - v. anche sopra
 						TEXT->s2.mode=OPDEF_MODE_VARIABILE;
 #elif I8086
 					if(((TEXT->s2.mode & 0x80) == OPDEF_MODE_INDIRETTO)) {
@@ -492,8 +493,11 @@ int Ccc::PROCError(int Er, const char *a) {
  	  else  
  	    wsprintf(myBuf,".");
 		_tcscat(errBuf,myBuf);
-		if(FErr)
+		if(FErr) {
 			FErr->println(errBuf);
+			FNGetLine(FIn->GetPosition()-80,myBuf);			// SISTEMARE posizione...
+			FErr->println(myBuf);
+			}
 	  if(debug) {
 	    PROCV("vartmp.map");
 //	    PROCT();
