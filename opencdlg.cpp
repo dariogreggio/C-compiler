@@ -72,6 +72,7 @@ COpzioniCompilPropPage1::COpzioniCompilPropPage1() : CPropertyPage(COpzioniCompi
 {
 	//{{AFX_DATA_INIT(COpzioniCompilPropPage1)
 	//}}AFX_DATA_INIT
+	isInitialized=FALSE;
 }
 
 COpzioniCompilPropPage1::~COpzioniCompilPropPage1()
@@ -173,7 +174,9 @@ COpzioniCompilPropPage2::COpzioniCompilPropPage2() : CPropertyPage(COpzioniCompi
 	m_OttimizzaDimensione = FALSE;
 	m_OttimizzaVelocita = FALSE;
 	m_AbsRel = -1;
+	m_Warning = -1;
 	//}}AFX_DATA_INIT
+	isInitialized=FALSE;
 }
 
 COpzioniCompilPropPage2::~COpzioniCompilPropPage2()
@@ -205,6 +208,7 @@ void COpzioniCompilPropPage2::DoDataExchange(CDataExchange* pDX)
 	DDX_Check(pDX, IDC_CHECK16, m_OttimizzaDimensione);
 	DDX_Check(pDX, IDC_CHECK15, m_OttimizzaVelocita);
 	DDX_Radio(pDX, IDC_RADIO1, m_AbsRel);
+	DDX_CBIndex(pDX, IDC_COMBO3, m_Warning);
 	//}}AFX_DATA_MAP
 }
 
@@ -241,6 +245,7 @@ BOOL COpzioniCompilPropPage2::OnInitDialog() {
 	m_AltreDefine=theApp.altreDefine;
 
 	m_MemoryModel=theApp.MemoryModel;
+	m_Warning=theApp.Warning;
 
 	isInitialized=TRUE;
 	UpdateData(FALSE);
@@ -289,6 +294,7 @@ COpzioniCompilPropPage3::COpzioniCompilPropPage3() : CPropertyPage(COpzioniCompi
 	//{{AFX_DATA_INIT(COpzioniCompilPropPage3)
 		// NOTE: the ClassWizard will add member initialization here
 	//}}AFX_DATA_INIT
+	isInitialized=FALSE;
 }
 
 COpzioniCompilPropPage3::~COpzioniCompilPropPage3()

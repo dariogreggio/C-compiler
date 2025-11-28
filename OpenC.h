@@ -264,7 +264,7 @@ public:
 public:
 	char *variabiliKey,*fileApertiKey;
 	DWORD Opzioni;
-	BYTE MemoryModel;
+	BYTE MemoryModel,Warning;
 
 	CMultiDocTemplate *pDocTemplate,*pDocTemplate2;
 	COpenCDoc2 *theOutput;

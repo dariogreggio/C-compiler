@@ -7,6 +7,7 @@
 #include "MainFrm.h"
 #include "OpenCDoc.h"
 #include "ChildFrm.h"
+#include "OpenCView.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -22,6 +23,7 @@ IMPLEMENT_DYNCREATE(CChildFrame, CMDIChildWnd)
 BEGIN_MESSAGE_MAP(CChildFrame, CMDIChildWnd)
 	//{{AFX_MSG_MAP(CChildFrame)
 	ON_WM_GETMINMAXINFO()
+	ON_WM_SIZE()
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -30,21 +32,35 @@ END_MESSAGE_MAP()
 
 CChildFrame::CChildFrame() {
 	// TODO: add member initialization code here
-	
+	m_bInitSplitter=FALSE;
+	}
+
+CChildFrame::~CChildFrame() {
 }
 
-CChildFrame::~CChildFrame()
-{
-}
-
-BOOL CChildFrame::OnCreateClient( LPCREATESTRUCT lpcs,
+BOOL CChildFrame::OnCreateClient(LPCREATESTRUCT lpcs,
 	CCreateContext* pContext) {
 	int i;
+	CRect cr;
+	GetWindowRect( &cr );
 
-	i=m_wndSplitter.Create( this,
-		2, 1,                 // TODO: adjust the number of rows, columns
+/*	i=m_wndSplitter.Create(this,
+		0, 1,                 // TODO: adjust the number of rows, columns
 		CSize( 100, 40 ),      // TODO: adjust the minimum pane size
-		pContext );
+		pContext);*/
+	i=m_wndSplitter.CreateStatic(this, 2, 1);
+
+	if(!m_wndSplitter.CreateView(0, 0, RUNTIME_CLASS(COpenCView),
+		CSize(cr.Width(), cr.Height() /*/2*/), pContext)) 	{
+		MessageBox( "Error setting up splitter view 1", "ERROR", MB_OK | MB_ICONERROR );
+		return FALSE;
+		}
+	if(!m_wndSplitter.CreateView(1, 0, RUNTIME_CLASS(COpenCView),
+		CSize(cr.Width(), 0 /*cr.Height()/2*/), pContext)) 	{
+		MessageBox( "Error setting up splitter view 2", "ERROR", MB_OK | MB_ICONERROR );
+		return FALSE;
+		}
+	m_bInitSplitter=TRUE;
 
 	return i;
 	}
@@ -55,22 +71,6 @@ BOOL CChildFrame::PreCreateWindow(CREATESTRUCT& cs) {
 
 	cs.style &= ~WS_VSCROLL;
 	return CMDIChildWnd::PreCreateWindow(cs);
-	}
-
-BOOL CChildFrame::CreateView( int row, int col, CRuntimeClass* pViewClass, SIZE sizeInit, CCreateContext* pContext ) {
-	int i=1;
-
-	AfxMessageBox("cv");
-	// non gliene puo' fregare di meno!
-	return i;
-	}
-
-BOOL CChildFrame::SplitRow( int cyBefore ) {
-	int i=1;
-
-	AfxMessageBox("split");
-	// non gliene puo' fregare di meno!
-	return i;
 	}
 
 
@@ -204,3 +204,20 @@ void CChildFrame::OnGetMinMaxInfo(MINMAXINFO FAR* lpMMI) {
 	CMDIChildWnd::OnGetMinMaxInfo(lpMMI);
 	}
 
+
+void CChildFrame::OnSize(UINT nType, int cx, int cy) {
+
+	CMDIChildWnd::OnSize(nType, cx, cy);
+	
+	CRect cr;
+	GetWindowRect(&cr);
+
+/*	if(m_bInitSplitter && nType != SIZE_MINIMIZED) {
+		m_wndSplitter.SetColumnInfo( 0, cx, 0 );
+		m_wndSplitter.SetRowInfo( 0, cr.Height() / 2, 50);
+		m_wndSplitter.SetRowInfo( 1, cr.Height() / 2, 50);
+		
+		m_wndSplitter.RecalcLayout();
+		}	bah non so serva cmq */
+	
+	}

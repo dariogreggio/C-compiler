@@ -55,7 +55,7 @@ BOOL COpenCDoc::OnOpenDocument(LPCTSTR lpszPathName) {
 	RECT rc;
 	COpenCView *w=(COpenCView *)getView();
 
-	if(!CDocument::OnOpenDocument(lpszPathName))
+	if(!CExRichDocument::OnOpenDocument(lpszPathName))
 		return FALSE;
 	
 	p=strrchr(lpszPathName,'\\');
@@ -103,7 +103,7 @@ void COpenCDoc::OnCloseDocument() {
 
 //	SaveState(m_nDocType);
 
-	CRichEditDoc::OnCloseDocument();
+	CExRichDocument::OnCloseDocument();
 	}
 
 CRichEditCntrItem* COpenCDoc::CreateClientItem(REOBJECT* preo) const {
@@ -147,6 +147,7 @@ void COpenCDoc::Serialize(CArchive& ar) {
 		es.dwCookie = (DWORD)ar.GetFile();
 //		es.pfnCallback = COpenCView::MyStreamInCallback;
 		((COpenCView*)m_viewList.GetHead())->StreamIn(es);
+//		((COpenCView*)m_viewList.GetTail())->StreamIn(es);
 
 //		((CRichEditView*)m_viewList.GetHead())->Serialize(ar);  //da MultiPad...
 		m_nDocLines=((COpenCView*)m_viewList.GetHead())->GetLineCount();		// FINIRE
@@ -246,6 +247,13 @@ void COpenCDoc::OnCompilaFile() {
 		parms+="-AS ";		// SMALL questo non c'è, credo vada di default
 	else
 		parms+="-AL ";		// LARGE
+
+	if(theApp.Warning>0) {
+		CStringEx S;
+		S.Format("-W%u ",theApp.Warning);
+		parms+=S;
+		}
+
 	strcpy(myBuf,(LPCTSTR)parms);			// non funziona!! lei si aspetta un puntatore per ogni switch...
 	p=strtok(myBuf," ");
 	for(i=2; i<32 && p!=NULL; i++) {
@@ -277,6 +285,31 @@ void COpenCDoc::OnUpdateCompilaFile(CCmdUI* pCmdUI) {
 	
 	pCmdUI->Enable(!GetPathName().IsEmpty() && !theApp.ccName.IsEmpty());
 	}
+
+/////////////////////////////////////////////////////////////////////////////
+// CWordPadCntrItem implementation
+
+IMPLEMENT_SERIAL(COpenCCntrItem, CRichEditCntrItem, 0)
+
+COpenCCntrItem::COpenCCntrItem(REOBJECT *preo, COpenCDoc* pContainer)
+	: CRichEditCntrItem(preo, pContainer) {
+
+	}
+
+/////////////////////////////////////////////////////////////////////////////
+// CWordPadCntrItem diagnostics
+
+#ifdef _DEBUG
+void COpenCCntrItem::AssertValid() const
+{
+	CRichEditCntrItem::AssertValid();
+}
+
+void COpenCCntrItem::Dump(CDumpContext& dc) const
+{
+	CRichEditCntrItem::Dump(dc);
+}
+#endif
 
 
 
@@ -387,29 +420,4 @@ void COpenCDoc::OnUpdateEditRepeat(CCmdUI* pCmdUI) {
 
 
 
-
-/////////////////////////////////////////////////////////////////////////////
-// CWordPadCntrItem implementation
-
-IMPLEMENT_SERIAL(COpenCCntrItem, CRichEditCntrItem, 0)
-
-COpenCCntrItem::COpenCCntrItem(REOBJECT *preo, COpenCDoc* pContainer)
-	: CRichEditCntrItem(preo, pContainer)
-{
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// CWordPadCntrItem diagnostics
-
-#ifdef _DEBUG
-void COpenCCntrItem::AssertValid() const
-{
-	CRichEditCntrItem::AssertValid();
-}
-
-void COpenCCntrItem::Dump(CDumpContext& dc) const
-{
-	CRichEditCntrItem::Dump(dc);
-}
-#endif
 

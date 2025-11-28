@@ -135,6 +135,7 @@ BOOL COpenCApp::InitInstance() {
 	altreDefine=myBuf;
 	Opzioni=GetPrivateProfileInt(variabiliKey,IDS_OPZIONI);
 	MemoryModel=GetPrivateProfileInt(variabiliKey,IDS_MEMORYMODEL);
+	Warning=GetPrivateProfileInt(variabiliKey,IDS_WARNING);
 
 	// Enable drag/drop open
 	m_pMainWnd->DragAcceptFiles();
@@ -164,6 +165,7 @@ int COpenCApp::ExitInstance() {
 
 	WritePrivateProfileInt(variabiliKey,IDS_OPZIONI,Opzioni);
 	WritePrivateProfileInt(variabiliKey,IDS_MEMORYMODEL,MemoryModel);
+	WritePrivateProfileInt(variabiliKey,IDS_WARNING,Warning);
 	WritePrivateProfileString(variabiliKey,IDS_ALTREDEFINE,(LPCTSTR)altreDefine);
 	WritePrivateProfileString(variabiliKey,IDS_NOMECC,(LPCTSTR)ccName);
 	return CWinApp::ExitInstance();
@@ -417,6 +419,7 @@ void COpenCApp::OnStrumentiOpzioni() {
 			Opzioni |= myPage1.m_OttimizzaCostanti ? ottimizzaConst : 0;
 			altreDefine=myPage1.m_AltreDefine;
 			MemoryModel=myPage1.m_MemoryModel;
+			Warning=myPage1.m_Warning;
 			}
 		if(myPage2.isInitialized) {
 			}
@@ -430,8 +433,7 @@ void COpenCApp::OnUpdateFileApriprogetto(CCmdUI* pCmdUI) {
 	
 	}
 
-void COpenCApp::OnFileApriprogetto() 
-{
+void COpenCApp::OnFileApriprogetto() {
 	// TODO: Add your command handler code here
 	
 }

@@ -173,6 +173,7 @@ public:
 	BOOL	m_OttimizzaDimensione;
 	BOOL	m_OttimizzaVelocita;
 	int		m_AbsRel;
+	int		m_Warning;
 	//}}AFX_DATA
 
 

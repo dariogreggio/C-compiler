@@ -12,6 +12,7 @@ public:
 	UINT_PTR m_uTimerID;
 	BOOL m_bDelayUpdateItems;
 
+	BOOL CreateView(int row, int col, CRuntimeClass* pViewClass, SIZE sizeInit, CCreateContext* pContext);
 	COpenCDoc* GetDocument();
 	BOOL IsModified() { return GetRichEditCtrl().GetModify(); }
 	static DWORD CALLBACK MyStreamInCallback(DWORD , LPBYTE , LONG , LONG *);
