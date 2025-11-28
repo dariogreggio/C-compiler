@@ -1418,24 +1418,28 @@ LBinaryMinus:
 	                      }
 	                    else
 	                      _tcscpy(t->s,";");
-#elif Z80 || I8086 || MC68000 || MICROCHIP
+#elif Z80 || MICROCHIP
 											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,FALSE);		// in effetti credo vada bene in Dn e basta
 //											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,(isPtrUsed && Pty!=99) ? TRUE : FALSE);
-											// non è il massimo, ma serve per... a=*(((unsigned short *)&c5)+1);
+											// (non è il massimo, ma serve per... a=*(((unsigned short *)&c5)+1);
+#elif I8086 || MC68000 
+											PROCGetAdd(VALUE_IS_D0,R.var,0,FALSE);		// mah RIVERIFICARE gli altri, 2025
 #endif	                    
+											V->Q=VALUE_IS_EXPR;
   	                  break;
 	                  case VALUE_IS_VARIABILE:
 	                    PROCGetAdd(VALUE_IS_VARIABILE,R.var,0,FALSE);			// idem
 //	                    PROCGetAdd(VALUE_IS_VARIABILE,R.var,0,(isPtrUsed && Pty!=99) ? TRUE : FALSE);
+											V->Q=(isPtrUsed && Brack==0) ? VALUE_IS_D0 : VALUE_IS_EXPR;
 	                    break;
 	                  case VALUE_IS_COSTANTEPLUS:		// boh, 2025...serve??
 	                    PROCGetAdd(VALUE_IS_COSTANTEPLUS,R.var,0,FALSE);
 //	                    PROCGetAdd(VALUE_IS_COSTANTEPLUS,R.var,0,(isPtrUsed && Pty!=99) ? TRUE : FALSE);
+											V->Q=(isPtrUsed && Brack==0) ? VALUE_IS_D0 : VALUE_IS_EXPR;
 	                    break;
 	                  default:
 	                    break;
 	                  }
-									V->Q=(isPtrUsed && Brack==0) ? VALUE_IS_D0 : VALUE_IS_EXPR;
 	                V->type=VARTYPE_UNSIGNED | VARTYPE_POINTER;
 		              V->size=getPtrSize(V->type);
 		              break;

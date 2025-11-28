@@ -1826,6 +1826,22 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 				  break;
 				}  
 			break;	
+		case VALUE_IS_D0:		// questo per cose tipo &pippo[5]
+// no direi		case VALUE_IS_EXPR:
+#if ARCHI
+#elif Z80
+				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,Regs->P);
+				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+#elif I8086
+				if(CPU86>=3) {
+					}
+					/*MemoryModel*/
+				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO,Regs->P);
+#elif MC68000
+	  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_REGISTRO32,Regs->D);
+#elif MICROCHIP
+#endif
+			break;	
 		}
 	
   if(OutSource) {
