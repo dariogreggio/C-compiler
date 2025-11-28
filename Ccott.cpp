@@ -30,10 +30,10 @@ int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
       if(a->ofs != b->ofs)
         return 1;
       break;
-    case 9:
+/*    case 9:
       if(a->s.v != b->s.v)
         return 1;
-      break;
+      break;*/
     case 10:
       if(_tcscmp(a->s.label,b->s.label))
         return 1;
@@ -156,11 +156,11 @@ foundReg:
           if(r->s1.mode == OPDEF_MODE_COSTANTE)
             _tcscpy(myBuf,r->s1.s.label);
           else if(r->s1.mode == OPDEF_MODE_VARIABILE)
-            _tcscpy(myBuf,r->s1.s.v->label);
+            _tcscpy(myBuf,r->s1.s.label);
           else if(r->s2.mode == OPDEF_MODE_COSTANTE)
             _tcscpy(myBuf,r->s2.s.label);
           else if(r->s2.mode == OPDEF_MODE_VARIABILE)
-            _tcscpy(myBuf,r->s2.s.v->label);
+            _tcscpy(myBuf,r->s2.s.label);
           else {
             printf("ecco: %d, %d\n",r->s1.mode,r->s2.mode);
             PROCError(1001,"ottimizza salti");  

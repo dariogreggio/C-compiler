@@ -39,9 +39,9 @@
 #if ARCHI
 #define __VER__ MAKEWORD(0,1)
 #elif Z80
-#define __VER__ MAKEWORD(6,2)
+#define __VER__ MAKEWORD(7,2)
 #elif I8086
-#define __VER__ MAKEWORD(2,2)
+#define __VER__ MAKEWORD(3,2)
 #elif I8051
 #define __VER__ MAKEWORD(1,0)
 #elif MICROCHIP
@@ -61,14 +61,15 @@ enum {
 #define MAX_TIPI 50
 
 struct ERRORE {
-  int t,l;
+  uint16_t t;
+	uint8_t l;
   const char *s;
   };
 
 union SUB_OP_DEF {
-  char label[32];
+  char label[MAX_NAME_LEN+1];
   int n;
-  struct VARS *v;
+//  struct VARS *v;
   };
     
 typedef uint32_t O_TYPE;
@@ -127,7 +128,7 @@ struct LINE {
   struct LINE *next;
   struct LINE *prev;
   enum LINE_TYPE type;             // 0 commento, 1 label, 2 data def, 3 label con istr., 8 jump, 9 call, 16 istr.
-  char opcode[16];
+  char opcode[32];		// usato anche in blocchi _asm per tutta la riga... attenzione
   struct OP_DEF s1;
   struct OP_DEF s2;
   char rem[128];
@@ -274,7 +275,7 @@ struct CONS {
   char name[128];
   struct CONS *next;
   };  
-#pragma message USARE vars2 ANCHE PER STRUCT *********************
+//#pragma message USARE vars2 ANCHE PER STRUCT *********************
 struct TAGS {
   char label[MAX_NAME_LEN+1];
   struct VARS *member;		
@@ -589,6 +590,7 @@ protected:
 	int8_t UseLMul,UseIRQ,UseTemp,UseFloat;
 	char *RootIn;
 	uint8_t Brack;				// usati da FNRev
+	int8_t isRValue,isPtrUsed,inCast;	// tutti questi potrebbero andare in  struct OPERAND
 	uint32_t TempProg;				//
 	struct LINE *GlblOut;	//
 
@@ -647,7 +649,7 @@ public:
 	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
-	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE);
+	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE, int8_t);
 #if MICROCHIP
 	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
 #else

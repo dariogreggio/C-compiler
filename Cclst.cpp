@@ -92,6 +92,7 @@ struct ERRORE Errs[]={
   2141,3,"value out of range for enum"/*anche 4341*/,
   2153,1,"hex constant must have at least one digit",
   2156,1,"pragma must be outside function",
+  2166,1,"l-value specifies const object",
   2200,1,"warning treated as error",
   2205,1,"can't initialize extern variable",
   2221,1,"'.' left operand points to struct/union, use ->",/*anche 2231*/
@@ -120,6 +121,8 @@ struct ERRORE Errs[]={
   4127,4,"conditional expression is constant",/*anche 4727*/
   4131,4,"old-style declaration",
   4244,3,"conversion, truncation, possible loss of data",
+  4305,3,"truncation from ",
+  4309,3,"truncation of constant value",
   4701,3,"local variable used without initialization",
   4705,4,"statement has no effect",
   4761,3,"integral size mismatch in argument; conversion supplied",
@@ -167,7 +170,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #elif Z80
     FO->put('(');
 #elif I8086
-//    FO->printf("%s [",s->mode & 0x7f == OPDEF_MODE_REGISTRO16 ? "WORD" : "BYTE");		// FINIRE...
+//    FO->printf("%s ",s->mode & 0x7f == OPDEF_MODE_REGISTRO16 ? "WORD PTR" : "BYTE PTR");		// FINIRE...
     FO->put('[');
 #elif MC68000
 // dopo!    
@@ -217,7 +220,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #endif
       break;
 //    case OPDEF_MODE_REGISTRO16:			// registro 16bit 
-//    case OPDEF_MODE_REGISTRO32:			// registro 132it 
+//    case OPDEF_MODE_REGISTRO32:			// registro 32bit 
     case OPDEF_MODE_REGISTRO:				// registro 8 o 16 o 32bit intero
 #if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
@@ -287,26 +290,26 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_VARIABILE_INDIRETTO:
 #if I8086
 //      FO->printf("%s PTR %s","BYTE",s->s.v->label);
-      FO->printf("%s",s->s.v->label);
+      FO->printf("%s",s->s.label);
       if(s->ofs)
         FO->printf("%+d",s->ofs);
 #elif MC68000
 			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 		    if(s->ofs)
-					FO->printf("%s%+d-%s(%s)",s->s.v->label,s->ofs,"__BaseAbs",Regs->AbsS);
+					FO->printf("%s%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);
 				else
-					FO->printf("%s-%s(%s)",s->s.v->label,"__BaseAbs",Regs->AbsS);
+					FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
 				}
 			else {
 				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
-					FO->printf("#%s",s->s.v->label);
+					FO->printf("#%s",s->s.label);
 				else
-					FO->printf("%s",s->s.v->label);
+					FO->printf("%s",s->s.label);
 				if(s->ofs)
 					FO->printf("%+d",s->ofs);
 				}
 #else
-      FO->printf("%s",s->s.v->label);
+      FO->printf("%s",s->s.label);
       if(s->ofs)
         FO->printf("%+d",s->ofs);
 #endif  
@@ -328,7 +331,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_STACKPOINTER_INDIRETTO:
 			if(s->mode & OPDEF_MODE_INDIRETTO) {
 #if MC68000
-				switch((int8_t)s->s.v) {
+				switch((int8_t)s->s.n) {
 					case 0:
 						FO->printf("(%s)",Regs->SpS);
 						break;
@@ -352,6 +355,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_CONDIZIONALE:
 #if MC68000
       FO->printf(s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0x7f],FO);
+#elif I8086
+      FO->printf("%s",OpCond[s->s.n & 0x7f],FO);
 #else
       FO->print(OpCond[s->s.n]);
 #endif
@@ -419,14 +424,16 @@ int Ccc::PROCObj(COutputFile *FO) {
 #ifdef MC68000
 					if(TEXT->opcode[1] &&			// serve per i Branch "B" o "J" :)
 						!_tcschr(TEXT->opcode,'#'))		// patch per 68000/costanti, ma ok... la lascio
+#elif I8086
+					if(TEXT->type != LINE_TYPE_JUMPC)
 #endif
 						FO->put('\t');
 #if I8086
-					if(((TEXT->s1.mode & 0x80) == OPDEF_MODE_INDIRETTO)) {
+					if(TEXT->s1.mode & OPDEF_MODE_INDIRETTO && !strstr(TEXT->opcode," PTR")) {
 						if(((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO_LOW8) || ((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO_HIGH8))
-							FO->print(" BYTE ");		// 
+							FO->print(" BYTE PTR ");		// 
 						else if((TEXT->s2.mode & 0x7f) == OPDEF_MODE_REGISTRO16)
-							FO->print(" WORD ");		// 
+							FO->print(" WORD PTR ");		// 
 						}
 #endif
 			    subObj(FO,&TEXT->s1);
@@ -436,17 +443,21 @@ int Ccc::PROCObj(COutputFile *FO) {
 					if(TEXT->type == LINE_TYPE_JUMPC)
 						FO->put('\t');
 					else
+#elif I8086
+					if(TEXT->type == LINE_TYPE_JUMPC)
+						FO->put('\t');
+					else
 #endif
 						FO->put(',');
 #ifdef MC68000
 					if(TEXT->s2.mode == OPDEF_MODE_VARIABILE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, se no mi esce il cancelletto a dx! - v. anche sopra
 						TEXT->s2.mode=OPDEF_MODE_VARIABILE;
 #elif I8086
-					if(((TEXT->s2.mode & 0x80) == OPDEF_MODE_INDIRETTO)) {
+					if(TEXT->s2.mode & OPDEF_MODE_INDIRETTO && !strstr(TEXT->opcode," PTR")) {
 						if(((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO_LOW8) || ((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO_HIGH8))
-							FO->print(" BYTE ");		// 
+							FO->print(" BYTE PTR ");		// 
 						else if((TEXT->s1.mode & 0x7f) == OPDEF_MODE_REGISTRO16)
-							FO->print(" WORD ");		// 
+							FO->print(" WORD PTR ");		// 
 						}
 #endif
 			    subObj(FO,&TEXT->s2);
