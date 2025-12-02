@@ -339,7 +339,7 @@ int Ccc::subGetType(O_TYPE *t, O_SIZE *s, O_DIM dim, long TT) {
       break;
     case ':':
       *t |= VARTYPE_BITFIELD;
-      PROCError(1002,"bitfield");		// 
+      PROCWarn(1003,"bitfield");		// 
       break;
     default:
       break;
@@ -399,13 +399,17 @@ rifo:
               I=getPtrSize(V->type);
             }
           if(T & VARTYPE_STRUCT) {
-	          if(T & VARTYPE_BITFIELD) {
+	          if(V->type & VARTYPE_BITFIELD) {
+							T |= VARTYPE_BITFIELD;		// me lo segno per dopo! (il padre NON ha l'attributo, anche perché possono coesistere - FINIRE
+							*s += MAKEPTRBITF(V->label);
 							}
-            if(I>= INT_SIZE) {
-              *s=((*s+INT_SIZE-1) & -INT_SIZE) +I;
-              }
-            else
-              *s += I;
+						else {
+							if(I>= StructPacking/*INT_SIZE*/) {
+								*s=((*s+StructPacking-1) & -StructPacking) +I;
+								}
+							else
+								*s += I;
+							}
             }
           else {
             if(I > *s) 
@@ -421,7 +425,12 @@ rifo:
         V=V->next;
         }
         */
-      S=*s;
+      if(T & VARTYPE_BITFIELD) {
+				S=(*s+8)/8;
+				S = (S+INT_SIZE-1) & -INT_SIZE;
+				}
+			else
+				S=*s;
       *t=T;
       OT=FIn->GetPosition();
       }
@@ -621,6 +630,18 @@ struct VARS *Ccc::FNGetAggr(struct TAGS *Tag, const char *TS, bool F, int *o) { 
     if(V->tag==Tag) {
 //    myLog->print(0,("ok\n");
       if(!_tcscmp(V->name,TS)) {
+				if(V->type & VARTYPE_BITFIELD) {
+					}
+				else {
+					if(((!T) && (S==INT_SIZE)) || ((T & VARTYPE_IS_POINTER) && !(T & VARTYPE_ARRAY))) {
+						if(S>1)
+							*o=((*o+StructPacking-1) & -StructPacking);
+						// v. anche  attrib & VAR_ATTRIB_PACKED;
+						}
+					else {
+						*o=((*o+StructPacking-1) & -StructPacking);
+						}
+					}
         break;
 //      o%=(o%+3)&& &FFFC
 	      }   
@@ -635,20 +656,82 @@ struct VARS *Ccc::FNGetAggr(struct TAGS *Tag, const char *TS, bool F, int *o) { 
 	          S=getPtrSize(T);
 	        }
 		    if(F) {
-		      if(((!T) && (S==INT_SIZE)) || ((T & VARTYPE_IS_POINTER) && !(T & VARTYPE_ARRAY))) {
-//		        *o=((*o+INT_SIZE-1) & -INT_SIZE) +S;
-		        *o=((*o+StructPacking-1) & -StructPacking) +S;
-						// v. anche  attrib & VAR_ATTRIB_PACKED;
-		        }
-		      else {
-		        *o += S;
-		        }
-		      }  
+					if(V->type & VARTYPE_BITFIELD) {
+						MAKEPTRBITF(V->label);		// gestito in FNGetAggr2
+						}
+					else {
+						if(((!T) && (S==INT_SIZE)) || ((T & VARTYPE_IS_POINTER) && !(T & VARTYPE_ARRAY))) {
+	//		        *o=((*o+INT_SIZE-1) & -INT_SIZE) +S;
+							if(S>1)
+								*o=((*o+StructPacking-1) & -StructPacking) +S;
+							else
+								*o=S;
+							// v. anche  attrib & VAR_ATTRIB_PACKED;
+							}
+						else {
+	//		        *o += S;
+							*o=((*o+StructPacking-1) & -StructPacking) +S;
+							}
+						}  
+					}  
 	      }
       }
     V=V->next;
     }
   return V;
+  }
+
+uint32_t Ccc::FNGetAggr2(struct VARS *p, struct VARS *v, int *o, int *o2) {  // restituisce pos e mask per bitfield
+	struct VARS *V;
+	uint32_t i,j;
+	O_TYPE T;
+	char TS[64];
+
+  i=0;
+  V=Var;
+  while(V) {
+    if(V->hasTag==v->tag) {
+			T=V->type;
+			}
+    if(V->tag==v->tag) {
+			if(!_tcscmp(V->name,v->name)) {
+				if(i+MAKEPTRBITF(V->label) > INT_SIZE*8) {		// se a-cavallo...  ev. Packed/StructPacking? forse su bitfield no
+					i= (i+INT_SIZE) & -INT_SIZE;
+					}
+				break;
+				}   
+			else {
+				if(v->type & VARTYPE_BITFIELD) {
+					// vedere se consentire mix bitfield e non! ovunque
+					}
+				if(T & VARTYPE_STRUCT) {
+					i += MAKEPTRBITF(V->label);
+					if(i)
+						;
+					}  
+				}
+			}
+    V=V->next;
+    }
+
+	*o=j=i;
+	if(i=MAKEPTRBITF(V->label)) {		// safety :)
+		uint32_t k= j ? (1 << j) : 1;
+		j=0;
+		do {
+			j <<= 1;
+			j |= k;
+			} while(--i);
+		}
+
+	*o2=0;
+	while(*o>=INT_SIZE*8) {		// 
+		*o2+=INT_SIZE;
+		*o-=INT_SIZE*8;
+		}
+
+
+  return j;
   }
 
 struct TAGS *Ccc::subAllocTag(const char *TS) {
@@ -667,18 +750,19 @@ struct TAGS *Ccc::subAllocTag(const char *TS) {
     }
   C->next=(struct TAGS*)NULL;
 	C->member=(struct VARS*)NULL;
-  _tcsncpy(C->label,TS,31);
-  C->label[31]=0;
+  _tcsncpy(C->label,TS,MAX_NAME_LEN);
+  C->label[MAX_NAME_LEN]=0;
   return C;
   }
 
 struct TAGS *Ccc::FNAllocAggr() {
   bool Go=0;
-	O_DIM d;
+	O_DIM dim;
 	O_SIZE s;
   O_TYPE t;
 	uint32_t attrib=0;
-  char MyBuf[64],TS[64],AS[64];
+	int i;
+  char MyBuf[sizeof(union STR_LONG)],TS[64],AS[64];
   long OT;
   struct VARS *V;
   struct TAGS *C,*tag;
@@ -716,33 +800,79 @@ struct TAGS *Ccc::FNAllocAggr() {
     do {
 			OT=FIn->GetPosition();
       FNLO(TS);
-      do {
-        s=INT_SIZE;
-        t=0;
-        ZeroMemory(d,sizeof(d));
-        tag=NULL;
-        PROCGetType(&t,&s,&tag,d,&attrib,OT);
-//        myLog->print(0,"tipo %lx, size %d\n",t,s);
-			  FNLA(AS);
-				if(!_tcscmp(AS,"short") /*|| !_tcscmp(AS,"signed")*/) {
-					if(FNIsType(AS)==VARTYPE_NOTYPE) {		// PATCH rapida per "short int" ecc... MIGLIORARE
-						FNLO(AS);
-						}
-					}
-        FNLO(AS);
+      s=INT_SIZE;
+      t=VARTYPE_PLAIN_INT;
+      ZeroMemory(dim,sizeof(dim));
+      tag=NULL;
 
-        V=PROCAllocVar(AS,t,CLASSE_EXTERN,0,s,tag,d);
+			PROCGetType(&t,&s,&tag,dim,&attrib,OT);
+			FNLA(AS);
+			if(!_tcscmp(AS,"short")/* || !_tcscmp(T,"signed")*/) {
+				FNLA(AS);
+				if(FNIsType(AS)==VARTYPE_PLAIN_INT && !t) {		// PATCH rapida per "short int" ecc... MIGLIORARE
+					FNLO(AS);
+					}
+				}
+
+			goto primogiro;		// perché ho già l'ev. ptr qua! v.sotto, migliorare
+
+      do {
+
+
+
+//        PROCGetType(&t,&s,&tag,dim,&attrib,OT);
+//        myLog->print(0,"tipo %lx, size %d\n",t,s);
+//			  FNLA(AS);
+
+
+
+
+				t &= VARTYPE_NOT_A_POINTER;
+				i=t & VARTYPE_ARRAY ? 0 : 0;		// gli array sono sempre anche puntatori, minimo
+				while(*FNLA(MyBuf)=='*') {		// sarebbe da gestire in GetType... qua il * non appartiene al tipo dichiarato a inizio riga ma per ciascuno...
+					FNLO(MyBuf);
+					i++;
+					}
+				t=i;
+				OT=FIn->GetPosition();
+
+				subGetType(&t, &s, dim, OT);
+
+primogiro:
+
+				FNLO(AS);
+				if(FNCercaVar(C,AS))
+					PROCError(2011,AS);
+
+
+	      V=PROCAllocVar(AS,t,CLASSE_EXTERN,0,s,tag,dim);
+//				FNLO(MyBuf);
+
+
+        V->tag=C;
+
+        if(*FNLA(MyBuf) == ':') {
+					FNLO(MyBuf);
+					i=FNGetConst(MyBuf,0);
+					if(!i)
+						PROCError(2149);
+					if(i>INT_SIZE*8) {
+						PROCWarn(4309);		// vabbe' :)
+						i=INT_SIZE*8;
+						}
+					MAKEPTRBITF(V->label)=i;		// la dim del bitfield
+					}
 
 				if(OutSource) {
-					wsprintf(MyBuf,"|%5u| : .. %s %u",__line__,AS,V->size);
+					wsprintf(MyBuf,"|%5u| : .. %s %u",__line__,AS,t & VARTYPE_BITFIELD ? MAKEPTRBITF(V->label) : V->size);
 //					FNGetLine(OldTextp,MyBuf+10);		// complicato... lascio solo nomi
 //					MyBuf[_tcslen(MyBuf)-2]=0;		// tolgo CR se no diventa doppio
 					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
 					}
 
-        V->tag=C;
         while(*FNLA(MyBuf) == '[') {
-          while(*FNLO(MyBuf) != ']');
+          while(*FNLO(MyBuf) != ']')
+						;
           }
         FNLO(TS);
         } while((*TS != ';') && (*TS));

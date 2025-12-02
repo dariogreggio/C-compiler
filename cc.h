@@ -35,6 +35,7 @@
 	#define STACK_ITEM_SIZE 2
 #endif
 #define PTR_SIZE INT_SIZE
+// la size delle bitfield è in multipli di INT_SIZE...
 
 #if ARCHI
 #define __VER__ MAKEWORD(0,1)
@@ -47,7 +48,7 @@
 #elif MICROCHIP
 #define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(10,1)
+#define __VER__ MAKEWORD(11,1)
 #endif
 
 enum {
@@ -328,6 +329,7 @@ struct BLOCK_PTR {
 
 #define MAKEPTRREG(s) (*(uint8_t*)s)
 #define MAKEPTROFS(s) (*(uint32_t*)s)
+#define MAKEPTRBITF(s) (*(uint8_t*)s)
 
 class COpenCDoc;
 class COpenCView2;
@@ -516,6 +518,8 @@ public:
 		VALUE_IS_COSTANTE=8,
 		VALUE_IS_COSTANTEPLUS=8 + 1,
 
+		// -5 è usato in FNGetConst come marker!
+
 //                V->Q |= 0x20;            // segnala ! condizionale  VERIFICARE! era anche usato per indicare condizione di tipo unsigned...
 //ma è usato anche come "condizione"...		VALUE_CONDITION_UNSIGNED=0x20,				// potrebbe non servire più, 2025 con le nuove condizioni per unsigned, ma è ancora usata in giro!
 		VALUE_CONDITION_UNSIGNED=0x10,		// non più usata 2025 cmq (creati valori espliciti per unsigned
@@ -647,6 +651,7 @@ public:
 	int PROCLoops(const char *, const char *, const char *, struct LINE *);
 	int FNRegFree();
 	struct VARS *FNCercaVar(const char *, bool);
+	struct VARS *FNCercaVar(struct TAGS *,const char *);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE, int8_t);
@@ -762,6 +767,7 @@ public:
 	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, uint32_t *attrib,long textpointer);
 	long FNIsType(char *);
 	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
+	uint32_t FNGetAggr2(struct VARS *, struct VARS *, int *, int *);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
 	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);

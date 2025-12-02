@@ -1825,6 +1825,14 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 				  PROCError(2103);
 				  break;
 				}  
+			if(OutSource) {
+		//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
+		//    PROCOut(NULL,"\t\t\t\t; ",V->name,NULL,NULL);	
+		//    LastOut=(struct LINE *)_frealloc(LastOut,i);
+		//    LastOut->prev->next=LastOut;
+				_tcscpy(LastOut->rem,"addr. ");
+				_tcscat(LastOut->rem,V->name);
+				}
 			break;	
 		case VALUE_IS_D0:		// questo per cose tipo &pippo[5]
 // no direi		case VALUE_IS_EXPR:
@@ -1844,14 +1852,6 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 			break;	
 		}
 	
-  if(OutSource) {
-//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
-//    PROCOut(NULL,"\t\t\t\t; ",V->name,NULL,NULL);	
-//    LastOut=(struct LINE *)_frealloc(LastOut,i);
-//    LastOut->prev->next=LastOut;
-    _tcscpy(LastOut->rem,"addr. ");
-    _tcscat(LastOut->rem,V->name);
-    }
   return 0;
   }                   
  
