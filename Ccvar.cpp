@@ -504,7 +504,7 @@ rifo:
 		FNLA(AS);
     if(!_tcscmp(AS,"far")) {
       *t |= VARTYPE_FAR;		// :)
-			if((MemoryModel & 0xf)==MEMORY_MODEL_LARGE)
+			if((MemoryModel & 0xf)>=MEMORY_MODEL_MEDIUM)
 				PROCWarn(4069,"far");		// magari dipende dalle CPU :)
       T=*t;
       FNLO(AS);
@@ -2112,7 +2112,7 @@ int Ccc::PROCUseCost(int8_t V, O_TYPE T, O_SIZE S, union STR_LONG *C,bool asPtr)
 		  	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)C->s,0);
 //	  		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,"OFFSET DGROUP:",C->s,NULL);
 #elif MC68000
-				if((MemoryModel & 0xf)==MEMORY_MODEL_SMALL)			// gestire
+				if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)			// gestire
 					;
 				if(asPtr)
 		  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea"/*movString*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)C->s,0,OPDEF_MODE_REGISTRO32,Regs->P);
@@ -2146,7 +2146,7 @@ int Ccc::PROCUseCost(int8_t V, O_TYPE T, O_SIZE S, union STR_LONG *C,bool asPtr)
 		  	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)C->s,0);
 //	  		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,"OFFSET DGROUP:",C->s,NULL);
 #elif MC68000
-				if((MemoryModel & 0xf)==MEMORY_MODEL_SMALL)			// gestire
+				if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)			// gestire
 					;
 				if(asPtr)
 		  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea"/*movString*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)C->s,0,OPDEF_MODE_REGISTRO32,Regs->P);

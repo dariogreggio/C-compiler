@@ -304,10 +304,18 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 					FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
 				}
 			else {
-				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
-					FO->printf("#%s",s->s.label);
-				else
-					FO->printf("%s",s->s.label);
+				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)	{	// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("#%s",s->s.label);		// v. cose tipo GetAdd...
+					else
+						FO->printf("#%s",s->s.label);
+					}
+				else {
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("%s.w",s->s.label);
+					else
+						FO->printf("%s",s->s.label);
+					}
 				if(s->ofs)
 					FO->printf("%+d",s->ofs);
 				}

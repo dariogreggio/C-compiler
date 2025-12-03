@@ -1959,7 +1959,7 @@ dontChgV:
 #elif MC68000
 //				PROCOper(LINE_TYPE_ISTRUZIONE,"asr.l",OPDEF_MODE_IMMEDIATO,(uint8_t)(log(i)/log(2)),u[0].mode,&u[0].s,u[0].ofs);
 				// in effetti ci va divisione! in caso di agggregati ecc
-				if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
+				if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 				// (e andrebbe fatta con long, almeno in certi casi
 					PROCOper(LINE_TYPE_ISTRUZIONE,"divs",OPDEF_MODE_IMMEDIATO,i,u[0].mode,&u[0].s,u[0].ofs);
 				else
@@ -2210,7 +2210,10 @@ myMul2:
   		switch(Mode) {
         case MODE_IS_OTHER:
     		case MODE_IS_VARIABLE:
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
+					if(VType & VARTYPE_UNSIGNED)
+						PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,u[0].mode,&u[0].s,u[0].ofs);
+					else
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
 					PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:                                
@@ -2699,15 +2702,23 @@ myMul1:
 
 	// (OTTIMIZZARE se divisore multiplo di 2
 	if(RSize==1 && Mode != MODE_IS_CONSTANT2)
-		PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[1].mode,&u[1].s,u[1].ofs);
+		if(VType & VARTYPE_UNSIGNED)
+			PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,u[1].mode,&u[1].s,u[1].ofs);
+		else
+			PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[1].mode,&u[1].s,u[1].ofs);
 
 	switch(VSize) {
 	  case 1:
   		switch(Mode) {
         case MODE_IS_OTHER:
     		case MODE_IS_VARIABLE:
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+					if(VType & VARTYPE_UNSIGNED) {
+						PROCOper(LINE_TYPE_ISTRUZIONE,"andi.l",OPDEF_MODE_IMMEDIATO32,0x000000ff,u[0].mode,&u[0].s,u[0].ofs);
+						}
+					else {
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+						}
 					PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:                                
@@ -2737,8 +2748,13 @@ myMul1:
 							break;
 							}
 						}
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+					if(VType & VARTYPE_UNSIGNED) {
+						PROCOper(LINE_TYPE_ISTRUZIONE,"andi.l",OPDEF_MODE_IMMEDIATO32,0x000000ff,u[0].mode,&u[0].s,u[0].ofs);
+						}
+					else {
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",u[0].mode,&u[0].s,u[0].ofs);
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+						}
 					PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO,LOBYTE(LOWORD(RCost->l)),u[0].mode,&u[0].s,u[0].ofs);
       		break;
     		}
@@ -2747,7 +2763,10 @@ myMul1:
   		switch(Mode) {
         case MODE_IS_OTHER:
     		case MODE_IS_VARIABLE:
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+					if(VType & VARTYPE_UNSIGNED)
+						PROCOper(LINE_TYPE_ISTRUZIONE,"andi.l",OPDEF_MODE_IMMEDIATO32,0x0000ffff,u[0].mode,&u[0].s,u[0].ofs);
+					else
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
 					PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:    // 
@@ -2777,7 +2796,10 @@ myMul1:
 							break;
 							}
 						}
-					PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
+					if(VType & VARTYPE_UNSIGNED)
+						PROCOper(LINE_TYPE_ISTRUZIONE,"andi.l",OPDEF_MODE_IMMEDIATO32,0x0000ffff,u[0].mode,&u[0].s,u[0].ofs);
+					else
+						PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",u[0].mode,&u[0].s,u[0].ofs);
 					PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(RCost->l),u[0].mode,&u[0].s,u[0].ofs);
       		break;
     		}
@@ -3057,22 +3079,22 @@ O_SIZE Ccc::getPtrSize(O_TYPE t) {
 	O_SIZE s;
 
 #if ARCHI
-	if(((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE) || (t & VARTYPE_FAR))
+	if(((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM) || (t & VARTYPE_FAR))
 		s=PTR_SIZE;
 	else
 		s=2;
 #elif Z80
-	if(((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE) || (t & VARTYPE_FAR))
+	if(((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM) || (t & VARTYPE_FAR))
 		s=4;			// mah
 	else
 		s=PTR_SIZE;
 #elif I8086
-	if(((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE) || (t & VARTYPE_FAR))
+	if(((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM) || (t & VARTYPE_FAR))
 		s=4;
 	else
 		s=2;
 #elif MC68000
-	if(((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE) || (t & VARTYPE_FAR))
+	if(((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM) || (t & VARTYPE_FAR))
 		s=PTR_SIZE;
 	else
 		s=2;

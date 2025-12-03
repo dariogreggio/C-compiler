@@ -154,9 +154,9 @@ enum {
 	};
 enum {
 	MEMORY_MODEL_SMALL=0,
-	MEMORY_MODEL_COMPACT=0,		// finire
-	MEMORY_MODEL_MEDIUM=0,		// finire
-	MEMORY_MODEL_LARGE=1,
+	MEMORY_MODEL_COMPACT=1,		// finire
+	MEMORY_MODEL_MEDIUM=2,		// finire
+	MEMORY_MODEL_LARGE=3,
 	MEMORY_MODEL_ABSOLUTE=0,
 	MEMORY_MODEL_RELATIVE=0x80,
 	};
@@ -415,7 +415,8 @@ private:
 */
 
 
-extern const char *movString,*storString,*jmpString,*jmpCondString,*callString,*returnString,*incString,*decString,*pushString,*popString;
+extern const char *movString,*storString,*jmpString,*jmpShortString,*jmpCondString,*callString,*returnString,
+	*incString,*decString,*pushString,*popString;
 
 class CSourceFile : public CFile {
 public:
@@ -621,7 +622,7 @@ protected:
 	uint8_t OptimizeExpr;         // RICORDA le SUB-Expr        -Og
 	uint8_t SynCheckOnly;         // SOLO SYNTAX CHECKING        -Zs
 	uint8_t UnsignedChar;         // CHAR E' UNSIGNED PER DEFAULT  -J
-	uint8_t MemoryModel;						// small s o large l 
+	uint8_t MemoryModel;						// small s o large l ecc
 	uint8_t NoMacro;              // DISABILITA MACRO PREDEF.    -u
 	uint8_t MultipleString;       // stringhe costanti uguali ripetute o compresse
 	uint8_t StorageDefault;				// storage class di default (finire)

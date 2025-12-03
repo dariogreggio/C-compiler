@@ -96,7 +96,7 @@ int Ccc::PROCReadD0(struct VARS *V, O_TYPE T, O_SIZE S, uint16_t cond, int ofs, 
 		  }
 #elif MC68000
 		if(!V->modif) {
-			if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE) {
+			if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM) {
 				if(ofs >= 0) 
 	  			_tcscpy(AS,"addi.l");		// memorymodel!
 				else {
@@ -1753,9 +1753,11 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 							OPDEF_MODE_VARIABILE,/*"OFFSET DGROUP:",*/(union SUB_OP_DEF *)&V->label,ofs);
 #elif MC68000
 					if(asPtr)
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,ofs,OPDEF_MODE_REGISTRO32,Regs->P);
+			  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,ofs,
+							OPDEF_MODE_REGISTRO32,Regs->P);
 					else
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&V->label,ofs,OPDEF_MODE_REGISTRO32,Regs->D);
+						PROCOper(LINE_TYPE_ISTRUZIONE,(MemoryModel & 0xf) <= MEMORY_MODEL_SMALL ? "move.w" : "move.l",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&V->label,ofs,
+							OPDEF_MODE_REGISTRO32,Regs->D);
 // beh non serve				  PROCOper(LINE_TYPE_ISTRUZIONE,"addi.l",OPDEF_MODE_IMMEDIATO,ofs,OPDEF_MODE_REGISTRO32,Regs->D);
 #elif MICROCHIP
 			  	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,ofs);

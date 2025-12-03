@@ -890,7 +890,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	                      case VALUE_IS_EXPR_FUNC:			// funzione
 	                        PROCCast(VARTYPE_UNSIGNED,INT_SIZE,R.type,R.size,-1);        // l'indice array dev'essere unsigned int
 
-													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
+													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 														;
 
 													// OTTIMIZZARE con ASL ;) se multiplo di 2 tipo PTR
@@ -913,7 +913,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 #else
 											    PROCReadD0(R.var,VARTYPE_UNSIGNED,INT_SIZE,*cond & VALUE_CONDITION_MASK,0,FALSE);
 #endif
-													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
+													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 														;
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
@@ -933,7 +933,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 #else
 	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE);
 #endif
-													if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
+													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 														;
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
@@ -1025,7 +1025,7 @@ R.cost->l=0;
                         PROCOper(LINE_TYPE_ISTRUZIONE,BS,OPDEF_MODE_REGISTRO16,Regs->P);			// NON dovrebbe servire qua! lascio incompleto
                         }
                       else {
-												if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)		// FINIRE! non so se ha senso usare ofs 32
+												if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)		// FINIRE! non so se ha senso usare ofs 32
 													PROCOper(LINE_TYPE_ISTRUZIONE,"adda.l",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO,Regs->P);
 												else
 													PROCOper(LINE_TYPE_ISTRUZIONE,"adda.l",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO,Regs->P);
@@ -2796,7 +2796,8 @@ myURcost:
 											if(!R.cost->l) {		// e costante = 0
 #if MC68000
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,"clr.l",OPDEF_MODE_REGISTRO,Regs->D);
-			                  PROCOper(LINE_TYPE_ISTRUZIONE,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
+													OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #else
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,0);
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
@@ -2810,7 +2811,8 @@ myURcost:
 											if(R.cost->l) {		// e costante != 0
 #if MC68000
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO,1,OPDEF_MODE_REGISTRO32,Regs->D);
-			                  PROCOper(LINE_TYPE_ISTRUZIONE,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
+													OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #else
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,1);
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
@@ -2933,7 +2935,7 @@ skippa_condbranch: ;
 //		          PROCOut("B",TS,"_");
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
-		          PROCOper(LINE_TYPE_JUMPC,"jr",OPDEF_MODE_CONDIZIONALE,(union SUB_OP_DEF *)MyBuf,0);
+		          PROCOper(LINE_TYPE_JUMPC,jmpShortString,OPDEF_MODE_CONDIZIONALE,(union SUB_OP_DEF *)MyBuf,0);
 #elif Z80     
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
@@ -2945,7 +2947,8 @@ skippa_condbranch: ;
 #elif MC68000
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
-		          PROCOper(LINE_TYPE_JUMPC,"bra.s"/*jmpString*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
 #elif MICROCHIP
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");

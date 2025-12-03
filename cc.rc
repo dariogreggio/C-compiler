@@ -66,8 +66,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,1,0
- PRODUCTVERSION 1,0,1,0
+ FILEVERSION 1,1,1,0
+ PRODUCTVERSION 1,1,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -85,14 +85,14 @@ BEGIN
             VALUE "Comments", "\0"
             VALUE "CompanyName", "Dario's Automation (Cyberdyne (ex ADPM Synthesis sas))\0"
             VALUE "FileDescription", "cc DLL\0"
-            VALUE "FileVersion", "1, 0, 1, 0\0"
+            VALUE "FileVersion", "1, 1, 1, 0\0"
             VALUE "InternalName", "cc\0"
             VALUE "LegalCopyright", "Copyright (C) Dario's Automation 2025; Cyberdyne 2010; ADPM Synthesis 1989-2001\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "cc.DLL\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "DLL compilatore C OpenC\0"
-            VALUE "ProductVersion", "1, 0, 1, 0\0"
+            VALUE "ProductVersion", "1, 1, 1, 0\0"
             VALUE "SpecialBuild", "\0"
         END
     END
