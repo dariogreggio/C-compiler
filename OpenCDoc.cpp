@@ -243,10 +243,24 @@ void COpenCDoc::OnCompilaFile() {
 	if(theApp.Opzioni & COpenCApp::checkPtr)
 		parms+="-Zr ";
 
-	if(theApp.MemoryModel==0)		// in MSVC... in MSDEV son poi spariti :)
-		parms+="-AS ";		// SMALL questo non c'è, credo vada di default
-	else
-		parms+="-AL ";		// LARGE
+	switch(theApp.MemoryModel) {		// in MSVC... in MSDEV son poi spariti :)
+		case 0:
+			parms+="-AT ";		// Tiny/Compact
+			break;
+		case 1:
+			parms+="-AS ";		// SMALL questo non c'è, credo vada di default
+			break;
+		case 2:
+			parms+="-AM ";		// Medium
+			break;
+		case 3:
+			parms+="-AL ";		// LARGE
+			break;
+		}
+
+	if(theApp.AbsRel) {
+		parms+="-mr ";		// relativo
+		}
 
 	if(theApp.Warning>0) {
 		CStringEx S;

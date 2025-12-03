@@ -10,6 +10,11 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+
+//https://www.codeproject.com/articles/Using-RichEditCtrl-to-Display-Formatted-Logs#comments-section
+// per righe colorate
+
+
 /////////////////////////////////////////////////////////////////////////////
 // COutputView
 /////////////////////////////////////////////////////////////////////////////
@@ -38,8 +43,7 @@ void COutputView::AssertValid() const
 	CEditView::AssertValid();
 }
 
-void COutputView::Dump(CDumpContext& dc) const
-{
+void COutputView::Dump(CDumpContext& dc) const {
 	CEditView::Dump(dc);
 }
 
@@ -52,7 +56,6 @@ COpenCDoc2* COutputView::GetDocument() // non-debug version is inline
 
 /////////////////////////////////////////////////////////////////////////////
 // COutputView message handlers
-
 
 int COutputView::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 

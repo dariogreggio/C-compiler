@@ -228,6 +228,7 @@ public:
 
 public:
 	COpenCApp();
+	~COpenCApp();
 
 // Overrides
 	// ClassWizard generated virtual function overrides
@@ -264,12 +265,13 @@ public:
 public:
 	char *variabiliKey,*fileApertiKey;
 	DWORD Opzioni;
-	BYTE MemoryModel,Warning;
+	BYTE MemoryModel,Warning,AbsRel;
 
 	CMultiDocTemplate *pDocTemplate,*pDocTemplate2;
 	COpenCDoc2 *theOutput;
 	CString ccName,altreDefine;
 
+	HINSTANCE m_hinstRE41;
 
 	//{{AFX_MSG(COpenCApp)
 	afx_msg void OnAppAbout();

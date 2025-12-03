@@ -245,6 +245,7 @@ BOOL COpzioniCompilPropPage2::OnInitDialog() {
 	m_AltreDefine=theApp.altreDefine;
 
 	m_MemoryModel=theApp.MemoryModel;
+	m_AbsRel=theApp.AbsRel;
 	m_Warning=theApp.Warning;
 
 	isInitialized=TRUE;

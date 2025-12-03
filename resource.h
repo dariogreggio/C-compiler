@@ -34,6 +34,8 @@
 #define IDC_COMBO2                      1018
 #define IDC_RADIO1                      1019
 #define IDC_RADIO2                      1020
+#define IDC_COMBO3                      1021
+#define IDC_CHECK18                     1022
 #define ID_STRUMENTI_SPY                32771
 #define ID_COMPILA_FILE                 32772
 #define ID_COMPILA_TUTTO                32773
@@ -58,6 +60,8 @@
 #define IDS_ALTREDEFINE                 61451
 #define IDS_MEMORYMODEL                 61452
 #define IDS_COORDINATECHILD             61453
+#define IDS_WARNING                     61454
+#define IDS_ABSREL                      61455
 
 // Next default values for new objects
 // 

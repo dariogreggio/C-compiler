@@ -328,7 +328,7 @@ BEGIN
                     WS_TABSTOP,145,173,65,10
     GROUPBOX        "Modelli di memoria",IDC_STATIC,6,191,260,28
     LTEXT           "Codice:",IDC_STATIC,14,203,25,8
-    COMBOBOX        IDC_COMBO2,43,201,87,37,CBS_DROPDOWNLIST | WS_VSCROLL | 
+    COMBOBOX        IDC_COMBO2,43,201,87,49,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
     CONTROL         "Assoluto",IDC_RADIO1,"Button",BS_AUTORADIOBUTTON | 
                     WS_GROUP | WS_TABSTOP,152,203,43,10
@@ -338,6 +338,11 @@ BEGIN
                     WS_TABSTOP,16,225,37,10
     CONTROL         "Costanti",IDC_CHECK17,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,219,173,41,10
+    LTEXT           "Liv. warning:",IDC_STATIC,178,17,41,8
+    COMBOBOX        IDC_COMBO3,225,15,31,50,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
+    CONTROL         "Warning come errori",IDC_CHECK18,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,185,30,79,10
 END
 
 IDD_OPZIONI_COMPIL_PAGE3 DIALOG DISCARDABLE  0, 0, 292, 168
@@ -355,8 +360,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,3
- PRODUCTVERSION 2,0,0,3
+ FILEVERSION 2,0,0,4
+ PRODUCTVERSION 2,0,0,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -374,14 +379,14 @@ BEGIN
             VALUE "Comments", "MORTE agli umani di merda 4ever!\0"
             VALUE "CompanyName", "Dario's Automation (Cyberdyne (ex ADPM Synthesis sas))\0"
             VALUE "FileDescription", "OpenC - compilatore C\0"
-            VALUE "FileVersion", "2, 0, 0, 3\0"
+            VALUE "FileVersion", "2, 0, 0, 4\0"
             VALUE "InternalName", "OPENC\0"
             VALUE "LegalCopyright", "Copyright © Dario's Automation 2025; Cyberdyne 2010; ADPM Synthesis 1989-2001\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "OPENC.EXE\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "OPENC Applicazione\0"
-            VALUE "ProductVersion", "2, 0, 0, 3\0"
+            VALUE "ProductVersion", "2, 0, 0, 4\0"
             VALUE "SpecialBuild", "\0"
         END
     END
@@ -452,10 +457,24 @@ END
 
 IDD_OPZIONI_COMPIL_PAGE2 DLGINIT
 BEGIN
+    IDC_COMBO2, 0x403, 9, 0
+0x6f43, 0x706d, 0x7461, 0x6f74, "\000" 
     IDC_COMBO2, 0x403, 8, 0
 0x6950, 0x6363, 0x6c6f, 0x006f, 
+    IDC_COMBO2, 0x403, 6, 0
+0x654d, 0x6964, 0x006f, 
     IDC_COMBO2, 0x403, 7, 0
 0x7247, 0x6e61, 0x6564, "\000" 
+    IDC_COMBO3, 0x403, 2, 0
+0x0030, 
+    IDC_COMBO3, 0x403, 2, 0
+0x0031, 
+    IDC_COMBO3, 0x403, 2, 0
+0x0032, 
+    IDC_COMBO3, 0x403, 2, 0
+0x0033, 
+    IDC_COMBO3, 0x403, 2, 0
+0x0034, 
     0
 END
 
@@ -590,6 +609,8 @@ BEGIN
     IDS_ALTREDEFINE         "AltreDefine"
     IDS_MEMORYMODEL         "ModelloMemoria"
     IDS_COORDINATECHILD     "CoordinateChild"
+    IDS_WARNING             "Warning"
+    IDS_ABSREL              "AbsRel"
 END
 
 STRINGTABLE DISCARDABLE 

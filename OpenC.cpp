@@ -47,8 +47,19 @@ END_MESSAGE_MAP()
 
 COpenCApp::COpenCApp() {
 
+ CoInitialize(NULL); //this must be called FIRST!
+
+	//m_hinstRE41 is a HINSTANCE type member var of CMyApp
+	m_hinstRE41=LoadLibrary(TEXT("msftedit.dll"));			// per usare RichEdit più recenti!
+	//this DLL must be loaded.
+	
 	variabiliKey="variabili";
 	fileApertiKey="fileAperti";
+	}
+
+COpenCApp::~COpenCApp() {
+	if(m_hinstRE41)
+		FreeLibrary(m_hinstRE41);
 	}
 
 /////////////////////////////////////////////////////////////////////////////
@@ -115,7 +126,7 @@ BOOL COpenCApp::InitInstance() {
 
 	// create main MDI Frame window
 	CMainFrame* pMainFrame = new CMainFrame;
-	if (!pMainFrame->LoadFrame(IDR_MAINFRAME))
+	if(!pMainFrame->LoadFrame(IDR_MAINFRAME))
 		return FALSE;
 	m_pMainWnd = pMainFrame;
 
@@ -135,6 +146,8 @@ BOOL COpenCApp::InitInstance() {
 	altreDefine=myBuf;
 	Opzioni=GetPrivateProfileInt(variabiliKey,IDS_OPZIONI);
 	MemoryModel=GetPrivateProfileInt(variabiliKey,IDS_MEMORYMODEL);
+	AbsRel=GetPrivateProfileInt(variabiliKey,IDS_ABSREL);
+
 	Warning=GetPrivateProfileInt(variabiliKey,IDS_WARNING);
 
 	// Enable drag/drop open
@@ -165,6 +178,7 @@ int COpenCApp::ExitInstance() {
 
 	WritePrivateProfileInt(variabiliKey,IDS_OPZIONI,Opzioni);
 	WritePrivateProfileInt(variabiliKey,IDS_MEMORYMODEL,MemoryModel);
+	WritePrivateProfileInt(variabiliKey,IDS_ABSREL,AbsRel);
 	WritePrivateProfileInt(variabiliKey,IDS_WARNING,Warning);
 	WritePrivateProfileString(variabiliKey,IDS_ALTREDEFINE,(LPCTSTR)altreDefine);
 	WritePrivateProfileString(variabiliKey,IDS_NOMECC,(LPCTSTR)ccName);
@@ -419,6 +433,7 @@ void COpenCApp::OnStrumentiOpzioni() {
 			Opzioni |= myPage1.m_OttimizzaCostanti ? ottimizzaConst : 0;
 			altreDefine=myPage1.m_AltreDefine;
 			MemoryModel=myPage1.m_MemoryModel;
+			AbsRel=myPage1.m_AbsRel;
 			Warning=myPage1.m_Warning;
 			}
 		if(myPage2.isInitialized) {
