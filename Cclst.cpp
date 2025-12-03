@@ -298,10 +298,18 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
         FO->printf("%+d",s->ofs);
 #elif MC68000
 			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-		    if(s->ofs)
-					FO->printf("%s%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);
-				else
-					FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
+				if(s->ofs) {
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("%s.w%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);		// non lo accetta.. RIVERIFICARE
+					else
+						FO->printf("%s%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);
+					}
+				else {
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("%s.w-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);		// non lo accetta.. RIVERIFICARE
+					else
+						FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
+					}
 				}
 			else {
 				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)	{	// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto

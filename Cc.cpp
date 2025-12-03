@@ -1692,7 +1692,7 @@ Mm20:   ;
 #elif MC68000
 						  PROCOper(LINE_TYPE_DATA_DEF,
 								(!(TipoOut & TIPO_SPECIALE)) ? 
-									((MemoryModel & 0xf) > MEMORY_MODEL_SMALL ? "dd" : "dw") : ((MemoryModel & 0xf) > MEMORY_MODEL_SMALL ? "\tdc.l" : "\tdc.w"),
+									((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
 								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
 #elif MICROCHIP
 						  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
