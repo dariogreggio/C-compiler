@@ -95,6 +95,7 @@ enum OPDEF_MODE {
 	OPDEF_MODE_STACKPOINTER=11,
 	OPDEF_MODE_CONDIZIONALE=16,
 	OPDEF_MODE_INDIRETTO=0x80,
+//	OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC=0x87,		// USARE per copia struct e/o array
 	OPDEF_MODE_REGISTRO_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_REGISTRO),
 	OPDEF_MODE_IMMEDIATO_INDIRETTO=0x86,
 	OPDEF_MODE_FRAMEPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_FRAMEPOINTER),
@@ -116,6 +117,7 @@ enum LINE_TYPE {
 	LINE_TYPE_DATA_DEF,
 	LINE_TYPE_LABEL_CON_ISTRUZIONE,
 	LINE_TYPE_JUMP=8,
+	LINE_TYPE_JUMPGOTO,
 	LINE_TYPE_JUMPC,
 	LINE_TYPE_CALL,
 	LINE_TYPE_ISTRUZIONE=16,
@@ -321,7 +323,6 @@ struct BLOCK_PTR {
   char T[32];    // CONTIENE I NOMI DEI FINE-BLOCCHI, # SE DO, & SE SWITCH,% SE if
   char C[32];   // CONTIENE LE LABEL PER continue
   char B[32];   // CONTIENE LE LABEL PER break
-	char **gotos;		// usare, per memorizzare e controllare le label definite!
   char *parm;
 	int8_t flag;		// usato per segnalare cose, tipo "default" già uscito in switch(
   };
@@ -580,7 +581,7 @@ protected:
   struct LINE *RootOut,*LastOut,*StaticOut,*BSSOut;
 	struct VARS *Var;
 	struct VARS *LVars;   // root, used, last
-	struct VARS *CurrFunc;
+	struct VARS *CurrFunc,*CurrFuncGotos;
 	struct CONS *Con;
 	struct CONS *LCons;
   struct ENUMS *LEnums;
@@ -654,6 +655,7 @@ public:
 	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *FNCercaVar(struct TAGS *,const char *);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+	struct VARS *FNCercaGoto(const char *);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE, int8_t);
 #if MICROCHIP

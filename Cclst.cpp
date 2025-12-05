@@ -192,9 +192,9 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
 #else
-			if(s->s.n<0 || s->s.n>7) {
+			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************666",0);
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************666",s->s.n);
 				PROCError(1001,"bad register number");
 				return;
 				}
@@ -209,9 +209,9 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
 #else
-			if(s->s.n<0 || s->s.n>7) {
+			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************667",0);
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************667",s->s.n);
 				PROCError(1001,"bad register number");
 				return;
 				}
@@ -228,9 +228,9 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
 #else
-			if(s->s.n<0 || s->s.n>7) {
+			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************668",0);
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"********************668",s->s.n);
 				PROCError(1001,"bad register number");
 				return;
 				}
@@ -481,6 +481,22 @@ int Ccc::PROCObj(COutputFile *FO) {
 #endif
 			    subObj(FO,&TEXT->s2);
 			    }  
+        break;
+			case LINE_TYPE_JUMPGOTO:
+				{ struct VARS *g;
+				if(g=FNCercaGoto(TEXT->s1.s.label)) {
+//						PROCOutLab(g->label,"_",CurrFunc->name);
+//						FO->println("%s_%s",g->label,CurrFunc->name);		// 
+			      FO->put('\t'); 				  // prima delle istruzioni TAB
+				    FO->printf("%s",TEXT->opcode);
+			      FO->put('\t');
+						_tcscat(TEXT->s1.s.label,"_");
+						_tcscat(TEXT->s1.s.label,CurrFunc->name);
+				    subObj(FO,&TEXT->s1);
+						}
+					else
+						PROCError(2094,TEXT->s1.s.label);
+				}
         break;
 			}
     if(*TEXT->rem) {

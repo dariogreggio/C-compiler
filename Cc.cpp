@@ -218,6 +218,7 @@ int Ccc::CompilaC(int argc, char **argv) {
 #endif
 	Var=LVars=NULL;
 	CurrFunc=NULL;
+	CurrFuncGotos=NULL;
 	Con=LCons=NULL;
   Enums=LEnums=NULL;
 	StrTag=LTag=NULL;
@@ -485,7 +486,8 @@ ukswitch:
   myLog->print(0,"%s - %s\n\n",__date__,__file__);
   InBlock=0;
   CurrFunc=NULL;
-  Declaring=TRUE;
+	CurrFuncGotos=NULL;  
+	Declaring=TRUE;
   FuncCalled=FALSE;
 	UseIRQ=UseLMul=UseFloat=FALSE;
   SaveFP=FALSE;
@@ -2188,7 +2190,13 @@ Mm20:   ;
       PROCVarList(FLst,CurrFunc);
       }
     // cancella le variabili locali...
-		CurrFunc=0;
+		while(CurrFuncGotos) {			    // cancello i goto
+			struct VARS *g=CurrFuncGotos->next;
+			GlobalFree(CurrFuncGotos);
+			CurrFuncGotos=g;
+			}
+		CurrFunc=NULL;
+		CurrFuncGotos=NULL;
 		}
   InBlock--;     
 					  
@@ -3011,7 +3019,7 @@ L5080:
 #elif I8086
 				if((!_tcscmp(nome,"main")) && (AutoOff>((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? 2*4 : 2*2))) {
 #else
-				if((!_tcscmp(nome,"main")) && (AutoOff>STACK_ITEM_SIZE)) {
+				if((!_tcscmp(nome,"main")) && (AutoOff>2*STACK_ITEM_SIZE)) {
 #endif
 // main PUO' AVERE PARAMETRI DELLA COMMAND LINE
 #if ARCHI
@@ -3755,37 +3763,11 @@ rifoStmt:
 		case 'og':
 			if(!_tcscmp(TS,"goto")) {
 				if(*FNLA(MyBuf) != ';') {
-	#if ARCHI
 	  			FNLO(MyBuf);
-	  			_tcscat(MyBuf,"_");
-	  			_tcscat(MyBuf,CurrFunc->name);
-		  		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-	#elif Z80
-	  			FNLO(MyBuf);
-	  			_tcscat(MyBuf,"_");
-	  			_tcscat(MyBuf,CurrFunc->name);
-	  			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-	#elif I8086
-	  			FNLO(MyBuf);
-	  			_tcscat(MyBuf,"_");
-	  			_tcscat(MyBuf,CurrFunc->name);
-	  			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-	#elif MC68000
-	  			FNLO(MyBuf);
-	  			_tcscat(MyBuf,"_");
-	  			_tcscat(MyBuf,CurrFunc->name);
-	  			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-	#elif MICROCHIP
-	  			FNLO(MyBuf);
-	  			_tcscat(MyBuf,"_");
-	  			_tcscat(MyBuf,CurrFunc->name);
-	  			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-	#endif
-					//usare 
-					OldTX[InBlock+1].gotos;
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
 		  		}
 				else
-					PROCError(2094);
+					PROCError(2059,TS);
 				}  
 			else
 				goto noStmt;
@@ -3809,6 +3791,15 @@ rifoStmt:
 			if(!_tcscmp(TS,"pragma")) {
 				if(!*FNLO(MyBuf))
 					PROCError(2059,TS);
+				if(*FNLA(MyBuf1) == '(') {
+					PROCCheck('(');
+					if(*FNLA(MyBuf1) != ')')
+						FNLO(MyBuf1);			// ev. finire...
+					PROCCheck(')');
+					}
+				else
+					FNLO(MyBuf1);			// ev. finire...
+				PROCWarn(1003,MyBuf);
 				if(!_tcscmp(MyBuf,"code_seg")) {
 	//	      if(InBlock>0)                       // sembra di no... ma mi fa strano! (2010)
 	//	        PROCError(2156);
@@ -3957,7 +3948,30 @@ rifoStmt:
 		default:
 noStmt:		
 			if(*FNLA(MyBuf)==':') {
-				PROCOutLab(TS,"_",CurrFunc->name);
+				if(!FNCercaGoto(TS)) {
+					struct VARS *g,*g2,*g3;
+
+					g=(struct VARS *)GlobalAlloc(GPTR,sizeof(struct VARS)); 
+					if(!g) {
+						PROCError(1001,"Fine memoria GOTO");
+						}
+					if(CurrFuncGotos) {
+						g2=g3=CurrFuncGotos;
+						while(g2) {
+							g3=g2;
+							g2=g2->next;
+							}
+						g3->next=g;
+						}
+					else {
+						CurrFuncGotos=g;
+						}
+					_tcsncpy(g->label,TS,sizeof(g->label)-1);		// uso questo e non Name...
+					g->next=(struct VARS *)NULL;
+					PROCOutLab(TS,"_",CurrFunc->name);
+					}
+				else
+					PROCError(2045,TS);
 				FNLO(TS);
 				goto rifoStmt;       // la label da sola non fa stmt...
 				}
@@ -4583,6 +4597,21 @@ noPascal:
   return V;
   }
 
+struct VARS *Ccc::FNCercaGoto(const char *N) {
+  register int Bl;
+  struct VARS *V;
+  
+	V=CurrFuncGotos;
+	while(V) {
+		if(!_tcscmp(N,V->label)) { 
+			return V;
+			}
+		V=V->next;
+		}
+
+  return NULL;
+  }
+ 
 struct ENUMS *Ccc::FNCercaEnum(const char *tag, const char *N, bool M) {
 // M% TRUE=RICERCA NEL BLOCCO, FALSE RICERCA GLOBALE
   register int Bl;
@@ -6565,31 +6594,51 @@ REGISTRI::REGISTRI(Ccc *c) {
 	DT[1]="de";
 	DT[2]="bc";
 	DT[3]="af";
+	DT[4]="ix";
+	DT[5]="iy";              // lo uso così solo se non uso FP
+	DT[6]="r6";		//?? bug?
+	DT[7]="r7";		//?? bug?
 	FpS="iy";
 	SpS="sp";
 	DT[8]="ix";
 	DT[9]="iy";              // lo uso così solo se non uso FP
+	DT[10]="r10";		//?? bug?
+	DT[11]="r11";		//?? bug?
+	DT[12]="r12";		//?? bug?
+	DT[13]="r13";		//?? bug?
+	DT[14]="r14";		//?? bug?
+	DT[15]="r15";		//?? bug?
   Accu="a";
 	D=0; P=0;
 	MaxD=3;
-	UserBase=8;
-	MaxUser=9;
+	UserBase=4;
+	MaxUser=5;
 #elif I8086
 	DT[0]="ax";
 	DT[1]="dx";		// meglio per restituire long in funzioni!
 	DT[2]="bx";
 	DT[3]="cx";
+	DT[4]="di";
+	DT[5]="si";
+	DT[6]="r6";		//?? bug?
+	DT[7]="r7";		//?? bug?
 	FpS="bp";
 	SpS="sp";
 	AbsS="bp";
 // no...	DT[8]="bp";		// base pointer
 	DT[8]="di";
 	DT[9]="si";
+	DT[10]="r10";		//?? bug?
+	DT[11]="r11";		//?? bug?
+	DT[12]="r12";		//?? bug?
+	DT[13]="r13";		//?? bug?
+	DT[14]="r14";		//?? bug?
+	DT[15]="r15";		//?? bug?
   Accu="ax";
 	D=0; P=8;
 	MaxD=3;
-	UserBase=8;
-	MaxUser=9;
+	UserBase=4;
+	MaxUser=5;
 #elif MC68000
 	DT[0]="d0";
 	DT[1]="d1";

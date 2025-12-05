@@ -2997,7 +2997,7 @@ myDiv4:
       Regs->Get();
 #elif Z80 
       if(VSize<4) {
-			  PROCOper(LINE_TYPE_ISTRUZIONE,"swap",OPDEF_MODE_STACKPOINTER_INDIRETTO,0,OPDEF_MODE_REGISTRO,0);
+			  PROCOper(LINE_TYPE_ISTRUZIONE,"ex",OPDEF_MODE_STACKPOINTER_INDIRETTO,0,OPDEF_MODE_REGISTRO,0);
 				// ehm ;) 2025
 //        PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[0].mode,&u[0].s,u[0].ofs,1,0);
 //		    IncOp(&u[0]);
@@ -5484,15 +5484,35 @@ int Ccc::subInc(bool m, int16_t *cond, uint8_t prePost, int8_t VQ, struct VARS *
 	        PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,Regs[VVar]);
 	        }
 #elif Z80
-	      if(prePost==2) {                 
-	        PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
-	        PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
-	        }
-        while(qty--)  
-           PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
-	      if(prePost==1) {
-	        PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
-	        PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+	      switch(VSize) {
+	        case 1:
+						if(prePost==2) {                 
+							PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+							PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+							}
+						while(qty--)  
+							 PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+						if(prePost==1) {
+							PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+							PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+							}
+	          break;
+	        case 2:
+						if(prePost==2) {                 
+							PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+							PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+							}
+						while(qty--)  
+							 PROCOper(LINE_TYPE_ISTRUZIONE,TS,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+						if(prePost==1) {
+							PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(VVar->label));
+							PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
+							}
+	          break;
+	        case 4:// 
+	          break;
+	        default:
+	          break;
 	        }
 #elif I8086
 	      switch(VSize) {
