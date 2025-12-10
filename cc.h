@@ -38,7 +38,7 @@
 // la size delle bitfield è in multipli di INT_SIZE...
 
 #if ARCHI
-#define __VER__ MAKEWORD(0,1)
+#define __VER__ MAKEWORD(1,1)
 #elif Z80
 #define __VER__ MAKEWORD(7,2)
 #elif I8086
@@ -94,6 +94,12 @@ enum OPDEF_MODE {
 	OPDEF_MODE_COSTANTE=10,
 	OPDEF_MODE_STACKPOINTER=11,
 	OPDEF_MODE_CONDIZIONALE=16,
+	OPDEF_MODE_REGISTRI=20,		// per 68000 movem, e Archi STMIA {} ecc
+#if ARCHI
+	OPDEF_MODE_SHIFT=32,
+	OPDEF_MODE_SHIFTU,
+	OPDEF_MODE_SHIFTR,
+#endif
 	OPDEF_MODE_INDIRETTO=0x80,
 //	OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC=0x87,		// USARE per copia struct e/o array
 	OPDEF_MODE_REGISTRO_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_REGISTRO),
@@ -134,6 +140,9 @@ struct LINE {
   char opcode[32];		// usato anche in blocchi _asm per tutta la riga... attenzione
   struct OP_DEF s1;
   struct OP_DEF s2;
+#if ARCHI
+  struct OP_DEF s3;
+#endif
   char rem[128];
   };
   
@@ -416,8 +425,13 @@ private:
 */
 
 
-extern const char *movString,*storString,*jmpString,*jmpShortString,*jmpCondString,*callString,*returnString,
-	*incString,*decString,*pushString,*popString;
+extern const char *movString,*storString,
+#if ARCHI
+	*loadString,			// qua sono diverse!
+#endif
+	*jmpString,*jmpShortString,*jmpCondString,*callString,*returnString,
+	*incString,*decString,
+	*pushString,*popString;
 
 class CSourceFile : public CFile {
 public:
@@ -524,7 +538,7 @@ public:
 
 //                V->Q |= 0x20;            // segnala ! condizionale  VERIFICARE! era anche usato per indicare condizione di tipo unsigned...
 //ma è usato anche come "condizione"...		VALUE_CONDITION_UNSIGNED=0x20,				// potrebbe non servire più, 2025 con le nuove condizioni per unsigned, ma è ancora usata in giro!
-		VALUE_CONDITION_UNSIGNED=0x10,		// non più usata 2025 cmq (creati valori espliciti per unsigned
+//		VALUE_CONDITION_UNSIGNED=0x10,		// non più usata 2025 cmq (creati valori espliciti per unsigned
 		VALUE_IS_CONDITION=0x20,					// è una condizione < > == ecc
 		VALUE_HAS_CONDITION=0x40,
 		VALUE_IS_CONDITION_VALUE=0x80,		// significa che usiamo un'expr come vero o falso
@@ -753,8 +767,11 @@ public:
   struct LINE *PROCDelLista(struct LINE *, struct LINE *, struct LINE *);
 	void PROCDelLastLine(struct LINE *);
 	void swap(struct LINE * *, struct LINE * *);
-  int PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
-  int PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
+  void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
+#if ARCHI
+  void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF * /*, const char *R=NULL*/);
+#endif
+  void PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, union SUB_OP_DEF *, int);
@@ -763,6 +780,15 @@ public:
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int s1=0);
   void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *);
   void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *);
+#if ARCHI
+  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int);
+  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, 
+		enum OPDEF_MODE, union SUB_OP_DEF *);
+  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, 
+		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, 
+		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+#endif
   int PROCOutLab(const char *,const char *s1=NULL,const char *s2=NULL);
 
 	enum ARITM_OP FNGetAritElem(int8_t *OP, char *, struct OPERAND *, int8_t Co);
@@ -781,7 +807,7 @@ public:
 	#endif
 
 	#if ARCHI
-	int FNIsLshift(long);
+	int FNIsLshift(uint32_t );
 	#elif Z80 || I8086 || MC68000 || MICROCHIP		// per i PIC32 forse serve in effetti
 	#endif
 
@@ -815,7 +841,10 @@ public:
 class REGISTRI {
 private:
 #if ARCHI
-	const char DT[16][16];               // Nomi dei registri
+	char DT[16][16];               // Nomi dei registri
+	long VType[16];
+	uint8_t VSize[16];
+	struct VARS *VVar[16];
 #elif Z80 || I8086 || MC68000 || I8051 || MICROCHIP
 	const char *DT[16];                  // Nomi dei registri
 	long VType[16];

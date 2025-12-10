@@ -27,7 +27,7 @@ struct ERRORE Errs[]={
   1065,1,"out of tags space",
   1068,1,"cannot open file",
   1069,1,"write error on file",
-#if MC68000
+#if MC68000 || ARCHI
   1126,1,"automatic allocation exceeds size (32768)" ,
 #else
   1126,1,"automatic allocation exceeds size (128)" /*anche 2127*/,
@@ -169,7 +169,12 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
   
   if(s->mode & OPDEF_MODE_INDIRETTO)			// b7=1 se indiretto
 #if ARCHI
-    FO->put('(');
+		if(s->mode != OPDEF_MODE_STACKPOINTER_INDIRETTO) {
+			if(0)		// usare per STMDB LDMIA, v. anche OPDEF_MODE_REGISTRI
+				FO->put('{');
+			else
+				FO->put('[');
+			}
 #elif Z80
     FO->put('(');
 #elif I8086
@@ -239,6 +244,10 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
         FO->printf("%d(%s)",s->ofs,(*Regs)[s->s.n]);
 			else
 				FO->print((*Regs)[s->s.n]);
+#elif ARCHI
+      FO->print((*Regs)[s->s.n]);
+		  if(s->s.n>=8 && (s->mode & OPDEF_MODE_INDIRETTO))      // metto anche ofs se è index reg
+        FO->printf(",#%d",s->ofs);
 #elif Z80
       FO->print((*Regs)[s->s.n]);
 		  if(s->mode & OPDEF_MODE_INDIRETTO)      // metto anche ofs se è index reg  ??? qua
@@ -250,21 +259,21 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO8:				// quantità 8bit
-#if MC68000
+#if MC68000 || ARCHI
       FO->printf("#%d",(int8_t)s->s.n);
 #else
       FO->printf("%d",(int8_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO16:				// quantità 16bit
-#if MC68000
+#if MC68000 || ARCHI
       FO->printf("#%d",(int16_t)s->s.n);
 #else
       FO->printf("%d",(int16_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO32:				// quantità 32bit
-#if MC68000
+#if MC68000 || ARCHI
       FO->printf("#%ld",(int32_t)s->s.n);
 #else
       FO->printf("%ld",(int32_t)s->s.n);
@@ -286,6 +295,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
         FO->printf("%+d",(int16_t)s->ofs);
 #elif MC68000
         FO->printf("%d(%s)",(int16_t)s->ofs,Regs->FpS);
+#elif ARCHI
+        FO->printf(",#%+d",(int16_t)s->ofs);
 #endif
 				}
       break;
@@ -346,6 +357,46 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       if(s->ofs)
         FO->printf("%+d",s->ofs);
       break;
+    case OPDEF_MODE_REGISTRI:
+#if ARCHI
+      FO->printf("{%s}",s->s.label);		// cambiare usando range di registri!
+#elif MC68000
+      FO->printf("%s",s->s.label);
+#else
+			PROCError(1001,"range di registri non consentito qua");
+#endif  
+      if(s->ofs)
+        FO->printf("%+d",s->ofs);
+      break;
+#if ARCHI
+    case OPDEF_MODE_SHIFT:
+			if(s->s.n>0) {
+	      FO->printf("ASL #%u",s->s.n);
+				}
+			else {
+	      FO->printf("ASR #%u",-s->s.n);
+//      FO->printf("%s",s->s.label);
+				}
+      break;
+    case OPDEF_MODE_SHIFTU:
+			if(s->s.n>0) {
+	      FO->printf("ASL #%u",s->s.n);
+				}
+			else {
+	      FO->printf("LSR #%u",-s->s.n);
+				}
+//      FO->printf("%s",s->s.label);
+      break;
+    case OPDEF_MODE_SHIFTR:
+			if(s->s.n>0) {
+	      FO->printf("ASL R%u",s->s.n);
+				}
+			else {
+	      FO->printf("LSR R%u",s->s.n);
+				}
+//      FO->printf("%s",s->s.label);
+      break;
+#endif
     case OPDEF_MODE_STACKPOINTER:
     case OPDEF_MODE_STACKPOINTER_INDIRETTO:
 			if(s->mode & OPDEF_MODE_INDIRETTO) {
@@ -364,6 +415,11 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #elif I8086
 				FO->printf("%s",Regs->SpS);
 
+#elif ARCHI
+				if((int8_t)s->s.n)			// se push/pop (forse ovvio ma ok; 
+					FO->printf("%s!",Regs->SpS);
+				else
+					FO->print(Regs->SpS);
 #else
 				FO->printf("%s",Regs->SpS);
 #endif
@@ -376,6 +432,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       FO->printf(s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0x7f],FO);
 #elif I8086
       FO->printf("%s",OpCond[s->s.n & 0x7f],FO);
+#elif ARCHI
+      FO->printf("%s",OpCond[s->s.n & 0x7f],FO);
 #else
       FO->print(OpCond[s->s.n]);
 #endif
@@ -383,7 +441,12 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     }
   if(s->mode & OPDEF_MODE_INDIRETTO)
 #if ARCHI
-    FO->put(')');
+		if(s->mode != OPDEF_MODE_STACKPOINTER_INDIRETTO) {
+			if(0)		// usare per STMDB LDMIA, v. anche OPDEF_MODE_REGISTRI
+				FO->put('}');
+			else
+		    FO->put(']');
+			}
 #elif Z80
     FO->put(')');
 #elif I8086
@@ -414,7 +477,7 @@ int Ccc::PROCObj(COutputFile *FO) {
         break;
       case LINE_TYPE_LABEL:
 #if ARCHI
-	      FO->put('.',FO);
+	      FO->put('.');
 #endif
 		    subObj(FO,&TEXT->s1);
 #if Z80 || I8086 || MC68000 || I8051 || MICROCHIP
@@ -427,7 +490,7 @@ int Ccc::PROCObj(COutputFile *FO) {
         break;
       case LINE_TYPE_LABEL_CON_ISTRUZIONE:
 #if ARCHI
-	      FO->put('.',FO);
+	      FO->put('.');
 #endif
 		    subObj(FO,&TEXT->s1);
         FO->printf("\t%s",TEXT->opcode);
@@ -440,10 +503,10 @@ int Ccc::PROCObj(COutputFile *FO) {
 	      FO->put('\t'); 				  // prima delle istruzioni TAB
         FO->printf("%s",TEXT->opcode);
 		    if(TEXT->s1.mode) {
-#ifdef MC68000
+#if MC68000
 					if(TEXT->opcode[1] &&			// serve per i Branch "B" o "J" :)
 						!_tcschr(TEXT->opcode,'#'))		// patch per 68000/costanti, ma ok... la lascio
-#elif I8086
+#elif I8086 || ARCHI
 					if(TEXT->type != LINE_TYPE_JUMPC)
 #endif
 						FO->put('\t');
@@ -458,17 +521,17 @@ int Ccc::PROCObj(COutputFile *FO) {
 			    subObj(FO,&TEXT->s1);
 		      }
 		    if(TEXT->s2.mode) {
-#ifdef MC68000
+#if MC68000
 					if(TEXT->type == LINE_TYPE_JUMPC)
 						FO->put('\t');
 					else
-#elif I8086
+#elif I8086 || ARCHI
 					if(TEXT->type == LINE_TYPE_JUMPC)
 						FO->put('\t');
 					else
 #endif
 						FO->put(',');
-#ifdef MC68000
+#if MC68000
 					if(TEXT->s2.mode == OPDEF_MODE_VARIABILE_INDIRETTO && TipoOut & TIPO_SPECIALE)		// cagate di Easy68k, se no mi esce il cancelletto a dx! - v. anche sopra
 						TEXT->s2.mode=OPDEF_MODE_VARIABILE;
 #elif I8086
@@ -481,6 +544,15 @@ int Ccc::PROCObj(COutputFile *FO) {
 #endif
 			    subObj(FO,&TEXT->s2);
 			    }  
+#if ARCHI
+		    if(TEXT->s3.mode) {
+					if(TEXT->type == LINE_TYPE_JUMPC)
+						FO->put('\t');
+					else
+						FO->put(',');
+			    subObj(FO,&TEXT->s3);
+			    }  
+#endif
         break;
 			case LINE_TYPE_JUMPGOTO:
 				{ struct VARS *g;
