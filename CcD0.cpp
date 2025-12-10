@@ -1696,8 +1696,8 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 			u.mode=OPDEF_MODE_REGISTRO;
 			i=u.s.n=(int)V->func;
 			if(i > 3) {
-        PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,i);
-        PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,asPtr ? Regs->P : Regs->D);
+        PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,i,
+					OPDEF_MODE_REGISTRO32,asPtr ? Regs->P : Regs->D);
 			  }
 			i=u.ofs=(int)V->parm+ofs;
 			if(i) {
@@ -1797,7 +1797,7 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 #endif   
 						}
 #if ARCHI
-				  PROCOper(LINE_TYPE_ISTRUZIONE,BS,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_FRAMEPOINTER,i);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,BS,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,12,OPDEF_MODE_IMMEDIATO32,i);
 #elif Z80
 					PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER,0);
 					PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);
@@ -1845,6 +1845,7 @@ int Ccc::PROCGetAdd(int8_t VQ, struct VARS *V, int ofs, bool asPtr) {
 		case VALUE_IS_D0:		// questo per cose tipo &pippo[5]
 // no direi		case VALUE_IS_EXPR:
 #if ARCHI
+				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_REGISTRO32,Regs->D);
 #elif Z80
 				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,Regs->P);
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,Regs->D);

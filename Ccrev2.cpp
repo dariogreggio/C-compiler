@@ -2553,7 +2553,7 @@ myMul1:
 	  v=FNCercaVar("__IntDiv",0);
   	if(!v)
     	v=PROCAllocVar("__IntDiv",VARTYPE_FUNC | VARTYPE_FUNC_USED,CLASSE_EXTERN,4,0,0,0);	
-    PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v,0);
+    PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
 //    PROCOper(LINE_TYPE_CALL,"BL __IntDiv",NULL,NULL);
 		}
 #elif Z80
@@ -3060,8 +3060,8 @@ myDiv4:
       }
     if(Regs->D>1) {
 #if ARCHI
-      PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-				OPDEF_MODE_REGISTRO32,0);
+      PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,0,
+				OPDEF_MODE_REGISTRO32,Regs->D);
       Regs->Get();
 #elif Z80 
       if(VSize<4) {

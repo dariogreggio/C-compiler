@@ -1241,12 +1241,32 @@ rifo_struct:
 						        V->tag=R.var->hasTag;
 										// FINIRE accumulando, e/o gestendo puntatore
 										V->Q=VALUE_IS_D0;
+#if MICROCHIP
+
+#elif ARCHI
+//										if(V->type & VARTYPE_IS_POINTER)
+//						  				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,
+//												OPDEF_MODE_REGISTRO32,Regs->D);
+//										else
+						  				PROCOper(LINE_TYPE_ISTRUZIONE,"ADD",		// MemoryModel=
+												OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_IMMEDIATO16,reg2);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
+#elif I8086
+//										if(V->type & VARTYPE_IS_POINTER)
+//						  				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,
+//												OPDEF_MODE_REGISTRO32,Regs->D);
+//										else
+						  				PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_IMMEDIATO16,reg2,		// MemoryModel
+												// CPU86
+												);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
+#elif MC68000
 //										if(V->type & VARTYPE_IS_POINTER)
 //						  				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,
 //												OPDEF_MODE_REGISTRO32,Regs->D);
 //										else
 						  				PROCOper(LINE_TYPE_ISTRUZIONE,"add.l",OPDEF_MODE_IMMEDIATO16,reg2,		// MemoryModel
 												OPDEF_MODE_REGISTRO32,Regs->P);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
+#else
+#endif
 										if(OutSource) {
 									//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
 									//    PROCOut(NULL,"\t\t\t\t; ",V->name,NULL,NULL);	
