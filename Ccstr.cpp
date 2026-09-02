@@ -70,7 +70,7 @@ void Ccc::swap(struct LINE * *l1, struct LINE * *l2) {
     
 void Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_DEF *C, const char *R) {
   struct LINE *New;
-  char myBuf[256];
+  char myBuf[128];
 
   New=(struct LINE *)GlobalAlloc(GPTR,sizeof(struct LINE)); 
 //  myLog->print(0,"OUT: %s\n",MyBuf);

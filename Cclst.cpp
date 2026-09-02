@@ -11,7 +11,7 @@ struct ERRORE Errs[]={
   1000,1,"unknown internal error - contact Cyberdyne",
   1001,1,"internal error:",
   1002,1,"unsupported:",
-  1003,1,"partially ununimplemented:",
+  1003,1,"partially unimplemented:",
   1004,1,"unexpected EOF",
   1016,1,"#if[n]def expected an identifier",
   1017,1,"unexpected chars",
@@ -29,6 +29,8 @@ struct ERRORE Errs[]={
   1069,1,"write error on file",
 #if MC68000 || ARCHI
   1126,1,"automatic allocation exceeds size (32768)" ,
+#elif GD24032
+  1126,1,"automatic allocation exceeds size (32768)" ,		// qua?
 #else
   1126,1,"automatic allocation exceeds size (128)" /*anche 2127*/,
 #endif
@@ -142,6 +144,8 @@ char *Ccc::OpCond[16]={		// v. OPERANDO_CONDIZIONALE , ne servono solo 6 (logica
 #elif MC68000
   "lt","ge","le","gt","eq","ne", "cs","cc","ls","hi"		// ahem boh...
 //  "ge","lt","gt","le","eq","ne", "cc","cs","hi","ls"		// OCCHIO le inverto perché gli operandi sono invertiti qua!
+#elif GD24032
+  "LT","GE","LE","GT","EQ","NE", "CS","CC","LS","HI"		// 
 #elif I8051
   "b", "ae","be","a", "z", "nz", "l", "ge","le","g"
 #elif MICROCHIP
@@ -158,6 +162,8 @@ char *Ccc::StrOp[20]={
   "mov","push","pop","inc","dec","jr","jp","call","ret","add","sub","adc","sbc","and","or","xor","not","neg"
 #elif MC68000
   "move","move","move","addq #1","subq #1","bra","jmp","jsr","rts","add","sub","adc","sbc","and","or","eor","not","neg"
+#elif GD24032
+  "MOV","STM","LDM","INC","DEC","JR","JMP","CALL","RET","ADD","SUB","ADC","SBC","AND","OR","XOR","NOT","NEG"
 #elif I8051
   "l","ge","g","le","z","nz","b","ae","a","be"		// FARE!
 #elif MICROCHIP
@@ -183,6 +189,9 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #elif MC68000
 // dopo!    
 		FO->printf("");		// vuole la printf cmq... boh
+#elif GD24032
+// dopo!    
+		FO->printf("[");		// vuole la printf cmq... boh
 #elif MICROCHIP
 		// credo che gli "indiretti" qua non siano mai usati, per ora. si potrebbe convertire in doppia sequenza MOVFW / PLUSW0!
 		if(CPUEXTENDEDMODE)
@@ -194,8 +203,10 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_NULLA:				//
 			break;
     case OPDEF_MODE_REGISTRO_LOW8:				// parte low di registro 16bit
-#if MC68000 || I8086
+#if MC68000 || I8086 
 			if(s->s.n<0 || s->s.n>15) {
+#elif GD24032
+			if(s->s.n<0 || s->s.n>25) {			//25 per baseAbs / mode relative
 #else
 			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
@@ -211,8 +222,10 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #endif
       break;
     case OPDEF_MODE_REGISTRO_HIGH8:				// parte high di registro 16bit
-#if MC68000 || I8086
+#if MC68000 || I8086 
 			if(s->s.n<0 || s->s.n>15) {
+#elif GD24032
+			if(s->s.n<0 || s->s.n>25) {		//25 per baseAbs / mode relative
 #else
 			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
@@ -232,6 +245,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_REGISTRO:				// registro 8 o 16 o 32bit intero
 #if MC68000 || I8086
 			if(s->s.n<0 || s->s.n>15) {
+#elif GD24032
+			if(s->s.n<0 || s->s.n>25) {		//25 per baseAbs / mode relative
 #else
 			if(s->s.n<0 || s->s.n>15 /*7*/) {
 #endif
@@ -252,7 +267,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       FO->print((*Regs)[s->s.n]);
 		  if(s->mode & OPDEF_MODE_INDIRETTO)      // metto anche ofs se è index reg  ??? qua
         FO->printf("%+d",s->ofs);
-#else
+#else		// 8086, GD24032
       FO->print((*Regs)[s->s.n]);
 		  if(s->s.n>=8 && (s->mode & OPDEF_MODE_INDIRETTO))      // metto anche ofs se è index reg
         FO->printf("%+d",s->ofs);
@@ -295,6 +310,45 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
         FO->printf("%+d",(int16_t)s->ofs);
 #elif MC68000
         FO->printf("%d(%s)",(int16_t)s->ofs,Regs->FpS);
+#elif GD24032
+        FO->printf("%+d",(int16_t)s->ofs);
+#elif ARCHI
+        FO->printf(",#%+d",(int16_t)s->ofs);
+#endif
+				}
+      break;
+    case OPDEF_MODE_ABSPOINTER:
+#if MC68000
+			if(!(s->mode & OPDEF_MODE_INDIRETTO))
+#endif
+#if MC68000 || GD24032 || I8086		// tendenzialmente solo qua esiste.. ma cmq lascio tutto
+				FO->print(Regs->AbsS);
+#endif
+			if(s->mode & OPDEF_MODE_INDIRETTO || s->ofs) {      // metto anche +0 se è ind.
+#if MICROCHIP
+//				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_IMMEDIATO8,s->ofs);
+//			  PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,14); FARE, forse, v. sopra
+        FO->printf("%+d",(int16_t)s->ofs);
+#elif Z80
+        FO->printf("%+d",(int8_t)s->ofs);
+#elif I8086
+        FO->printf("%+d",(int16_t)s->ofs);
+#elif MC68000
+//        FO->printf("%d(%s)",(int16_t)s->ofs,Regs->AbsS);
+				if(s->ofs) {
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("%s.w%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);		// non lo accetta.. RIVERIFICARE
+					else
+						FO->printf("%s%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);
+					}
+				else {
+					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
+						FO->printf("%s.w-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);		// non lo accetta.. RIVERIFICARE
+					else
+						FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
+					}
+#elif GD24032
+        FO->printf("+%s-__BaseAbs%+d",s->s.label,(int32_t)s->ofs);
 #elif ARCHI
         FO->printf(",#%+d",(int16_t)s->ofs);
 #endif
@@ -307,8 +361,13 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       FO->printf("%s",s->s.label);
       if(s->ofs)
         FO->printf("%+d",s->ofs);
+#elif GD24032
+//      FO->printf("%s PTR %s","BYTE",s->s.v->label);
+      FO->printf("%s",s->s.label);
+      if(s->ofs)
+        FO->printf("%+d",s->ofs);
 #elif MC68000
-			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
+/*			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 				if(s->ofs) {
 					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
 						FO->printf("%s.w%+d-%s(%s)",s->s.label,s->ofs,"__BaseAbs",Regs->AbsS);		// non lo accetta.. RIVERIFICARE
@@ -322,7 +381,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 						FO->printf("%s-%s(%s)",s->s.label,"__BaseAbs",Regs->AbsS);
 					}
 				}
-			else {
+			else {*/
 				if(s->mode & OPDEF_MODE_INDIRETTO && TipoOut & TIPO_SPECIALE)	{	// cagate di Easy68k, qua dovrebbe bastare il nome var - v. anche il secondo operando, sotto
 					if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM)
 						FO->printf("#%s",s->s.label);		// v. cose tipo GetAdd...
@@ -337,7 +396,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 					}
 				if(s->ofs)
 					FO->printf("%+d",s->ofs);
-				}
+//				}
 #else
       FO->printf("%s",s->s.label);
       if(s->ofs)
@@ -351,6 +410,9 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #elif MC68000
 //      FO->printf("%s %s","BYTE",s->s.v->label);
       FO->printf("%s",s->s.label);
+#elif GD24032
+//      FO->printf("%s %s","BYTE",s->s.v->label);
+      FO->printf("%s",s->s.label);
 #else
       FO->printf("%s",s->s.label);
 #endif  
@@ -361,6 +423,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #if ARCHI
       FO->printf("{%s}",s->s.label);		// cambiare usando range di registri!
 #elif MC68000
+      FO->printf("%s",s->s.label);
+#elif GD24032
       FO->printf("%s",s->s.label);
 #else
 			PROCError(1001,"range di registri non consentito qua");
@@ -414,7 +478,18 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 					}
 #elif I8086
 				FO->printf("%s",Regs->SpS);
-
+#elif GD24032
+				switch((int8_t)s->s.n) {
+					case 0:
+						FO->printf("%s",Regs->SpS);
+						break;
+					case -1:
+						FO->printf("--%s",Regs->SpS);
+						break;
+					case 1:
+						FO->printf("%s++",Regs->SpS);
+						break;
+					}
 #elif ARCHI
 				if((int8_t)s->s.n)			// se push/pop (forse ovvio ma ok; 
 					FO->printf("%s!",Regs->SpS);
@@ -429,11 +504,13 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       break;
     case OPDEF_MODE_CONDIZIONALE:
 #if MC68000
-      FO->printf(s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0x7f],FO);
+      FO->printf(s->s.n & 0x80 ? "%s.s" : "%s",OpCond[s->s.n & 0xf],FO);
 #elif I8086
-      FO->printf("%s",OpCond[s->s.n & 0x7f],FO);
+      FO->printf("%s",OpCond[s->s.n & 0xf],FO);
+#elif GD24032
+      FO->printf("%s",OpCond[s->s.n & 0xf],FO);
 #elif ARCHI
-      FO->printf("%s",OpCond[s->s.n & 0x7f],FO);
+      FO->printf("%s",OpCond[s->s.n & 0xf],FO);
 #else
       FO->print(OpCond[s->s.n]);
 #endif
@@ -450,6 +527,8 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #elif Z80
     FO->put(')');
 #elif I8086
+    FO->put(']');
+#elif GD24032
     FO->put(']');
 #elif MC68000
 //			FO->put(')')
@@ -475,12 +554,23 @@ int Ccc::PROCObj(COutputFile *FO) {
 					FO->putcr();
 					}
         break;
+			case LINE_TYPE_OTTIMIZZATA:
+				{	struct OP_DEF o;
+					o.mode=OPDEF_MODE_VARIABILE; //OPDEF_MODE_NULLA;
+					_tcscpy(o.s.label,"------ RIMOSSA");
+					subObj(FO,&TEXT->s1);
+					// FINIRE, usare un OP_DEF per i commenti/rimosse
+					subObj(FO,&o);
+//				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"------ RIMOSSA",0); esce al fondo, non va bene
+					FO->putcr();
+				}
+        break;
       case LINE_TYPE_LABEL:
 #if ARCHI
 	      FO->put('.');
 #endif
 		    subObj(FO,&TEXT->s1);
-#if Z80 || I8086 || MC68000 || I8051 || MICROCHIP
+#if Z80 || I8086 || MC68000 || GD24032 || I8051 || MICROCHIP
 	      FO->put(':');
 #endif
         break;
@@ -506,7 +596,7 @@ int Ccc::PROCObj(COutputFile *FO) {
 #if MC68000
 					if(TEXT->opcode[1] &&			// serve per i Branch "B" o "J" :)
 						!_tcschr(TEXT->opcode,'#'))		// patch per 68000/costanti, ma ok... la lascio
-#elif I8086 || ARCHI
+#elif I8086 || ARCHI || GD24032
 					if(TEXT->type != LINE_TYPE_JUMPC)
 #endif
 						FO->put('\t');
@@ -525,7 +615,7 @@ int Ccc::PROCObj(COutputFile *FO) {
 					if(TEXT->type == LINE_TYPE_JUMPC)
 						FO->put('\t');
 					else
-#elif I8086 || ARCHI
+#elif I8086 || ARCHI || GD24032
 					if(TEXT->type == LINE_TYPE_JUMPC)
 						FO->put('\t');
 					else

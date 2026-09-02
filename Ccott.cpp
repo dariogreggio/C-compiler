@@ -5,13 +5,24 @@
 #include <string.h>
 #include <ctype.h>
 
+typedef enum {		// gemini 1/9/26
+    TYPE_MOVE,       // MOV, LOAD, STORE
+    TYPE_ALU,        // ADD, SUB, SHL, XOR...
+    TYPE_CLEAR,      // CLR
+    TYPE_CMP,        // CMP, TEST
+    TYPE_JMP_UNCOND, // JR, JMP, RET
+    TYPE_JMP_COND,   // JEQ, JNE, JGT...
+    TYPE_CALL,       // CALL, CALLR
+    TYPE_SYSTEM      // NOP, HALT...
+} InstructionType;
+
 
 int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
   
   if(a->mode != b->mode || a->ofs != b->ofs)
     return 1;
   switch(a->mode & 0x7f) {
-    case 0:
+    case LINE_TYPE_COMMENTO:		// era 0
       return 1;
       break;
     case 1:
@@ -26,7 +37,7 @@ int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
       if(a->s.n != b->s.n)
         return 1;
       break;
-    case 8:
+    case LINE_TYPE_JUMP:		// era 8
       if(a->ofs != b->ofs)
         return 1;
       break;
@@ -38,7 +49,7 @@ int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
       if(_tcscmp(a->s.label,b->s.label))
         return 1;
       break;
-    case 16:
+    case LINE_TYPE_ISTRUZIONE:		// era 16
       if(a->s.n != b->s.n)
         return 1;
       break;
@@ -49,7 +60,7 @@ int Ccc::OPComp(struct OP_DEF *a, struct OP_DEF *b) {
 struct LINE *Ccc::GetNextNoRem(struct LINE *r) {
   
   while(r) {
-    if(r->type)
+    if(r->type != LINE_TYPE_COMMENTO)
       return r;
     r=r->next;  
     }
@@ -60,7 +71,7 @@ int Ccc::Ottimizza(struct LINE *r) {
   register int j,i1,j1;
   register enum OPDEF_MODE i;
   int k;
-  struct OP_DEF R[5][4];
+  struct OP_DEF R[OPDEF_MODE_LAST][OPDEF_MODE_LAST];
   struct LINE *r1,*r2,*r3;
   char myBuf[128];
 
@@ -70,15 +81,65 @@ int Ccc::Ottimizza(struct LINE *r) {
       if(Optimize & OPTIMIZE_SUBEXPR) {           // common expr
         if(r->type==LINE_TYPE_LABEL || r->type==LINE_TYPE_DATA_DEF || r->type==LINE_TYPE_LABEL_CON_ISTRUZIONE || r->type==LINE_TYPE_JUMPC) {   // una label o call distrugge tutto
 delAll:       
+#if ARCHI
 			    for(i1=0; i1<5; i1++)
 			      for(j=0; j<4; j++)
 			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#elif Z80
+			    for(i1=0; i1<5; i1++)
+			      for(j=0; j<4; j++)
+			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#elif I8086
+			    for(i1=0; i1<5; i1++)
+			      for(j=0; j<4; j++)
+			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#elif MC68000
+			    for(i1=0; i1<5; i1++)
+			      for(j=0; j<4; j++)
+			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#elif GD24032
+			    for(i1=0; i1<5; i1++)
+			      for(j=0; j<4; j++)
+			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#elif MICROCHIP
+			    for(i1=0; i1<5; i1++)
+			      for(j=0; j<4; j++)
+			        R[i1][j].mode=OPDEF_MODE_NULLA;
+#endif
 //       puts("cancello");
 			    }    
-			  else {  
+			  else if(r->type>=LINE_TYPE_JUMP) {  
+#if ARCHI
         if(!_tcscmp(r->opcode,"call"))
+#elif Z80
+        if(!_tcscmp(r->opcode,"call"))
+#elif I8086
+        if(!_tcscmp(r->opcode,"call"))
+#elif MC68000
+        if(!_tcscmp(r->opcode,"bsr"))
+#elif GD24032
+        if(!_tcscmp(r->opcode,"CALL") || !_tcscmp(r->opcode,"BL"))
+//        if(!_tcscmp(r->opcode,"jmp") || !_tcscmp(r->opcode,"jr") || (_tcslen(r->opcode) == 3 && *r->opcode=='B'))
+
+// al livello più esterno, o più interno, usare BL/RETU
+
+#elif MICROCHIP
+        if(!_tcscmp(r->opcode,"call"))
+#endif
           goto delAll;
+#if ARCHI
         if(!_tcscmp(r->opcode,"ld")) {
+#elif Z80
+        if(!_tcscmp(r->opcode,"ld")) {
+#elif I8086
+        if(!_tcscmp(r->opcode,"ld")) {
+#elif MC68000
+        if(!_tcsncmp(r->opcode,"MOVE",4)) {
+#elif GD24032
+        if(!_tcsncmp(r->opcode,"MOV",3)) {
+#elif MICROCHIP
+        if(!_tcscmp(r->opcode,"ld")) {
+#endif
           i=r->s1.mode;
           if(i && (i <= 3)) {     // se è load in registro...
             j=r->s1.s.n;
@@ -87,6 +148,7 @@ delAll:
 //	            printf("trovato");
 	            }
 	          else {
+#if ARCHI
 	            k=0;
 	            if(i==1 || i==2) {          // solo su 8 bit (per ora?)
 						    for(i1=0; i1<5; i1++) {
@@ -136,7 +198,256 @@ foundReg:
 		          }
 		        }  
           }
+#elif Z80
+	            k=0;
+	            if(i==1 || i==2) {          // solo su 8 bit (per ora?)
+						    for(i1=0; i1<5; i1++) {
+			  		      if(!OPComp(&R[i1][i],&r->s2)) {
+			  		        k=1;          // se quel valore è in un altro registro (dello stesso tipo), lo copio
+			  		        printf("registro in registro: %d %d\n",i1,i);
+			  		        goto foundReg;
+				  		      }
+				  		    }
+				  		  }  
+foundReg:			  		        
+            	R[j][i]=r->s2;     // salvo...
+//	            printf("salvato per il reg. %d, %d: mode: %x, ofs %d\n",r->s1.s.n,r->s1.mode,r->s2.mode,r->s2.ofs);
+	            if(k) {
+	              r->s2.mode=i;
+	              r->s2.s.n=i1;
+	              r->s2.ofs=0;
+	              }
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+					    for(i1=0; i1<5; i1++) {
+					      for(j1=0; j1<4; j1++) {
+			  		      if(R[i1][j1].mode && R[i1][j1].mode==i && R[i1][j1].s.n==j) {
+			  		        // se in un altro registro è salvato questo registro, lo elimino
+//			  		        printf("registro %d %d in registro %d %d\a\n",i1,j1,j,i);
+								  	R[i1][j1].mode=OPDEF_MODE_NULLA;
+										if(j1==1 || j1==2)
+										  R[i1][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+										if(j1==3)
+										  R[i1][1].mode=R[i1][2].mode=OPDEF_MODE_NULLA;
+			  		        }
+			  		      }
+			  		    }
+	            }
+	          }
+	        else {  
+	          i=r->s2.mode;
+            j=r->s2.s.n;
+	          if(i && (i <= 3)) {     // se è store da registro...
+	            R[j][i]=r->s1;
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+		          }
+		        }  
           }
+#elif I8086
+	            k=0;
+	            if(i==1 || i==2) {          // solo su 8 bit (per ora?)
+						    for(i1=0; i1<5; i1++) {
+			  		      if(!OPComp(&R[i1][i],&r->s2)) {
+			  		        k=1;          // se quel valore è in un altro registro (dello stesso tipo), lo copio
+			  		        printf("registro in registro: %d %d\n",i1,i);
+			  		        goto foundReg;
+				  		      }
+				  		    }
+				  		  }  
+foundReg:			  		        
+            	R[j][i]=r->s2;     // salvo...
+//	            printf("salvato per il reg. %d, %d: mode: %x, ofs %d\n",r->s1.s.n,r->s1.mode,r->s2.mode,r->s2.ofs);
+	            if(k) {
+	              r->s2.mode=i;
+	              r->s2.s.n=i1;
+	              r->s2.ofs=0;
+	              }
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+					    for(i1=0; i1<5; i1++) {
+					      for(j1=0; j1<4; j1++) {
+			  		      if(R[i1][j1].mode && R[i1][j1].mode==i && R[i1][j1].s.n==j) {
+			  		        // se in un altro registro è salvato questo registro, lo elimino
+//			  		        printf("registro %d %d in registro %d %d\a\n",i1,j1,j,i);
+								  	R[i1][j1].mode=OPDEF_MODE_NULLA;
+										if(j1==1 || j1==2)
+										  R[i1][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+										if(j1==3)
+										  R[i1][1].mode=R[i1][2].mode=OPDEF_MODE_NULLA;
+			  		        }
+			  		      }
+			  		    }
+	            }
+	          }
+	        else {  
+	          i=r->s2.mode;
+            j=r->s2.s.n;
+	          if(i && (i <= 3)) {     // se è store da registro...
+	            R[j][i]=r->s1;
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+		          }
+		        }  
+          }
+#elif MC68000
+	            k=0;
+	            if(i==1 || i==2) {          // solo su 8 bit (per ora?)
+						    for(i1=0; i1<5; i1++) {
+			  		      if(!OPComp(&R[i1][i],&r->s2)) {
+			  		        k=1;          // se quel valore è in un altro registro (dello stesso tipo), lo copio
+			  		        printf("registro in registro: %d %d\n",i1,i);
+			  		        goto foundReg;
+				  		      }
+				  		    }
+				  		  }  
+foundReg:			  		        
+            	R[j][i]=r->s2;     // salvo...
+//	            printf("salvato per il reg. %d, %d: mode: %x, ofs %d\n",r->s1.s.n,r->s1.mode,r->s2.mode,r->s2.ofs);
+	            if(k) {
+	              r->s2.mode=i;
+	              r->s2.s.n=i1;
+	              r->s2.ofs=0;
+	              }
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+					    for(i1=0; i1<5; i1++) {
+					      for(j1=0; j1<4; j1++) {
+			  		      if(R[i1][j1].mode && R[i1][j1].mode==i && R[i1][j1].s.n==j) {
+			  		        // se in un altro registro è salvato questo registro, lo elimino
+//			  		        printf("registro %d %d in registro %d %d\a\n",i1,j1,j,i);
+								  	R[i1][j1].mode=OPDEF_MODE_NULLA;
+										if(j1==1 || j1==2)
+										  R[i1][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+										if(j1==3)
+										  R[i1][1].mode=R[i1][2].mode=OPDEF_MODE_NULLA;
+			  		        }
+			  		      }
+			  		    }
+	            }
+	          }
+	        else {  
+	          i=r->s2.mode;
+            j=r->s2.s.n;
+	          if(i && (i <= 3)) {     // se è store da registro...
+	            R[j][i]=r->s1;
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+		          }
+		        }  
+          }
+#elif GD24032
+	            k=0;
+	            if(i==OPDEF_MODE_REGISTRO_LOW8 || i==OPDEF_MODE_REGISTRO_HIGH8) {          // ?????? cos'erano ??   (solo su 8 bit (per ora?)
+						    for(i1=0; i1<OPDEF_MODE_IMMEDIATO32; i1++) {
+			  					if(!OPComp(&R[i1][i],&r->s2)) {
+			  						k=1;          // se quel valore è in un altro registro (dello stesso tipo), lo copio
+			  						printf("registro in registro: %d %d\n",i1,i);
+			  						goto foundReg;
+				  					}
+					  		  }
+				  		  }
+foundReg:			  		        
+            	R[j][i]=r->s2;     // salvo...
+//	            printf("salvato per il reg. %d, %d: mode: %x, ofs %d\n",r->s1.s.n,r->s1.mode,r->s2.mode,r->s2.ofs);
+	            if(k) {
+	              r->s2.mode=i;
+	              r->s2.s.n=i1;
+	              r->s2.ofs=0;
+	              }
+					    for(i1=0; i1<OPDEF_MODE_REGISTRO; i1++) {
+					      for(j1=0; j1<OPDEF_MODE_REGISTRO; j1++) {
+			  		      if(R[i1][j1].mode && R[i1][j1].mode==i && R[i1][j1].s.n==j) {
+			  		        // se in un altro registro è salvato questo registro, lo elimino
+			  		        //printf("registro %d %d in registro %d %d\a\n",i1,j1,j,i);
+										// sarebbe bello mettere un commento al posto della riga eliminata!
+										r->type=LINE_TYPE_OTTIMIZZATA;
+
+//								  	R[i1][j1].mode=OPDEF_MODE_NULLA;
+
+			  		        }
+			  		      }
+			  		    }
+	            }
+	          }
+	        else {  
+	          i=r->s2.mode;
+            j=r->s2.s.n;
+	          if(i && (i <= OPDEF_MODE_REGISTRO)) {     // se è store da registro...
+	            R[j][i]=r->s1;
+										r->type=LINE_TYPE_OTTIMIZZATA;
+							if(i==OPDEF_MODE_REGISTRO_LOW8 || i==OPDEF_MODE_REGISTRO_HIGH8)
+							  R[j][OPDEF_MODE_REGISTRO].mode=OPDEF_MODE_NULLA;
+							if(i==OPDEF_MODE_REGISTRO)
+							  R[j][OPDEF_MODE_REGISTRO_LOW8].mode=R[j][OPDEF_MODE_REGISTRO_HIGH8].mode=OPDEF_MODE_NULLA;
+		          }
+		        }  
+          }
+#elif MICROCHIP
+	            k=0;
+	            if(i==1 || i==2) {          // solo su 8 bit (per ora?)
+						    for(i1=0; i1<5; i1++) {
+			  		      if(!OPComp(&R[i1][i],&r->s2)) {
+			  		        k=1;          // se quel valore è in un altro registro (dello stesso tipo), lo copio
+			  		        printf("registro in registro: %d %d\n",i1,i);
+			  		        goto foundReg;
+				  		      }
+				  		    }
+				  		  }  
+foundReg:			  		        
+            	R[j][i]=r->s2;     // salvo...
+//	            printf("salvato per il reg. %d, %d: mode: %x, ofs %d\n",r->s1.s.n,r->s1.mode,r->s2.mode,r->s2.ofs);
+	            if(k) {
+	              r->s2.mode=i;
+	              r->s2.s.n=i1;
+	              r->s2.ofs=0;
+	              }
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+					    for(i1=0; i1<5; i1++) {
+					      for(j1=0; j1<4; j1++) {
+			  		      if(R[i1][j1].mode && R[i1][j1].mode==i && R[i1][j1].s.n==j) {
+			  		        // se in un altro registro è salvato questo registro, lo elimino
+//			  		        printf("registro %d %d in registro %d %d\a\n",i1,j1,j,i);
+								  	R[i1][j1].mode=OPDEF_MODE_NULLA;
+										if(j1==1 || j1==2)
+										  R[i1][3].mode=OPDEF_MODE_NULLA;						    // registro 8 cancella reg-16
+										if(j1==3)
+										  R[i1][1].mode=R[i1][2].mode=OPDEF_MODE_NULLA;
+			  		        }
+			  		      }
+			  		    }
+	            }
+	          }
+	        else {  
+	          i=r->s2.mode;
+            j=r->s2.s.n;
+	          if(i && (i <= 3)) {     // se è store da registro...
+	            R[j][i]=r->s1;
+							if(i==1 || i==2)
+							  R[j][3].mode=OPDEF_MODE_NULLA;
+							if(i==3)
+							  R[j][1].mode=R[j][2].mode=OPDEF_MODE_NULLA;
+		          }
+		        }  
+          }
+#endif
+          }
+#if ARCHI
         if(!_tcscmp(r->opcode,"inc") || !_tcscmp(r->opcode,"dec") || !strncmp(r->opcode,"ad",2) || (*r->opcode=='s') || (*r->opcode=='r') || !_tcscmp(r->opcode,"pop")) {
           i=r->s1.mode;
           j=r->s1.s.n;
@@ -150,6 +461,81 @@ foundReg:
 			      }  
 					  
           }
+#elif Z80
+        if(!_tcscmp(r->opcode,"inc") || !_tcscmp(r->opcode,"dec") || !strncmp(r->opcode,"ad",2) || (*r->opcode=='s') || (*r->opcode=='r') || !_tcscmp(r->opcode,"pop")) {
+          i=r->s1.mode;
+          j=r->s1.s.n;
+          if(i && (i <= 3))     // queste op stroncano il registro
+					  R[j][i].mode=OPDEF_MODE_NULLA;
+			    for(i1=0; i1<5; i1++) {
+			      for(j1=0; j1<4; j1++) {
+			        if(R[i1][j1].s.n == j)         // se il registro alterato era usato da un altro...
+			          R[i1][j1].mode=OPDEF_MODE_NULLA;            // ...cancello
+			        }
+			      }  
+					  
+          }
+#elif I8086
+        if(!_tcscmp(r->opcode,"inc") || !_tcscmp(r->opcode,"dec") || !strncmp(r->opcode,"ad",2) || (*r->opcode=='s') || (*r->opcode=='r') || !_tcscmp(r->opcode,"pop")) {
+          i=r->s1.mode;
+          j=r->s1.s.n;
+          if(i && (i <= 3))     // queste op stroncano il registro
+					  R[j][i].mode=OPDEF_MODE_NULLA;
+			    for(i1=0; i1<5; i1++) {
+			      for(j1=0; j1<4; j1++) {
+			        if(R[i1][j1].s.n == j)         // se il registro alterato era usato da un altro...
+			          R[i1][j1].mode=OPDEF_MODE_NULLA;            // ...cancello
+			        }
+			      }  
+					  
+          }
+#elif MC68000
+        if(!_tcscmp(r->opcode,"inc") || !_tcscmp(r->opcode,"dec") || !strncmp(r->opcode,"ad",2) || (*r->opcode=='s') || (*r->opcode=='r') || !_tcscmp(r->opcode,"pop")) {
+          i=r->s1.mode;
+          j=r->s1.s.n;
+          if(i && (i <= 3))     // queste op stroncano il registro
+					  R[j][i].mode=OPDEF_MODE_NULLA;
+			    for(i1=0; i1<5; i1++) {
+			      for(j1=0; j1<4; j1++) {
+			        if(R[i1][j1].s.n == j)         // se il registro alterato era usato da un altro...
+			          R[i1][j1].mode=OPDEF_MODE_NULLA;            // ...cancello
+			        }
+			      }  
+					  
+          }
+#elif GD24032
+        if(!_tcscmp(r->opcode,"INC") || !_tcscmp(r->opcode,"DEC") || !strncmp(r->opcode,"AD",2) || (*r->opcode=='S') || (*r->opcode=='R') || !_tcscmp(r->opcode,"POP")) {
+          i=r->s1.mode;
+          j=r->s1.s.n;
+			    for(i1=0; i1<5; i1++) {
+			      for(j1=0; j1<4; j1++) {
+							if(R[i1][j1].s.n == j) {        // se il registro alterato era usato da un altro...
+
+//			          R[i1][j1].mode=OPDEF_MODE_NULLA;            // ...cancello
+
+
+										r->type=LINE_TYPE_OTTIMIZZATA;
+
+								}
+			        }
+			      }  
+					  
+          }
+#elif MICROCHIP
+        if(!_tcscmp(r->opcode,"inc") || !_tcscmp(r->opcode,"dec") || !strncmp(r->opcode,"ad",2) || (*r->opcode=='s') || (*r->opcode=='r') || !_tcscmp(r->opcode,"pop")) {
+          i=r->s1.mode;
+          j=r->s1.s.n;
+          if(i && (i <= 3))     // queste op stroncano il registro
+					  R[j][i].mode=OPDEF_MODE_NULLA;
+			    for(i1=0; i1<5; i1++) {
+			      for(j1=0; j1<4; j1++) {
+			        if(R[i1][j1].s.n == j)         // se il registro alterato era usato da un altro...
+			          R[i1][j1].mode=OPDEF_MODE_NULLA;            // ...cancello
+			        }
+			      }  
+					  
+          }
+#endif
         }
       if(Optimize & OPTIMIZE_JUMP) {           // salti
         if(r->type == LINE_TYPE_JUMP) {
@@ -167,7 +553,7 @@ foundReg:
             }
           r2=r1;
           while(r2) {
-            if(r2->type==1) {        // codice di LABEL
+            if(r2->type==LINE_TYPE_LABEL) {        // codice di LABEL
 	            if(!_tcscmp(myBuf,r2->s1.s.label)) {
 	              printf("trovata la label del salto %s\n",myBuf);
 	              if(r2==r->next) {   // elimino un salto a subito dopo
@@ -180,7 +566,7 @@ foundReg:
 	                break;
 	                }
 	              r2=GetNextNoRem(r2->next);  
-	              if(r2->type == 8) {
+	              if(r2->type == LINE_TYPE_JUMP /*8*/) {
 	                if(r2->s1.mode != 16) {
 	                  if(r->s1.mode != 16)
 	                    r->s1=r2->s1;

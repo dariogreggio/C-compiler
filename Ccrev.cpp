@@ -12,13 +12,18 @@ void Ccc::subEvEx(uint8_t Pty, int16_t *cond, char *Clabel, struct OPERAND *V) {
   /*Brack=*/isRValue=isPtrUsed=inCast=0;
 	Regs->Reset();
   FNRev(Pty,cond,Clabel,V);
-	if((V->Q & VALUE_IS_CONDITION) && Pty>=14)		// se condizionale e livello + esterno, esco 2025
+	if(Pty>15)		// se livello + esterno, esco 2026
 		return;
+//	if((V->Q & VALUE_IS_CONDITION) && Pty>=14)		// se condizionale e livello + esterno, esco 2025
+//		return;
   if(V->Q == VALUE_IS_D0) {
 #if MICROCHIP
     PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE,0);
 #elif MC68000
 		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua..
+	    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE);
+#elif GD24032
+		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua.. VERIFICARE!
 	    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE);
 #else
     PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,V->cost->l,FALSE);
@@ -30,6 +35,9 @@ void Ccc::subEvEx(uint8_t Pty, int16_t *cond, char *Clabel, struct OPERAND *V) {
 #elif MC68000
 		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua..
 	    ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE);
+#elif GD24032
+		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua.. VERIFICARE!
+	    ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE);
 #else
     ReadVar(V->var,VARTYPE_PLAIN_INT,0,(*cond & VALUE_CONDITION_MASK) ? TRUE : FALSE,FALSE);
 #endif
@@ -39,6 +47,9 @@ void Ccc::subEvEx(uint8_t Pty, int16_t *cond, char *Clabel, struct OPERAND *V) {
     PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #elif MC68000
 		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua..
+	    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
+#elif GD24032
+		if(!(V->Q & VALUE_IS_CONDITION))		// già a posto qua.. VERIFICARE!
 	    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
 #else
     PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
@@ -120,7 +131,7 @@ int Ccc::FNEvalECast(char *C, O_TYPE *T, O_SIZE *S) {
 #endif
 			}
 	  else if(V.Q==VALUE_IS_EXPR || V.Q==VALUE_IS_EXPR_FUNC)
-	    PROCCast(*T,*S,V.type,V.size,-1);
+	    PROCCast(*T,*S,&V.type,&V.size,-1);
 	  }
 	else {                      // altrimenti no cast e ritorno i valori T & S
 		if(V.Q==VALUE_IS_VARIABILE) {
@@ -581,6 +592,23 @@ void Ccc::subSpezReg(uint8_t S, struct OP_DEF *u) {
     }
 
   }
+#elif GD24032
+void Ccc::subSpezReg(uint8_t S, struct OP_DEF *u) {
+
+//no!	ZeroMemory(u,sizeof(struct OP_DEF)*4);
+	// bah qua??
+  u[0].mode=OPDEF_MODE_REGISTRO32;
+  u[0].s.n=Regs->D;
+  u[1].mode=OPDEF_MODE_REGISTRO32;
+  u[1].s.n=Regs->D+1;
+  if(S>4) {
+	  u[2].mode=OPDEF_MODE_REGISTRO32;
+	  u[2].s.n=Regs->D+2;
+	  u[3].mode=OPDEF_MODE_REGISTRO32;
+	  u[3].s.n=Regs->D+3;
+    }
+
+  }
 #elif MICROCHIP
 void Ccc::subSpezReg(uint8_t S, struct OP_DEF *u) {
 
@@ -688,7 +716,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
       case ARITM_IS_OPERANDO:
         if(OP>Pty) {
           if(OP>=3 && OP<=10) {          // se c'è un operatore (*,+,<=,&...), TOLGO cond subito!
-            *cond=0;           // in realtà anche alcuni op.2 andrebbero tolti...
+//            *cond=0;           // in realtà anche alcuni op.2 andrebbero tolti...
             }
 					if(!Co)
 						PROCError(2059,TS);
@@ -727,6 +755,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
                       V->size=0;
 											ZeroMemory(V->var,sizeof(struct VARS));
                       PROCGetType(&V->type,&V->size,&V->tag,d,&attrib,l1);
+
                       PROCCheck(')');
                       i2=0;
 											inCast=TRUE;
@@ -742,11 +771,12 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 										    V->Q=VALUE_IS_EXPR;
 										    }
 										  else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) {
-                      	PROCCast(V->type,V->size,R.type,R.size,-1);
+                      	PROCCast(V->type,V->size,&R.type,&R.size,-1);
                       	V->Q=VALUE_IS_EXPR;
                       	}
 										  else if(R.Q==VALUE_IS_D0) {
 #if MICROCHIP
+												if(R.var->size) 			// v. case 0 in readD0, casi con costante
                       	PROCReadD0(R.var,V->type,V->size,0,0,FALSE,0);
 #elif I8086
 												if(!R.flag && isRValue) {		// v. anche sotto idem
@@ -758,6 +788,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 															Regs->D);	//
 													CHECKPOINTER();
 													}
+												if(R.var->size) 			// v. case 0 in readD0, casi con costante
 												PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
 #elif MC68000
 												if(!R.flag && isRValue) {		// v. anche sotto idem
@@ -765,8 +796,18 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 														Regs->P);	// 
 													CHECKPOINTER();
 													}
+												if(R.var->size) 			// v. case 0 in readD0, casi con costante
+                      	PROCReadD0(R.var,V->type,V->size,0,0,FALSE);
+#elif GD24032
+												if(!R.flag && isRValue) {		// v. anche sotto idem
+						  						PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
+														Regs->P);	// 
+													CHECKPOINTER();
+													}
+												if(R.var->size) 			// v. case 0 in readD0, casi con costante
                       	PROCReadD0(R.var,V->type,V->size,0,0,FALSE);
 #else
+												if(R.var->size) 			// v. case 0 in readD0, casi con costante
                       	PROCReadD0(R.var,V->type,V->size,0,0,FALSE);
 #endif
 										    V->Q=VALUE_IS_EXPR;
@@ -776,6 +817,15 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 										    V->Q=R.Q;
 										    }
 //										    PROCUseCost(RQ,R.type,R.size,&R.cost);
+
+
+//											V->var->size=V->size;
+//											V->var->type=V->type;
+// post archimedes riverificare*********** dic25 in effetti è ok così, v. ReadD0  size=0
+											//"arriva così se array è una costante! tipo literal string "abcd"[  "
+
+
+
                       }			// cast
                     else {
 //                      BrackOP[Brack]=OP;
@@ -856,7 +906,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 //											myLog->print(0,"faccio GETADD 1 con ofs %d\n",l);
 			                      l=0;
 			                      }
-			                    else if(V->type & VARTYPE_POINTER) {
+			                    else if(V->type & VARTYPE_POINTER		/* VARTYPE_IS_POINTER ??? verificare */) {
 				                    if(V->var->classe == CLASSE_REGISTER)
 						                  reg2=MAKEPTRREG(V->var->label);
 														else {
@@ -892,12 +942,25 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	                    switch(R.Q) {
 	                      case VALUE_IS_EXPR:			// espressione
 	                      case VALUE_IS_EXPR_FUNC:			// funzione
-	                        PROCCast(VARTYPE_UNSIGNED,INT_SIZE,R.type,R.size,-1);        // l'indice array dev'essere unsigned int
+	                        PROCCast(VARTYPE_UNSIGNED,INT_SIZE,&R.type,&R.size,-1);        // l'indice array dev'essere unsigned int
 
 													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 														;
 
 													// OTTIMIZZARE con ASL ;) se multiplo di 2 tipo PTR
+#if I8086
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+#elif MC68000
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
 															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
@@ -909,6 +972,31 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
 																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
 														}
+#elif GD24032
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"MUL.d",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"MUL.d",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+#else
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+#endif
 
 	                        v |= 1;   // segnalo indice in R
 	                        break;
@@ -921,6 +1009,20 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 #endif
 													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
 														;
+#if I8086
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
+#elif MC68000
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
 															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
@@ -933,16 +1035,20 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
 														}
 
-	                        v |= 1;   // segnalo indice in R
-	                        break;
-	                      case VALUE_IS_VARIABILE:
-#if MICROCHIP
-	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE,0);			// FINIRE
+#elif GD24032
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"MUL",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"MUL",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
 #else
-	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE);
-#endif
-													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
-														;
 													if(R.flag>1)
 		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
 															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
@@ -954,6 +1060,71 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
 																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
 														}
+
+#endif
+	                        v |= 1;   // segnalo indice in R
+	                        break;
+	                      case VALUE_IS_VARIABILE:
+#if MICROCHIP
+	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE,0);			// FINIRE
+#else
+	                        ReadVar(R.var,VARTYPE_UNSIGNED,INT_SIZE,0,FALSE);
+#endif
+													if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)
+														;
+#if I8086
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mul",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
+#elif MC68000
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
+#elif GD24032
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"MUL",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"MUL",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
+#else
+													if(R.flag>1)
+		                        PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+															FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size*V->dim[R.flag-1],NULL,0),
+															OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+													// se MemoryModel large potrebbe servire _lmul
+													else {
+														if(FNGetMemSize(T1 /* era V->type*/ /*& ~VARTYPE_ARRAY*/,V->size,NULL,0) > 1)
+															PROCOper(LINE_TYPE_ISTRUZIONE,"mulu",OPDEF_MODE_IMMEDIATO16,
+																FNGetMemSize(T1 /* era V->type*/ & ~VARTYPE_ARRAY,V->size,NULL,0),
+																OPDEF_MODE_REGISTRO32,Regs->D);// (multidim)
+														}
+
+#endif
 														// più o meno va, ma manca poi il secondo indice se constante - se var pare ok!
 													// o si somma esplicitamente come una var, o sarebbe da ottimizzare in StoreVar...
 R.cost->l=0;
@@ -1044,7 +1215,22 @@ R.cost->l=0;
 												if((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)		// FINIRE! non so se ha senso usare ofs 32
 													PROCOper(LINE_TYPE_ISTRUZIONE,"adda.l",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);
 												else
-													PROCOper(LINE_TYPE_ISTRUZIONE,"adda.l",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);
+													PROCOper(LINE_TYPE_ISTRUZIONE,"adda.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);
+                        }
+#elif GD24032
+                      if(R.Q & VALUE_IS_COSTANTE) {
+                        i=V->cost->l;
+                        if(i >= 0) {
+                          BS="add";
+                          }
+                        else {            
+                          BS="sub";
+                          }
+                        i *= R.size;
+                        PROCOper(LINE_TYPE_ISTRUZIONE,BS,OPDEF_MODE_REGISTRO16,Regs->P);			// NON dovrebbe servire qua! lascio incompleto
+                        }
+                      else {
+												PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_REGISTRO16,Regs->D);
                         }
 #elif MICROCHIP
                         u[1].mode=u[0].mode=OPDEF_MODE_REGISTRO_LOW8;
@@ -1085,7 +1271,7 @@ R.cost->l=0;
 //											myLog->print(0,"faccio GETADD 2 con ofs %d\n",l);
 	                      l=0;
 	                      }
-	                    else if(V->type & VARTYPE_POINTER) {
+	                    else if(V->type & VARTYPE_IS_POINTER) {
 												if(V->var->classe == CLASSE_REGISTER) {
 				                  reg2=MAKEPTRREG(V->var->label);
 													goto read_array_add_cmq;		// mah serve cmq... o forse in alcuni casi si potrebbe ottimizzare? altre cpu
@@ -1101,6 +1287,9 @@ read_array_add_cmq:
 #if MC68000
 				                    PROCOper(LINE_TYPE_ISTRUZIONE,"adda.w",OPDEF_MODE_IMMEDIATO16,l,OPDEF_MODE_REGISTRO16,
 															Regs->P);
+#elif GD24032
+				                    PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,
+															Regs->P,OPDEF_MODE_IMMEDIATO32,l);
 #elif ARCHI
 				                    PROCOper(LINE_TYPE_ISTRUZIONE,"ADD",OPDEF_MODE_REGISTRO32,Regs->P,		// MemoryModel qua??
 															OPDEF_MODE_IMMEDIATO32,l);
@@ -1141,10 +1330,16 @@ read_array_add_cmq:
                     T1 &= ~VARTYPE_ARRAY /*0xFFFFFBFF*/;
                     T1=(T1 & VARTYPE_NOT_A_POINTER) | ((T1 & VARTYPE_IS_POINTER) -1);
                     if(FNIsOp(MyBuf,0)>=2)
-                      *cond=0;
+//                      *cond=0;
 //                      u[0].mode=0x80;
 //                      PROCReadD0(V->size,V->type,&u[0],&u[1],i,*cond & 0xff);
 #ifdef MC68000
+										if(!(V->type & VARTYPE_ARRAY) && Pty<=14) {		// solo se era puntatore usato come array, altrimenti sono a posto (INEVITABILE un passaggio in più in registro...
+											if(!(*cond & VALUE_CONDITION_MASK))			// qua non serve, lo faccio da EvalCond (v.
+												PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0 /*R.Q == VALUE_IS_COSTANTE ? R.cost->l : 0  in effetti l'ho già messo sopra!*/,
+													FALSE);
+											}
+#elif GD24032
 										if(!(V->type & VARTYPE_ARRAY) && Pty<=14) {		// solo se era puntatore usato come array, altrimenti sono a posto (INEVITABILE un passaggio in più in registro...
 											if(!(*cond & VALUE_CONDITION_MASK))			// qua non serve, lo faccio da EvalCond (v.
 												PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,0 /*R.Q == VALUE_IS_COSTANTE ? R.cost->l : 0  in effetti l'ho già messo sopra!*/,
@@ -1255,7 +1450,7 @@ rifo_struct:
 //						  				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,
 //												OPDEF_MODE_REGISTRO32,Regs->D);
 //										else
-						  				PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_IMMEDIATO16,reg2,		// MemoryModel
+						  				PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_IMMEDIATO16,reg2		// MemoryModel
 												// CPU86
 												);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
 #elif MC68000
@@ -1265,6 +1460,10 @@ rifo_struct:
 //										else
 						  				PROCOper(LINE_TYPE_ISTRUZIONE,"add.l",OPDEF_MODE_IMMEDIATO16,reg2,		// MemoryModel
 												OPDEF_MODE_REGISTRO32,Regs->P);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
+#elif GD24032
+						  				PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,Regs->P,
+												OPDEF_MODE_IMMEDIATO16,reg2		// MemoryModel
+												);		// sarebbe bello unire con la seguente, ma se c'è mix di ptr e . è un casino...
 #else
 #endif
 										if(OutSource) {
@@ -1310,7 +1509,15 @@ rifo_struct:
 											V->Q=VALUE_IS_EXPR;	
 											}
 										else {
-											V->Q=VALUE_IS_D0;		// FINIRE se lvalue
+											i=FNGetAggr2(V->var,R.var,&reg2,&j);
+/*											j=0;
+											while(reg2>=INT_SIZE*8) {		// si potrebbe spostare in FNGetAggr2
+												j+=INT_SIZE;
+												reg2-=INT_SIZE*8;
+												}*/
+											PROCReadD0(R.var,R.type,R.size,0,j,FALSE);		// size sarà sempre int quindi 4!
+											VPtr=R.var;			// salvo il membro per store
+											V->Q=VALUE_IS_D0;		// FINIRE se lvalue, v altri 2026
 											}
 										if(OutSource) {
 									//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
@@ -1367,6 +1574,13 @@ rifo_struct:
 											V->Q=VALUE_IS_EXPR;	
 											}
 										else {
+											i=FNGetAggr2(V->var,R.var,&reg2,&j);
+/*											j=0;
+											while(reg2>=INT_SIZE*8) {		// si potrebbe spostare in FNGetAggr2
+												j+=INT_SIZE;
+												reg2-=INT_SIZE*8;
+												}*/
+											PROCReadD0(R.var,R.type,R.size,0,j,FALSE);		// size sarà sempre int quindi 4!
 											VPtr=R.var;			// salvo il membro per store
 											V->Q=VALUE_IS_D0;		// FINIRE se lvalue
 											}
@@ -1383,6 +1597,69 @@ rifo_struct:
 										if(reg2)
 							  			PROCOper(LINE_TYPE_ISTRUZIONE,"add.l",OPDEF_MODE_IMMEDIATO32,reg2,OPDEF_MODE_REGISTRO32,		// MemoryModel
 												Regs->P);
+	                  V->Q=VALUE_IS_D0;
+										if(OutSource) {
+									//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
+									//    PROCOut(NULL,"\t\t\t\t; ",V->name,NULL,NULL);	
+									//    LastOut=(struct LINE *)_frealloc(LastOut,i);
+									//    LastOut->prev->next=LastOut;
+											_tcscpy(LastOut->rem,reg2 ? "ofs. " : "ofs.=0 ");
+											_tcscat(LastOut->rem,R.var->name);
+											}
+										}
+#elif GD24032
+									if(R.var->type & VARTYPE_BITFIELD) {
+										reg2 = reg2/INT_SIZE;		// FINIRE!!
+										if(reg2)
+								  		PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,		// MemoryModel
+												Regs->P,OPDEF_MODE_IMMEDIATO32,reg2);
+										if(isRValue) {
+											i=FNGetAggr2(V->var,R.var,&reg2,&j);
+/*											j=0;
+											while(reg2>=INT_SIZE*8) {		// si potrebbe spostare in FNGetAggr2
+												j+=INT_SIZE;
+												reg2-=INT_SIZE*8;
+												}*/
+											PROCReadD0(R.var,R.type,R.size,0,j,FALSE);		// size sarà sempre int quindi 4!
+											if(i)		// anche signed :)
+							  				PROCOper(LINE_TYPE_ISTRUZIONE,"AND.d",OPDEF_MODE_REGISTRO32,
+													Regs->D,OPDEF_MODE_IMMEDIATO32,i);	// mettere in funz a sé?
+											if(reg2 > 0) {
+												if(reg2<8)
+													PROCOper(LINE_TYPE_ISTRUZIONE,R.type & VARTYPE_UNSIGNED ? "SRA" : "SRL",
+														OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO,reg2);
+												else {
+													PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_IMMEDIATO,reg2);
+													PROCOper(LINE_TYPE_ISTRUZIONE,R.type & VARTYPE_UNSIGNED ? "SRA" : "SRL",
+														OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);
+													}
+												}
+											V->Q=VALUE_IS_EXPR;	
+											}
+										else {
+											i=FNGetAggr2(V->var,R.var,&reg2,&j);
+/*											j=0;
+											while(reg2>=INT_SIZE*8) {		// si potrebbe spostare in FNGetAggr2
+												j+=INT_SIZE;
+												reg2-=INT_SIZE*8;
+												}*/
+											PROCReadD0(R.var,R.type,R.size,0,j,FALSE);		// size sarà sempre int quindi 4!
+											VPtr=R.var;			// salvo il membro per store
+											V->Q=VALUE_IS_D0;		// FINIRE se lvalue
+											}
+										if(OutSource) {
+									//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
+									//    PROCOut(NULL,"\t\t\t\t; ",V->name,NULL,NULL);	
+									//    LastOut=(struct LINE *)_frealloc(LastOut,i);
+									//    LastOut->prev->next=LastOut;
+											_tcscpy(LastOut->rem,"mask/shift ");
+											_tcscat(LastOut->rem,R.var->name);
+											}
+										}
+									else {
+										if(reg2)
+							  			PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,		// MemoryModel
+												Regs->P,OPDEF_MODE_IMMEDIATO32,reg2);
 	                  V->Q=VALUE_IS_D0;
 										if(OutSource) {
 									//    i=_tcslen(LastOut->s)+_tcslen(V->name)+25;
@@ -1410,7 +1687,7 @@ rifo_struct:
 									V->var->modif=0;
 									V->var->size=R.size;
 									V->var->func=(struct VARS *)Regs->D;
-									V->var->parm=(char *)reg2;
+									V->var->parm=isRValue ? (char *)reg2 : 0;
                   V->tag=R.var->tag;
 									V->flag=1;	//									V->flag= ??  0 per copiare ev. Dn in An, v.array e ptr
 									memcpy(V->dim,R.dim,sizeof(O_DIM));
@@ -1437,7 +1714,7 @@ LBinaryMinus:
                     T=1;											// se pre-inc
                     u[0].s.n=Regs->D;
 //                    BS=Regs->DS;
-                    *cond=0;
+//                    *cond=0;
                     FNRev(2,cond,Clabel,V);
                     }
                   else {
@@ -1468,7 +1745,7 @@ LBinaryMinus:
 //                    _tcscat(T1S,"1");
 										I=1;
                     }
-#elif Z80 || I8086 || MC68000 || MICROCHIP
+#elif Z80 || I8086 || MC68000 || GD24032 || MICROCHIP
                   if(V->type & VARTYPE_IS_POINTER) {
                     v=getPtrSize(V->type);
                     I=V->size;
@@ -1496,6 +1773,8 @@ LBinaryMinus:
 								    if(R.var->classe == CLASSE_REGISTER) {
 #if MC68000
 											ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,TRUE);	// Pty<=14 ? TRUE : FALSE ...
+#elif GD24032
+											ReadVar(R.var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,TRUE);	// Pty<=14 ? TRUE : FALSE ...
 #else
 			                reg2=MAKEPTRREG(R.var->label);		// beh ri-verificare gli altri!
 #endif
@@ -1510,33 +1789,64 @@ LBinaryMinus:
 // ????											if(Pty<=14)		// se NON per Store (ossia se r-value
 			//									R.Q=0;		// ho già il ptr in A0 e quindi stronco la lettura seguente
 											// GESTIRE MEGLIO! ossia anche in Store
+#elif GD24032
+
 #endif
 								      }
 								    }
 									else if(R.Q==VALUE_IS_D0) {
 #if MICROCHIP
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE,0);
 #elif MC68000
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
+										if(Pty<14)			// solo se non assegnazione (altrimenti ci pensa dopo
+									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
+#elif GD24032
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 										if(Pty<14)			// solo se non assegnazione (altrimenti ci pensa dopo
 									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #else
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #endif
 										}
 									else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) {
 #if MICROCHIP
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE,0);
 #elif MC68000
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 										if(Pty<14 /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
 									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 											}
-										if(!isRValue /*Pty<14*/ /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+										if(!R.var->size || !isRValue /*Pty<14*/ /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+
+// (IN ALCUNI CASI NON VA ANCORA BENE! DIC25 n=(*(unsigned short *)&a)+a2;
+
+
 											/// in certi casi rimane una doppia move, tipo se segue ++/--
-								  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
-												Regs->P);	
+								  		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);	
 											CHECKPOINTER();
+											R.flag=1;		// stronco ev. letture a seguire!
+											}
+#elif GD24032
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
+										if(Pty<14 /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
+											}
+										if(!R.var->size || !isRValue /*Pty<14*/ /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
+
+// (IN ALCUNI CASI NON VA ANCORA BENE! DIC25 n=(*(unsigned short *)&a)+a2;
+
+
+											/// in certi casi rimane una doppia move, tipo se segue ++/--
+								  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);	
+											CHECKPOINTER();
+											R.flag=1;		// stronco ev. letture a seguire!
 											}
 #elif I8086
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 										if(Pty<14 /*isRValue*/) 			// solo se non-assegnazione (altrimenti ci pensa dopo   
 									    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 										if(!isRValue /*Pty<14*/ /*isRValue*/) {			// solo se non-assegnazione (altrimenti ci pensa dopo   
@@ -1545,6 +1855,7 @@ LBinaryMinus:
 											CHECKPOINTER();
 											}
 #else
+										if(R.var->size) 			// v. case 0 in readD0, casi con costante
 								    PROCReadD0(R.var,0,0,*cond & VALUE_CONDITION_MASK,0,TRUE);
 #endif
 										}
@@ -1587,7 +1898,7 @@ LBinaryMinus:
 	                break;
 
 	              case '&':
-	                *cond=0;
+//	                *cond=0;
 	                FNRev(2,cond,Clabel,&R);
 	                switch(R.Q) {
 	                  case VALUE_IS_EXPR:
@@ -1624,7 +1935,7 @@ LBinaryMinus:
 											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,FALSE);		// in effetti credo vada bene in Dn e basta
 //											PROCGetAdd(VALUE_IS_COSTANTE,R.var,0,(isPtrUsed && Pty!=99) ? TRUE : FALSE);
 											// (non è il massimo, ma serve per... a=*(((unsigned short *)&c5)+1);
-#elif I8086 || MC68000 
+#elif I8086 || MC68000  || GD24032
 											PROCGetAdd(VALUE_IS_D0,R.var,0,FALSE);		// mah RIVERIFICARE gli altri, 2025
 #endif	                    
 											V->Q=VALUE_IS_EXPR;
@@ -1647,7 +1958,7 @@ LBinaryMinus:
 		              break;
 
 		            case '~':
-		              *cond=0;
+//		              *cond=0;
 		              FNRev(2,cond,Clabel,V);
 		              switch(V->Q) {
 		                case VALUE_IS_COSTANTE:
@@ -1674,6 +1985,8 @@ LBinaryMinus:
 											PROCOper(LINE_TYPE_ISTRUZIONE,"neg",OPDEF_MODE_REGISTRO16,Regs->D);
 #elif MC68000
 											PROCOper(LINE_TYPE_ISTRUZIONE,"neg",OPDEF_MODE_REGISTRO32,Regs->D);
+#elif GD24032
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NEG",OPDEF_MODE_REGISTRO32,Regs->D);
 #elif MICROCHIP
 											u[0].mode=OPDEF_MODE_REGISTRO_LOW8;
 											u[0].s.n=Regs->D;
@@ -1767,6 +2080,20 @@ LBinaryMinus:
 													break;
 		                    case 1:
     											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.b",OPDEF_MODE_REGISTRO8,Regs->D);
+		                      break;
+		                    default:
+		                      break;
+		                    }
+#elif GD24032
+		                  switch(V->size) {
+		                    case 4:
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.l",OPDEF_MODE_REGISTRO32,Regs->D);
+													break;
+		                    case 2:
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.w",OPDEF_MODE_REGISTRO16,Regs->D);
+													break;
+		                    case 1:
+    											PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.b",OPDEF_MODE_REGISTRO8,Regs->D);
 		                      break;
 		                    default:
 		                      break;
@@ -1919,6 +2246,30 @@ LBinaryMinus:
 		                  }  
 		                else  
   	                  V->Q = VALUE_IS_CONDITION | CONDIZ_UGUALE;     // segnala ! condizionale (cmq implicito in CONDIZ_
+#elif GD24032
+	                  if(!(*cond & VALUE_CONDITION_MASK)) {
+//		                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpCondString,OPDEF_MODE_CONDIZIONALE | 0x80,5,OPDEF_MODE_COSTANTE,
+//											PROCOper(LINE_TYPE_ISTRUZIONE,"bne.s",OPDEF_MODE_COSTANTE,
+//												TipoOut==0 ? (union SUB_OP_DEF *)"$" : (union SUB_OP_DEF *)"*"/* *=$ (sistemare merda di easy68k*/,4+2);
+//											PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO32,1,OPDEF_MODE_REGISTRO,Regs->D);
+//											PROCOper(LINE_TYPE_ISTRUZIONE,"bra.s",OPDEF_MODE_COSTANTE,
+//												TipoOut==0 ? (union SUB_OP_DEF *)"$" : (union SUB_OP_DEF *)"*"/* *=$ (sistemare merda di easy68k*/,2+2);
+//											PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO32,0,OPDEF_MODE_REGISTRO,Regs->D);
+											PROCOper(LINE_TYPE_JUMPC /* per formato istruzione..*/,"s",OPDEF_MODE_CONDIZIONALE,
+												FNGetCondString(CONDIZ_UGUALE & 0xf,FALSE),
+												OPDEF_MODE_REGISTRO32,Regs->D);
+											if(V->size > 1) {
+												PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,0);
+												if(V->size > 2) {
+	    										PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,0);
+													}
+												}
+  										V->Q=VALUE_IS_EXPR;
+											V->size=INT_SIZE;
+											V->type=VARTYPE_PLAIN_INT;
+		                  }  
+		                else  
+  	                  V->Q = VALUE_IS_CONDITION | CONDIZ_UGUALE;     // segnala ! condizionale (cmq implicito in CONDIZ_
 #elif MICROCHIP
 	                  if(!(*cond & VALUE_CONDITION_MASK)) {
 	                    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
@@ -1949,7 +2300,7 @@ unarynot_done:
 
 	              case 'z':                  // finto per lasciare il case!
 LUnaryMinus:
-	                *cond=0;
+//	                *cond=0;
 	                FNRev(2,cond,Clabel,V);
 	                switch(V->Q) {
 	                  case VALUE_IS_COSTANTE:
@@ -1976,6 +2327,8 @@ LUnaryMinus:
 #elif I8086
 											PROCOper(LINE_TYPE_ISTRUZIONE,"neg",OPDEF_MODE_REGISTRO16,Regs->D);
 #elif MC68000
+											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.l",OPDEF_MODE_REGISTRO32,Regs->D);
+#elif GD24032
 											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.l",OPDEF_MODE_REGISTRO32,Regs->D);
 #elif MICROCHIP
 											u[0].mode=OPDEF_MODE_REGISTRO_LOW8;
@@ -2081,6 +2434,20 @@ LUnaryMinus:
 		                    default:
 		                      break;
 	                      }
+#elif GD24032
+	                    switch(V->size) {
+		                    case 1:
+    											PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.b",OPDEF_MODE_REGISTRO8,Regs->D);
+		                      break;
+		                    case 2:
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.w",OPDEF_MODE_REGISTRO16,Regs->D);
+													break;
+		                    case 4:
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.l",OPDEF_MODE_REGISTRO32,Regs->D);
+													break;
+		                    default:
+		                      break;
+	                      }
 #elif MICROCHIP
 											u[0].mode=OPDEF_MODE_REGISTRO_LOW8;
 											u[0].s.n=Regs->D;
@@ -2133,7 +2500,7 @@ LUnaryMinus:
 //										FIn->Seek(l1,CFile::begin);
 										FIn->RestorePosition(l1);
 //										__line__=ol;
-	                  *cond=0;
+//	                  *cond=0;
 	                  FNRev(15,cond,Rlabel,&R);
 	                  T=R.size;
 		                if(R.type & VARTYPE_ARRAY)
@@ -2185,6 +2552,8 @@ LUnaryMinus:
 #elif MC68000 
 //							if(0) {
 	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
+#elif GD24032
+	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
 #endif  	            
                 reg2=Regs->Inc((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
                 }
@@ -2199,6 +2568,11 @@ LUnaryMinus:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"move.l"/*popString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_REGISTRO32,0);
                 swap(&ROut,&LastOut);		// vado a inserire
 								PROCOper(LINE_TYPE_ISTRUZIONE,"move.l"/*pushString*/,OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+                swap(&ROut,&LastOut);
+#elif GD24032
+								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.l"/*popString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_REGISTRO32,0);
+                swap(&ROut,&LastOut);		// vado a inserire
+								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.l"/*pushString*/,OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
                 swap(&ROut,&LastOut);
 #else
 								PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO32,0);
@@ -2221,6 +2595,8 @@ LUnaryMinus:
 #elif MC68000 
 	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
 //            if(0) {
+#elif GD24032
+	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
 #endif  	            
                 if(!reg2)
                   Regs->Dec((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
@@ -2255,7 +2631,7 @@ LUnaryMinus:
 							    default:
 							      BS=TS;
 							      break;
-#elif Z80 || I8086 || MC68000 || I8051 || MICROCHIP
+#elif Z80 || I8086 || MC68000 || GD24032 || I8051 || MICROCHIP
 							    case '+':
 							    case '-':
 							    case '=':
@@ -2314,9 +2690,9 @@ LUnaryMinus:
 			              if(reg2)
 		                  swap(&ROut,&LastOut);
 #if MICROCHIP
-                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,TRUE,0);
+                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #else
-                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,TRUE);
+                    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
 										V->Q=VALUE_IS_EXPR;
 		                break;  
@@ -2346,6 +2722,8 @@ LUnaryMinus:
 											*/
                       T=MODE_IS_CONSTANT1;
 //												idem come CONSTANT2	beh ma in effetti qua ottimizzo cmq le costanti! 
+#elif GD24032
+                      T=MODE_IS_CONSTANT1;
 #endif
 	                  break;
 	                case VALUE_IS_COSTANTEPLUS:
@@ -2389,6 +2767,8 @@ myUVvar:
                         goto myUVvar;
 #elif MC68000
                         goto myUVvar;
+#elif GD24032
+                        goto myUVvar;
 #endif                
 												break;   
 											case CLASSE_AUTO:
@@ -2412,6 +2792,8 @@ myUVvar:
 #elif I8086		                      
                         goto myUVvar;
 #elif MC68000
+                        goto myUVvar;
+#elif GD24032
                         goto myUVvar;
 #endif
 							          break;  
@@ -2439,6 +2821,8 @@ myUVvar:
   	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE))
 #elif MC68000 
   	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE))
+#elif GD24032
+  	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE))
 #endif  	            
                   {
                   reg2=Regs->Inc((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
@@ -2456,6 +2840,8 @@ myUVvar:
 #elif I8086
 	              j=(V->size > 2) ? 2 : 1;			// sì insomma
 #elif MC68000
+	              j=(V->size > 4) ? 2 : 1;  
+#elif GD24032
 	              j=(V->size > 4) ? 2 : 1;  
 #endif
 		            subSpezReg(2,u+j);
@@ -2514,6 +2900,8 @@ myUVvar:
 											}
                     else
                       T=MODE_IS_CONSTANT2;	// appunto
+#elif GD24032
+                    T=MODE_IS_CONSTANT2;
 #endif
 	                  break;
 	                case VALUE_IS_COSTANTEPLUS:
@@ -2535,6 +2923,9 @@ myURcost:
 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MC68000
 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+												// VERIFICARE QUA!
 #elif MICROCHIP
 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #endif
@@ -2574,6 +2965,10 @@ myURcost:
 		                      }
 		                    else  
 	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+		                    u[j].mode=OPDEF_MODE_REGISTRO32;
+		                    u[j].s.n=MAKEPTRREG(R.var->label);
+		                    T=-1;  
 #endif
 	                      break;
 											case CLASSE_AUTO:
@@ -2620,6 +3015,23 @@ myURcost:
 												// tolto qua tutto quel controllo... non so bene a cosa servisse, forse per ottimizzare
 
 	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+		                    if(/*!(V->type & 0x1d0f) && */ (T==0 && (OP != 5))) {
+		                    // dovrebbe prendere anche i char *...
+													// VERIFICARE QUA!
+		                      i=MAKEPTROFS(R.var->label);
+		                      u[j].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+		                      u[j].s.n=0;
+		                      u[j].ofs=i;
+							            if(R.size>2) {
+			                      u[j+1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+			                      u[j+1].s.n=0;
+			                      u[j+1].ofs=i+2;
+								            }
+	                      	T=-1;
+		                      }
+	                      else 
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 												break;
 	                    }
@@ -2657,6 +3069,8 @@ myURcost:
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 #elif MC68000
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO8,Regs->D);
+#elif GD24032
+                    PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO8,Regs->D);
 #endif
                     break;
                   case 2:
@@ -2675,6 +3089,8 @@ myURcost:
 #elif I8086
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 #elif MC68000
+                    PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO16,Regs->D);
+#elif GD24032
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[1].mode,&u[1].s,u[1].ofs,OPDEF_MODE_REGISTRO16,Regs->D);
 #endif
                     break;
@@ -2701,6 +3117,8 @@ myURcost:
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[2].mode,&u[2].s,u[2].ofs,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[3].mode,&u[3].s,u[3].ofs,OPDEF_MODE_REGISTRO_LOW8,Regs->D+1);
 #elif MC68000
+                    PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[2].mode,&u[2].s,u[2].ofs,OPDEF_MODE_REGISTRO32,Regs->D);
+#elif GD24032
                     PROCOper(LINE_TYPE_ISTRUZIONE,movString,u[2].mode,&u[2].s,u[2].ofs,OPDEF_MODE_REGISTRO32,Regs->D);
 #endif
                     break;
@@ -2742,52 +3160,62 @@ myURcost:
 
                 switch(OP) {
                   case 3:
-				            *cond=0;
-										if(Optimize & OPTIMIZE_CONST && *TS!='%' &&  R.Q==VALUE_IS_COSTANTE && (i=FNIsPower2(R.cost->l))) {			// ottimizzo potenze di 2!
+//				            *cond=0;
+										if(Optimize & OPTIMIZE_CONST && *TS!='%' && R.Q==VALUE_IS_COSTANTE && (i=FNIsPower2(R.cost->l))) {			// ottimizzo potenze di 2!
 											R.cost->l=i;
 											V->Q=subShift(*TS=='*',MODE_IS_CONSTANT2,V->Q,V->var,V->type,V->size,R.type,
 												V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],FALSE);
 											}
+										else if(Optimize & OPTIMIZE_CONST && *TS=='%' && R.Q==VALUE_IS_COSTANTE && (i=FNIsPower2(R.cost->l))) {			// ottimizzo potenze di 2!
+											R.cost->l = R.cost->l-1;
+			                V->Q=subAOX('&',cond,T,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,V->cost,R.cost,
+												&u[0],&u[1],&u[2],&u[3],FALSE);
+											}
 										else {
+#if GD24032
+#else
 											if(!(R.Q & VALUE_IS_COSTANTE)) {
 												if(R.Q == VALUE_IS_VARIABILE)
-													PROCCast(V->type,V->size,R.type,R.size,
+													PROCCast(V->type,V->size,&R.type,&R.size,
 														R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label) : -1);		// cast implicito tra operandi!
 												else
-													PROCCast(V->type,V->size,R.type,R.size,Regs->D);		// cast implicito tra operandi!
+													PROCCast(V->type,V->size,&R.type,&R.size,Regs->D);		// cast implicito tra operandi!
 												}
+#endif
 			                V->Q=subMul(*TS,T,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,V->cost,R.cost,
 												&u[0],&u[1],&u[2],&u[3],FALSE);
 											}
                     break;
                   case 4:
-				            *cond=0;
+//				            *cond=0;
+#if GD24032
+#else
 										if(!(R.Q & VALUE_IS_COSTANTE)) {
 											if(R.Q == VALUE_IS_VARIABILE)
-												PROCCast(V->type,V->size,R.type,R.size,
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label) : -1);		// cast implicito tra operandi!
 											else
-												PROCCast(V->type,V->size,R.type,R.size,
-													Regs->D);		// cast implicito tra operandi!
+												PROCCast(V->type,V->size,&R.type,&R.size,Regs->D);		// cast implicito tra operandi!
 											}
+#endif
 		                V->Q=subAdd(*TS=='+',T,V->Q,V->var,&V->type,&V->size,R.Q,R.type,R.size,V->cost,R.cost,
 											&u[0],&u[1],&u[2],&u[3],FALSE);
 			              break;
 		              case 5:
-				            *cond=0;
+//				            *cond=0;
 										// qua direi che il cast non serve
 		                V->Q=subShift(*TS=='<',T,V->Q,V->var,V->type,V->size,R.type,V->cost,R.cost,
 											&u[0],&u[1],&u[2],&u[3],FALSE);
 		                break;
                   case 6:
                   case 7:
-				            *cond=0;
+//				            *cond=0;
 										if(!(R.Q & VALUE_IS_COSTANTE)) {
 											if(R.Q == VALUE_IS_VARIABILE)
-												PROCCast(V->type,V->size,R.type,R.size,
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label) : -1);		// cast implicito tra operandi!
 											else
-												PROCCast(V->type,V->size,R.type,R.size,
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													Regs->D);		// cast implicito tra operandi!
 											}
 		                V->Q=subCMP(TS,*cond,T,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,V->cost,R.cost,
@@ -2795,14 +3223,17 @@ myURcost:
                     break;
                   default:		// 8 9 10
 //				            *cond=0;
+#if GD24032
+#else
 										if(!(R.Q & VALUE_IS_COSTANTE)) {
 											if(R.Q == VALUE_IS_VARIABILE)
-												PROCCast(V->type,V->size,R.type,R.size,
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label) : -1);		// cast implicito tra operandi!
 											else
-												PROCCast(V->type,V->size,R.type,R.size,
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													Regs->D);		// cast implicito tra operandi!
 											}
+#endif
 		                V->Q=subAOX(*TS,cond,T,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,V->cost,R.cost,
 											&u[0],&u[1],&u[2],&u[3],FALSE);
                     break;
@@ -2816,6 +3247,8 @@ myURcost:
 #elif MC68000
   	            if(/*T>=0 &&*/ (VQ1==VALUE_IS_EXPR || VQ1==VALUE_IS_EXPR_FUNC || VQ1==VALUE_IS_D0 || VQ1==VALUE_IS_VARIABILE))
 //  	            if(0)
+#elif GD24032
+  	            if(/*T>=0 &&*/ (VQ1==VALUE_IS_EXPR || VQ1==VALUE_IS_EXPR_FUNC || VQ1==VALUE_IS_D0 || VQ1==VALUE_IS_VARIABILE))
 #elif MICROCHIP
   	            if((/*T>=0 &&*/ (VQ1==VALUE_IS_EXPR || VQ1==VALUE_IS_EXPR_FUNC || VQ1==VALUE_IS_D0 || VQ1==VALUE_IS_VARIABILE)) || OP==3)
 #endif  	            
@@ -3054,7 +3487,7 @@ skippa_condbranch: ;
 		            }
 		          FNGetLabel(TS,2);
 		          PROCGenCondBranch(TS,TRUE,&V->Q,FNGetMemSize(V->type,V->size,0/*dim*/,0));
-		          *cond=0;
+//		          *cond=0;
 		          subEvEx(13,cond,Clabel,&R);
 #if ARCHI
 //		          PROCOut("B",TS,"_");
@@ -3075,6 +3508,11 @@ skippa_condbranch: ;
 		          PROCOper(LINE_TYPE_JUMP,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
 								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
 #elif MC68000
+							_tcscpy(MyBuf,TS);
+							_tcscat(MyBuf,"_");
+							PROCOper(LINE_TYPE_JUMP,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+#elif GD24032
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
 							PROCOper(LINE_TYPE_JUMP,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
@@ -3112,6 +3550,7 @@ skippa_condbranch: ;
 //		            swap(&ROut,&LastOut);
 #if MC68000
 #elif I8086
+#elif GD24032
 #elif ARCHI
 #else		// mmm provare... 
 								// tolgo, verificare
@@ -3128,12 +3567,13 @@ skippa_condbranch: ;
 									}
 #if MC68000
 #elif I8086
+#elif GD24032
 #elif ARCHI
 #else		// mmm provare... 
 		            i=Regs->Inc(getPtrSize(V->type));
 #endif
 		            }
-		          *cond=0;
+//		          *cond=0;
 		          if(FNRev(14,cond,Rlabel,&R) < 0)
 								/*PROCError(2059) no... finire*/;
 		          if(R.Q==VALUE_IS_VARIABILE && (V->Q != VALUE_IS_VARIABILE || V->var->classe != CLASSE_REGISTER)) {   // store in registri a parte...
@@ -3143,25 +3583,45 @@ skippa_condbranch: ;
                   case CLASSE_STATIC:
 #if MICROCHIP
                     ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE,0);		// FINIRE
+                    T=0;
 #elif MC68000
 //										if(Pty>14)
 											ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
+                    T=0;
+#elif GD24032
+										if(R.var->size != V->size) {		// se non devo fare cast posso andare memory to memory!
+											ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
+											PROCCast(V->type,V->size,&R.type,&R.size,-1);		// cast implicito tra operandi!
+	                    T=0;
+											}
+										else
+											T=1;
 #else
                     ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
-#endif
                     T=0;
+#endif
   									break;
                   case CLASSE_REGISTER:
 #if MICROCHIP
 	  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
+                    T=0;
 #elif MC68000
 //										if(Pty>14)
 										//if(*TS != '=') in effetti serve cmq, sarebbe da ottimizzare volendo
 		  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+                    T=0;
+#elif GD24032
+										if(R.var->size != V->size) {		// se non devo fare cast posso andare diretto!
+		  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
+											PROCCast(V->type,V->size,&R.type,&R.size,-1);		// cast implicito tra operandi!
+	                    T=0;
+											}
+										else
+											T=1;
 #else
 	  			          ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
-#endif
                     T=0;
+#endif
                     break;
 									case CLASSE_AUTO:
 #if MICROCHIP
@@ -3183,8 +3643,19 @@ skippa_condbranch: ;
 //                      ReadVar(R.var,VARTYPE_PLAIN_INT,FNGetMemSize(V->type,V->size,1),0);
 		  			          T=1;
 		  			          }
+#elif GD24032
+										if((*TS=='<' || *TS=='>') || (R.var->size != V->size)) {	// se non devo fare cast posso andare memory to memory!
+//											if(Pty>14)
+		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
+//											PROCCast(V->type,V->size,&R.type,&R.size,-1);		// cast implicito tra operandi!
+									    T=0;
+		  			          }
+		  			        else {
+//                      ReadVar(R.var,VARTYPE_PLAIN_INT,FNGetMemSize(V->type,V->size,1),0);
+		  			          T=1;
+		  			          }
 #else
-									  if(*TS == '=' /*|| *TS=='*' || *TS=='/' || *TS=='%'  && *V->Q==3 && V->var->classe<3*/) {
+									  if(*TS=='=' /*|| *TS=='*' || *TS=='/' || *TS=='%'  && *V->Q==3 && V->var->classe<3*/) {
 		                  ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 									    T=0;
 		  			          }
@@ -3201,8 +3672,14 @@ skippa_condbranch: ;
 								if(V->Q == VALUE_IS_VARIABILE && V->var->classe == CLASSE_REGISTER)		// v.sopra: qua mi serve... forse anche altri
 	                T=1;
 								else 
-									T=0;
+									T= R.Q & VALUE_IS_COSTANTE ? 1 : 0;
+#elif GD24032
+								if(V->Q == VALUE_IS_VARIABILE && V->var->classe == CLASSE_REGISTER)		// v.sopra: qua mi serve... forse anche altri
+	                T=1;
+								else 
+									T= R.Q & VALUE_IS_COSTANTE ? 1 : 0;
 #else
+
                 T=0;
 #endif
 
@@ -3223,6 +3700,8 @@ skippa_condbranch: ;
 	              PROCUseCost(R.Q,R.type,R.size/*cioè V->size*/,R.cost,FALSE,0);		// FINIRE
 #elif MC68000
 								// questo le può usare direttamente!
+#elif GD24032
+
 #else
 	              PROCUseCost(R.Q,R.type,R.size/*cioè V->size*/,R.cost,FALSE);
 #endif
@@ -3256,6 +3735,20 @@ skippa_condbranch: ;
 //									PROCCast(V->type,V->size,R.type,R.size,-1);
 									R.Q=VALUE_IS_EXPR;
 									}
+#elif GD24032
+								if(!R.flag) {		// era puntatore e NON array o expr 
+						  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
+										Regs->P);	// qua è ok così
+									CHECKPOINTER();
+//							    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
+									}
+//								else
+//							    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
+								if(FNGetMemSize(V->type,V->size,0/*dim*/,1) != FNGetMemSize(R.type,R.size,0/*dim*/,1)) {		// se serve, mi tocca leggere
+							    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
+//									PROCCast(V->type,V->size,R.type,R.size,-1);
+									R.Q=VALUE_IS_EXPR;
+									}
 #elif ARCHI		// verificare, 2025
 								if(!R.flag) {		// era puntatore e NON array o expr 
 						  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,
@@ -3275,7 +3768,7 @@ skippa_condbranch: ;
 #endif
 						    }
               else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC)
-    					  PROCCast(V->type,V->size,R.type,R.size,-1);
+    					  PROCCast(V->type,V->size,&R.type,&R.size,-1);
               else if(R.Q==VALUE_IS_COSTANTE) {
 						    }
 		          if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || *TS!='=') {
@@ -3283,6 +3776,7 @@ skippa_condbranch: ;
 //		            swap(&ROut,&LastOut);
 #if MC68000
 #elif I8086
+#elif GD24032
 #elif ARCHI
 #else		// mmm provare... 
 		            if(!i)
@@ -3294,6 +3788,7 @@ skippa_condbranch: ;
 //		            swap(&ROut,&LastOut);
 #if MC68000
 #elif I8086
+#elif GD24032
 #elif ARCHI
 #else		// mmm provare... 
 		            if(!i)
@@ -3354,6 +3849,15 @@ skippa_condbranch: ;
 										//OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC USARE
 								    PROCOper(LINE_TYPE_ISTRUZIONE,"dbra.w",OPDEF_MODE_REGISTRO16,Regs->D,
 											OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"*-6",0);
+#elif GD24032
+				            PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P+1);
+										// MemoryModel
+				            PROCOper(LINE_TYPE_ISTRUZIONE,"MOV",OPDEF_MODE_IMMEDIATO16,R.size-1,OPDEF_MODE_REGISTRO16,Regs->D);
+										PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P+1,
+											OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+										//OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC USARE
+								    PROCOper(LINE_TYPE_ISTRUZIONE,"dbra.w",OPDEF_MODE_REGISTRO16,Regs->D,
+											OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"*-6",0);
 #elif MICROCHIP
 				            FNGetLabel(TS,2);
 				            Regs->Save();
@@ -3378,16 +3882,92 @@ skippa_condbranch: ;
 				              if(!(V->var->type & VARTYPE_IS_POINTER) && (V->var->type & (VARTYPE_STRUCT | VARTYPE_UNION | VARTYPE_ARRAY | VARTYPE_FUNC /*0x1d00*/))) 
   				              PROCError(2106);
 											else {
-												StoreVar(V->var,R.Q,R.var,R.cost,
+												StoreVar(V->var, T ? R.Q : VALUE_IS_D0,R.var,R.cost,
 													(R.Q==VALUE_IS_0 || R.Q==VALUE_IS_D0) ? TRUE : FALSE);		// VERIFICARE! se R.Q non è nulla ossia =0 allora arrivo da D0 ossia puntatore...
 												}
 
 											// VERIFICARE perché arriva 2!!
 
-											if(Pty==14 && R.Q==VALUE_IS_COSTANTE && !R.cost->l)			// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
-			   								V->Q=VALUE_IS_COSTANTE;
+#if ARCHI
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
 											else
 			    		          V->Q=VALUE_IS_EXPR;
+#elif Z80
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
+											else
+			    		          V->Q=VALUE_IS_EXPR;
+#elif I8086
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
+											else
+			    		          V->Q=VALUE_IS_EXPR;
+#elif MC68000
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
+											else
+			    		          V->Q=VALUE_IS_EXPR;
+
+#elif GD24032
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
+											else
+			    		          V->Q=VALUE_IS_EXPR;
+#elif MICROCHIP
+											if(Pty==14)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+												if(R.Q==VALUE_IS_COSTANTE /*&& !R.cost->l*/)	{		// se si propaga, tipo a=b=c=0 ... lascio costante (utili specie se si usa CLR per scrivere 0
+			   									V->Q=VALUE_IS_COSTANTE;
+													*V->cost=*R.cost;
+													}
+												else if(R.Q==VALUE_IS_VARIABILE)	{		// 
+			   									V->Q=VALUE_IS_VARIABILE;
+//													V->var=R.var;
+													}
+												}
+											else
+			    		          V->Q=VALUE_IS_EXPR;
+#endif
 
 				              }
 //				            if(*V->Q==1)
@@ -3418,6 +3998,13 @@ skippa_condbranch: ;
 															Regs->D);	
 							  					PROCOper(LINE_TYPE_ISTRUZIONE,"ori.l",OPDEF_MODE_IMMEDIATO32,R.cost->l,OPDEF_MODE_REGISTRO32,
 														Regs->D);	// 
+#elif GD24032
+													if(i)		// anche signed :)
+							  						PROCOper(LINE_TYPE_ISTRUZIONE,"AND.d",OPDEF_MODE_REGISTRO32,
+															Regs->D,OPDEF_MODE_IMMEDIATO32,~i);	
+							  					PROCOper(LINE_TYPE_ISTRUZIONE,"OR.d",OPDEF_MODE_REGISTRO32,
+														Regs->D,OPDEF_MODE_IMMEDIATO32,R.cost->l);	// 
+
 #else
 													// finire tutti
 													if(i)		// anche signed :)
@@ -3460,10 +4047,21 @@ skippa_condbranch: ;
 														}
 													// finire!
 													if(i)		// anche signed :)
-							  						PROCOper(LINE_TYPE_ISTRUZIONE,"and",OPDEF_MODE_IMMEDIATO16,~i,OPDEF_MODE_REGISTRO16,
-															Regs->D+1);
-						  						PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO16,Regs->D+1,
-														OPDEF_MODE_REGISTRO16,Regs->D);	
+							  						PROCOper(LINE_TYPE_ISTRUZIONE,"and",OPDEF_MODE_REGISTRO16,
+															Regs->D+1,OPDEF_MODE_IMMEDIATO16,~i);
+						  						PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO16,Regs->D,
+														OPDEF_MODE_REGISTRO16,Regs->D+1);	
+#elif GD24032
+													if(reg2 > 0) {
+														PROCOper(LINE_TYPE_ISTRUZIONE,"SLA.d",
+															OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO,reg2);
+														}
+													if(i)		// anche signed :)
+							  						PROCOper(LINE_TYPE_ISTRUZIONE,"AND.d",OPDEF_MODE_REGISTRO32,
+															Regs->D+1,OPDEF_MODE_IMMEDIATO32,~i);
+						  						PROCOper(LINE_TYPE_ISTRUZIONE,"OR.d",OPDEF_MODE_REGISTRO32,Regs->D,
+														OPDEF_MODE_REGISTRO32,Regs->D+1);	
+													// manca sign-extend, dice gemini 2026
 #else
 													if(reg2 > 0) {
 														if(reg2<8)
@@ -3495,10 +4093,10 @@ skippa_condbranch: ;
 			            break;
 		            case '+':
 		            case '-':
-                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0),u);
+                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,NULL),u);
 		              if(T) {
-	                	i=MAKEPTROFS(R.var->label);
 #if MC68000 // beh qua mi serve leggere in D0
+	                	i=MAKEPTROFS(R.var->label);
 		                if(FNGetMemSize(V->type,V->size,0/*dim*/,1) <=4) {
 		                  u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 		                  u[1].ofs=i;
@@ -3513,6 +4111,7 @@ skippa_condbranch: ;
 //		                  u[3].s=0;
                       }
 #elif I8086			// verificare per 8086
+	                	i=MAKEPTROFS(R.var->label);
 										if(FNGetMemSize(V->type,V->size,0/*dim*/,1) <= (CPU86>=3 ? 4 : 2)) {
 		                  u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 		                  u[1].ofs=i;
@@ -3526,7 +4125,33 @@ skippa_condbranch: ;
 		                  u[3].ofs=i+2;
 //		                  u[3].s=0;
                       }
+#elif GD24032
+										switch(R.var->classe) {
+	                    case CLASSE_EXTERN:
+                      case CLASSE_GLOBAL:
+                      case CLASSE_STATIC:
+												u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	_tcscpy(u[1].s.label,R.var->label);
+      									break;
+	                    case CLASSE_REGISTER:
+												u[1].mode=OPDEF_MODE_REGISTRO32;
+												u[1].ofs=MAKEPTRREG(R.var->label);
+	                      break;
+											case CLASSE_AUTO:
+	                			i=MAKEPTROFS(R.var->label);
+												if(FNGetMemSize(V->type,V->size,0/*dim*/,1) <=4) {
+													u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+													u[1].ofs=i;
+		//		                  u[1].s=0;
+													}
+												else {  
+													u[2].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+													u[2].ofs=i+4;
+													}
+												break;
+											}
 #else
+	                	i=MAKEPTROFS(R.var->label);
 		                if(FNGetMemSize(V->type,V->size,0/*dim*/,1) <=2) {
 		                  u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 		                  u[1].ofs=i;
@@ -3542,6 +4167,10 @@ skippa_condbranch: ;
                       }
 #endif
                     }
+									else {
+										u[1].mode=OPDEF_MODE_REGISTRO32;
+										u[1].s.n=Regs->D;
+										}
                   if(R.Q==VALUE_IS_COSTANTE) {
 #if MICROCHIP
                     j=2;
@@ -3553,6 +4182,8 @@ skippa_condbranch: ;
 												V->type & VARTYPE_IS_POINTER ? (TRUE) : 0);
 	                    j=0;
 											}
+#elif GD24032
+                    j=2;
 #else
                     j=2;
 #endif
@@ -3564,18 +4195,24 @@ skippa_condbranch: ;
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE,0);		// FINIRE
 #elif MC68000
  											PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
+#elif GD24032
+ 											PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #else
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #endif
 											}
 										else if(R.Q==VALUE_IS_D0 || R.Q==VALUE_IS_EXPR) {
+											if(R.var->size) {			// v. case 0 in readD0, casi con costante
 #if MICROCHIP
 									    PROCReadD0(R.var,0,0,0,0,FALSE,0);
 #elif MC68000
 									    PROCReadD0(R.var,0,0,0,0,FALSE);
+#elif GD24032
+									    PROCReadD0(R.var,0,0,0,0,FALSE);
 #else
 											// vedere altri...
 #endif
+											}
 											}
                     }
 //già fatto in subAdd									if(!(R.Q & VALUE_IS_COSTANTE))
@@ -3592,13 +4229,16 @@ skippa_condbranch: ;
 			                		u[0].ofs=i;
 #ifdef MC68000
 // idem vedi mul ecc													PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);		// me ne frego della size!
+    											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 4) {
+#elif GD24032
+    											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 4) {
 #else
     											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 2) {
+#endif
 														u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 														u[1].ofs=i+2;
 	//				                  u[1].s=0;
 														}
-#endif
 													goto my_add;
 												case CLASSE_REGISTER:
 													u[0].mode=OPDEF_MODE_REGISTRO;
@@ -3623,6 +4263,9 @@ my_add:
 //							            i=Regs->Inc(FNGetMemSize(V->type,V->size,0));
 #ifdef MC68000
 // ??													PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);		// me ne frego della size!
+#elif GD24032
+			                		u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+				                	_tcscpy(u[0].s.label,V->var->label);
 #else
 #endif
 
@@ -3704,6 +4347,20 @@ my_add:
 	                		if(FNGetMemSize(V->type,V->size,0/*dim*/,0)>2) {		// 4?? provare
 	                			u[1]=u[0];
 	                			}
+#elif GD24032
+	                		u[0].s.n=(int)V->var->func;
+	                		if(u[0].s.n <= Regs->UserBase && (int)V->var->parm) {
+		                		u[0].mode=OPDEF_MODE_REGISTRO32;
+	                			u[0].ofs=0;
+	//											Op2A("add",&u[0],(int)V->var->parm,0);
+	                			}
+	                		else { 
+	                			u[0].ofs=(int)V->var->parm;
+	                			}
+	                		u[0].mode=OPDEF_MODE_REGISTRO_INDIRETTO;
+	                		if(FNGetMemSize(V->type,V->size,0/*dim*/,0)>2) {		// 4?? provare
+	                			u[1]=u[0];
+	                			}
 #elif MICROCHIP
 	                		u[0].s.n=(int)V->var->func;
 	                		if(u[0].s.n <= 3 && (int)V->var->parm) {
@@ -3746,6 +4403,35 @@ my_add:
 		            case '/':
 		            case '%':
                   subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,NULL),u);
+#if GD24032
+		              if(T) {
+										switch(V->var->classe) {
+											case CLASSE_AUTO:
+			                	i=MAKEPTROFS(R.var->label);
+			                	u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+			                	u[1].ofs=i;
+    										if(FNGetMemSize(R.type,R.size,0/*dim*/,1) > 4) {
+													u[2].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+													u[2].ofs=i+2;
+													}
+												break;
+											case CLASSE_REGISTER:
+												u[1].mode=OPDEF_MODE_REGISTRO;
+												u[1].s.n=MAKEPTRREG(R.var->label);
+												break;
+											case CLASSE_EXTERN:
+											case CLASSE_GLOBAL:
+											case CLASSE_STATIC:
+			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+				                _tcscpy(u[1].s.label,R.var->label);
+												break;
+											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
+                    }
+									else {
+										u[1].mode=OPDEF_MODE_REGISTRO32;
+										u[1].s.n=Regs->D;
+										}
+#endif
 			            switch(V->Q) {
 			              case VALUE_IS_VARIABILE:
 #if MICROCHIP
@@ -3753,10 +4439,38 @@ my_add:
 #elif MC68000
 // mah no											PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);		// me ne frego della size!
 											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+//											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
+											switch(V->var->classe) {
+												case CLASSE_AUTO:
+			                		i=MAKEPTROFS(V->var->label);
+			                		u[0].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+			                		u[0].ofs=i;
+    											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 4) {
+														u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+														u[1].ofs=i+2;
+														}
+													break;
+												case CLASSE_REGISTER:
+													u[0].mode=OPDEF_MODE_REGISTRO;
+													u[0].s.n=MAKEPTRREG(V->var->label);
+													break;
+												case CLASSE_EXTERN:
+												case CLASSE_GLOBAL:
+												case CLASSE_STATIC:
+			                		u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+				                	_tcscpy(u[0].s.label,V->var->label);
+													break;
+												}
+
 #else
 											ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
+#if GD24032
+//											if(V->size >4)		// beh completare! verificare
+#else
 					            i=Regs->Inc((int8_t)FNGetMemSize(V->type,V->size,0,0));
+#endif
 											if(R.Q & VALUE_IS_COSTANTE) {
 												if(Optimize & OPTIMIZE_CONST && (i=FNIsPower2(R.cost->l))) {			// ottimizzo potenze di 2!
 													if(*TS=='*' || *TS=='/') {
@@ -3777,19 +4491,33 @@ my_add:
 #elif MC68000
 						// siamo già a posto...
 												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
+#elif GD24032
+//												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #else
 												ReadVar(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,FALSE);
 #endif
 												j=0;
-												PROCCast(V->type,V->size,R.type,R.size,
+#if GD24032
+												// qua dovremmo sempre essere a posto...
+#else
+												PROCCast(V->type,V->size,&R.type,&R.size,
 													R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label): -1);		// cast implicito tra operandi!
+#endif
 												}
 											V->Q=subMul(*TS,j,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,
 												V->cost,R.cost,&u[0],&u[1],&u[2],&u[3],TRUE);
+#if GD24032
+//											if(V->size >4)		// beh completare! verificare
+#else
 					            if(!i)
 					              Regs->Dec((int8_t)FNGetMemSize(V->type,V->size,0,NULL));
+#endif
 											// caso unico: prima DEC di store
+#if GD24032
+//											if(V->size >4)		// beh completare!
+#else
 											StoreVar(V->var,V->Q,V->var,V->cost,0);
+#endif
 											break;
 										case VALUE_IS_D0:  		                   // non finito...
 #if MICROCHIP
@@ -3820,15 +4548,44 @@ my_add:
 									break;
 		            case '<':
 		            case '>':
-                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0),u);
+                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,NULL),u);
 		              if(T) {
 //		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
+#if GD24032
+										switch(V->var->classe) {
+											case CLASSE_AUTO:
+			                	i=MAKEPTROFS(R.var->label);
+			                	u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+			                	u[1].ofs=i;
+    										if(FNGetMemSize(R.type,R.size,0/*dim*/,1) > 4) {
+													u[2].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+													u[2].ofs=i+2;
+													}
+												break;
+											case CLASSE_REGISTER:
+												u[1].mode=OPDEF_MODE_REGISTRO;
+												u[1].s.n=MAKEPTRREG(R.var->label);
+												break;
+											case CLASSE_EXTERN:
+											case CLASSE_GLOBAL:
+											case CLASSE_STATIC:
+			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+				                _tcscpy(u[1].s.label,R.var->label);
+												break;
+											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
+#else
 	                	i=MAKEPTROFS(R.var->label);
 	                	u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 	                	u[1].ofs=i;
 	                	u[3].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 	                	u[3].ofs=i+2;
+#endif
                     }
+									else {
+										u[1].mode=OPDEF_MODE_REGISTRO32;
+										u[1].s.n=Regs->D;
+										}
+
                   if(R.Q==VALUE_IS_COSTANTE)
                     j=2;
                   else {
@@ -3854,6 +4611,8 @@ my_add:
 													}
 												else
 			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+
 #else
     		                if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 2) {
 				                  u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
@@ -3877,6 +4636,7 @@ my_add:
 //												else
 //													StoreVar(V->var,V->Q,V->var,V->cost,FALSE);
 												// TUTTO FATTO :)
+#elif GD24032
 #endif
 			                  break;
 			                case CLASSE_REGISTER:                // anche register
@@ -3885,10 +4645,15 @@ my_add:
 #if MICROCHIP
 		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
+#elif GD24032
 #else
 		                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
 #if MC68000
+												u[0].s.n=MAKEPTRREG(V->var->label);
+ 			                  V->Q=subShift(*TS=='<',j,V->Q,V->var,V->type,V->size,R.type,V->cost,R.cost,
+													&u[0],&u[1],&u[2],&u[3],TRUE);
+#elif GD24032
 												u[0].s.n=MAKEPTRREG(V->var->label);
  			                  V->Q=subShift(*TS=='<',j,V->Q,V->var,V->type,V->size,R.type,V->cost,R.cost,
 													&u[0],&u[1],&u[2],&u[3],TRUE);
@@ -3920,6 +4685,10 @@ my_add:
 													}
 												else
 			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
+#elif GD24032
+
+			                	u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	_tcscpy(u[0].s.label,V->var->label);
 #elif I8086
 												// tutte dirette qua!!
 			                	u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
@@ -3937,17 +4706,22 @@ my_add:
 												if(j==2 && V->size==2 && R.cost->l==1) {
 													}
 												// v. subShift
+#elif GD24032
+
 #endif
-  			                  V->Q=subShift(*TS=='<',j,V->Q,V->var,V->type,V->size,R.type,V->cost,R.cost,
-														&u[0],&u[1],&u[2],&u[3],TRUE);
+ 			                  V->Q=subShift(*TS=='<',j,V->Q,V->var,V->type,V->size,R.type,V->cost,R.cost,
+													&u[0],&u[1],&u[2],&u[3],TRUE);
 #if MC68000
 												// (in teoria se lo shift è 1, costante, e la var 16bit, si può fare DIRETTAMENTE operazione
 												if(j==2 && V->size==2 && R.cost->l==1) {
 													}
 												else
+#elif GD24032
+
 #endif
 #if I8086
 													// tutto fatto qua
+#elif GD24032
 #else
 			                  StoreVar(V->var,V->Q,V->var,V->cost,0);
 #endif
@@ -4003,6 +4777,17 @@ my_add:
 	                		u[0].ofs=(int)V->var->parm;
 	                		}
 	                	u[0].mode=OPDEF_MODE_REGISTRO_INDIRETTO;
+#elif GD24032
+	                	u[0].s.n=(int)V->var->func;
+	                	if(u[0].s.n <= Regs->UserBase && (int)V->var->parm) {
+		                	u[0].mode=OPDEF_MODE_REGISTRO32;
+	                		u[0].ofs=0;
+//											Op2A("add",&u[0],(int)V->var->parm,0);
+	                	  }
+	                	else { 
+	                		u[0].ofs=(int)V->var->parm;
+	                		}
+	                	u[0].mode=OPDEF_MODE_REGISTRO_INDIRETTO;
 #elif MICROCHIP
 	                	u[0].s.n=(int)V->var->func;
 	                	if(u[0].s.n <= 3 && (int)V->var->parm) {
@@ -4021,6 +4806,7 @@ my_add:
 #if MICROCHIP
 									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #elif MC68000
+#elif GD24032
 #else
 									    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);
 #endif
@@ -4035,19 +4821,46 @@ my_add:
 		            case '&':
 		            case '|':
 		            case '^':
-                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0),u);
+                  subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,NULL),u);
 		              if(T) {
 //		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
 	                	i=MAKEPTROFS(R.var->label);
 #if MC68000
 	                	u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 	                	u[1].ofs=i;
+#elif GD24032
+										switch(V->var->classe) {
+											case CLASSE_AUTO:
+			                	i=MAKEPTROFS(R.var->label);
+			                	u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+			                	u[1].ofs=i;
+    										if(FNGetMemSize(R.type,R.size,0/*dim*/,1) > 4) {
+													u[2].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+													u[2].ofs=i+2;
+													}
+												break;
+											case CLASSE_REGISTER:
+												u[1].mode=OPDEF_MODE_REGISTRO;
+												u[1].s.n=MAKEPTRREG(R.var->label);
+												break;
+											case CLASSE_EXTERN:
+											case CLASSE_GLOBAL:
+											case CLASSE_STATIC:
+			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+				                _tcscpy(u[1].s.label,R.var->label);
+												break;
+											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
 #else
 	                	u[3].mode=u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 	                	u[1].ofs=i;
 	                	u[3].ofs=i+2;
 #endif
                     }
+									else {
+										u[1].mode=OPDEF_MODE_REGISTRO32;
+										u[1].s.n=Regs->D;
+										}
+
                   if(R.Q==VALUE_IS_COSTANTE)
                     j=2;
                   else {
@@ -4059,7 +4872,7 @@ my_add:
    	                  PROCUseCost(R.Q,R.type,R.size,R.cost,FALSE);
 #endif
 											}
-										PROCCast(V->type,V->size,R.type,R.size,
+										PROCCast(V->type,V->size,&R.type,&R.size,
 											R.var->classe==CLASSE_REGISTER ? MAKEPTRREG(R.var->label): -1);		// cast implicito tra operandi!
                     }
 			            switch(V->Q) {
@@ -4071,6 +4884,12 @@ my_add:
 			                		u[0].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 			                		u[0].ofs=i;
 #if MC68000
+    											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 4) {
+														u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
+														u[1].ofs=i+2;
+	//				                  u[1].s=0;
+														}
+#elif GD24032
     											if(FNGetMemSize(V->type,V->size,0/*dim*/,1) > 4) {
 														u[1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 														u[1].ofs=i+2;
@@ -4096,6 +4915,7 @@ my_aox:
 #if MICROCHIP
 				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
+#elif GD24032
 #else
 				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
@@ -4108,6 +4928,7 @@ my_aox:
 #if MICROCHIP
 				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #elif MC68000
+#elif GD24032
 #else
 				                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
@@ -4132,6 +4953,8 @@ my_aox:
 #if MICROCHIP
 										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE,0);
 #elif MC68000
+										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);			// SERVE?? verificare 7/11/25
+#elif GD24032
 										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);			// SERVE?? verificare 7/11/25
 #else
 										    PROCReadD0(V->var,VARTYPE_PLAIN_INT,0,0,0,FALSE);

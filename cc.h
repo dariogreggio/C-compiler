@@ -33,6 +33,9 @@
 #elif MC68000 
   #define INT_SIZE 4
 	#define STACK_ITEM_SIZE 2
+#elif GD24032
+  #define INT_SIZE 4
+	#define STACK_ITEM_SIZE 4
 #endif
 #define PTR_SIZE INT_SIZE
 // la size delle bitfield è in multipli di INT_SIZE...
@@ -48,7 +51,9 @@
 #elif MICROCHIP
 #define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(11,1)
+#define __VER__ MAKEWORD(12,1)
+#elif GD24032
+#define __VER__ MAKEWORD(50,0)
 #endif
 
 enum {
@@ -93,6 +98,7 @@ enum OPDEF_MODE {
 	OPDEF_MODE_VARIABILE=9,
 	OPDEF_MODE_COSTANTE=10,
 	OPDEF_MODE_STACKPOINTER=11,
+	OPDEF_MODE_ABSPOINTER=12,
 	OPDEF_MODE_CONDIZIONALE=16,
 	OPDEF_MODE_REGISTRI=20,		// per 68000 movem, e Archi STMIA {} ecc
 #if ARCHI
@@ -106,7 +112,10 @@ enum OPDEF_MODE {
 	OPDEF_MODE_IMMEDIATO_INDIRETTO=0x86,
 	OPDEF_MODE_FRAMEPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_FRAMEPOINTER),
 	OPDEF_MODE_VARIABILE_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_VARIABILE),
+// bah non serve!	OPDEF_MODE_COSTANTE_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_COSTANTE),
 	OPDEF_MODE_STACKPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_STACKPOINTER),
+	OPDEF_MODE_ABSPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_ABSPOINTER),
+	OPDEF_MODE_LAST,	// per ottimizza
 	};
 
 struct OP_DEF {
@@ -131,6 +140,7 @@ enum LINE_TYPE {
 	LINE_TYPE_WRITE=16,
 	LINE_TYPE_PUSH=16,
 	LINE_TYPE_POP=16,
+	LINE_TYPE_OTTIMIZZATA=128,
 	};
 
 struct LINE {
@@ -157,7 +167,7 @@ struct LINE_DEF {
 
 enum {
 	OPTIMIZE_JUMP=1,
-	OPTIMIZE_SUBEXPR=2,
+	OPTIMIZE_SUBEXPR=2,		// usato per propagazione registri ecc, andrebbero separati
 	OPTIMIZE_INLINECALLS=4,
 	OPTIMIZE_CONST=16,
 	OPTIMIZE_SIZE=0x100,
@@ -623,7 +633,7 @@ protected:
 	char __date__[11];
 	char __time__[11];
 	char TextSegm[64],DataSegm[64]; 
-	int Declaring,FuncCalled,SaveFP,ASM,AutoOff;
+	int Declaring,FuncCalled,SaveFP,ASM,AutoOff,AbsOff,AbsOff2,AbsOff3;
 	uint8_t debug;
 	uint8_t PreProcOnly;          // PREPROCESSA SOLO SU stdout  -E
 	uint8_t CheckStack;            // INSERISCE LO STACK PROBE    -Gs
@@ -671,7 +681,7 @@ public:
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
 	struct VARS *FNCercaGoto(const char *);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
-	int PROCCast(O_TYPE, O_SIZE, O_TYPE, O_SIZE, int8_t);
+	int PROCCast(O_TYPE, O_SIZE, O_TYPE*, O_SIZE*, int8_t);
 #if MICROCHIP
 	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
 #else
@@ -708,6 +718,8 @@ public:
 #elif I8086  
 	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif MC68000
+	void subSpezReg(uint8_t, struct OP_DEF *);
+#elif GD24032
 	void subSpezReg(uint8_t, struct OP_DEF *);
 #elif MICROCHIP
 	void subSpezReg(uint8_t, struct OP_DEF *);
@@ -796,7 +808,7 @@ public:
 	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, uint32_t *attrib,long textpointer);
 	long FNIsType(char *);
 	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
-	uint32_t FNGetAggr2(struct VARS *, struct VARS *, int *, int *);
+	uint32_t FNGetAggr2(struct VARS *, struct VARS *, int *, int *ofs=NULL);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
 	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);
@@ -808,7 +820,7 @@ public:
 
 	#if ARCHI
 	int FNIsLshift(uint32_t );
-	#elif Z80 || I8086 || MC68000 || MICROCHIP		// per i PIC32 forse serve in effetti
+	#elif Z80 || I8086 || MC68000 || GD24032 ||MICROCHIP		// per i PIC32 forse serve in effetti
 	#endif
 
 #if MICROCHIP
@@ -850,6 +862,11 @@ private:
 	long VType[16];
 	uint8_t VSize[16];
 	struct VARS *VVar[16];
+#elif GD24032 
+	char DT[32][16];                  // Nomi dei registri
+	long VType[32];
+	uint8_t VSize[32];
+	struct VARS *VVar[32];
 #endif  
 	int8_t ToDec;                      // quanto decrementare (Inc, Dec)
 	int8_t ToGet;											// quanto pop-are (Save, Get)
@@ -857,7 +874,7 @@ public:
 	int8_t D,P;					// registro per dato, registro per indirizzo
 	uint8_t MaxD,UserBase,MaxUser;     // in ordine crescente
 	const char *SpS;
-#if I8086 || MC68000 
+#if I8086 || MC68000 || GD24032
 	const char *AbsS;
 #endif
 	const char *FpS;
