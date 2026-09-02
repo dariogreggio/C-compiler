@@ -4899,6 +4899,10 @@ done1:
 									PROCOper(LINE_TYPE_ISTRUZIONE,"SET.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 									goto done1;
 									}
+								else if(m=='^') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+									goto done1;
+									}
 								else if(m=='&')
 									goto done1;
 								}
@@ -4919,6 +4923,10 @@ done1:
 									else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done1;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
 											goto done1;
 											}
 										else if(m=='&')
@@ -4943,6 +4951,10 @@ done1:
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 											goto done1;
 											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done1;
+											}
 										else if(m=='&')
 											goto done1;
 										}
@@ -4959,6 +4971,10 @@ done1:
 									else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.b",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
+											goto done1;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.b",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
 											goto done1;
 											}
 										else if(m=='&')
@@ -5252,6 +5268,10 @@ done2:
 									PROCOper(LINE_TYPE_ISTRUZIONE,"SET.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 									goto done2;
 									}
+								else if(m=='^') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+									goto done2;
+									}
 								else if(m=='&')
 									goto done2;
 								}
@@ -5275,6 +5295,10 @@ done2:
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 											goto done2;
 											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+											goto done2;
+											}
 										else if(m=='&')
 											goto done2;
 										}
@@ -5294,6 +5318,10 @@ done2:
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 											goto done1;
 											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done1;
+											}
 										else if(m=='&')
 											goto done2;
 										}
@@ -5311,6 +5339,10 @@ done2:
 									else if(Optimize & OPTIMIZE_CONST && LOWORD(j)==0xffff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
+											goto done2;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
 											goto done2;
 											}
 										else if(m=='&')
@@ -5605,9 +5637,13 @@ done4:
 									goto done4;
 								goto done4;
 								}
-							else if(Optimize & OPTIMIZE_CONST && i==0xffffffff) {	// :)
+							else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
 								if(m=='|') {
 									PROCOper(LINE_TYPE_ISTRUZIONE,"SET.d",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+									goto done4;
+									}
+								else if(m=='^') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.d",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 									goto done4;
 									}
 								else if(m=='&')
@@ -5627,9 +5663,13 @@ done4:
 											goto done4;
 										goto done4;
 										}
-									else if(Optimize & OPTIMIZE_CONST && i==0xffffffff) {	// :)
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.d",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done4;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.d",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
 											goto done4;
 											}
 										else if(m=='&')
@@ -5646,9 +5686,13 @@ done4:
 											goto done4;
 										goto done4;
 										}
-									else if(Optimize & OPTIMIZE_CONST && i==0xffffffff) {	// :)
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done4;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 											goto done4;
 											}
 										else if(m=='&')
@@ -5665,9 +5709,13 @@ done4:
 											goto done4;
 										goto done4;
 										}
-									else if(Optimize & OPTIMIZE_CONST && i==0xffffffff) {	// :)
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
 										if(m=='|') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"SET.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label));
+											goto done4;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label));
 											goto done4;
 											}
 										else if(m=='&')
