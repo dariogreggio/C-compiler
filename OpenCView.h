@@ -3,6 +3,15 @@
 /////////////////////////////////////////////////////////////////////////////
 
 class CRichEditCtrlEx;
+#define WB_LEFT            0
+#define WB_RIGHT           1
+#define WB_ISDELIMITER     2
+#define WB_CLASSIFY        3
+#define WB_MOVEWORDLEFT    4
+#define WB_MOVEWORDRIGHT   5
+#define WB_LEFTSTART       6
+#define WB_RIGHTSTART      7
+
 
 class COpenCView : public CRichEditView {
 protected: // create from serialization only
@@ -21,6 +30,19 @@ public:
 	static DWORD CALLBACK MyStreamOutCallback(DWORD , LPBYTE , LONG , LONG *);
 	long StreamIn(EDITSTREAM);
 	long StreamOut(EDITSTREAM);
+
+protected:
+	CFindReplaceDialog* m_pFindDlg; // Puntatore alla dialog attiva
+  CString m_strLastSearch;        // Ultima stringa cercata
+  BOOL m_bMatchCase;              // Rispetta maiuscole/minuscole
+  BOOL m_bWholeWord;              // Parola intera
+
+	// Funzione helper per eseguire la ricerca vera e propria nel testo
+  BOOL DoSearchText(LPCTSTR lpszFind, BOOL bDown, BOOL bCase, BOOL bWholeWord);
+	CString GetRichTextSelection();
+	void SelectWordAtCaret();
+
+
 
 // Operations
 public:
@@ -41,6 +63,11 @@ public:
 	virtual void OnBeginPrinting(CDC* pDC, CPrintInfo* pInfo);
 	virtual void OnEndPrinting(CDC* pDC, CPrintInfo* pInfo);
 	//}}AFX_VIRTUAL
+	void OnUpdatePosIndicator(CCmdUI* pCmdUI);
+  // Gestori dei messaggi
+  afx_msg void OnEditFindCustom();
+  afx_msg void OnFindWordNext();
+  afx_msg LRESULT OnFindReplaceCmd(WPARAM wParam, LPARAM lParam);
 
 // Implementation
 public:
@@ -56,11 +83,16 @@ protected:
 protected:
 	//{{AFX_MSG(COpenCView)
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
+	afx_msg void OnInitialUpdate();
 	afx_msg void OnDestroy();
 	afx_msg void OnChar(UINT nChar, UINT nRepCnt, UINT nFlags);
 	afx_msg void OnEditTrovaselezione();
 	afx_msg void OnUpdateEditTrovaselezione(CCmdUI* pCmdUI);
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
+	afx_msg void OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
+	afx_msg void OnEditFind();
+	afx_msg void OnEditRepeat();
+	afx_msg void OnUpdateEditRepeat(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 };

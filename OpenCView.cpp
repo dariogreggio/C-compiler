@@ -1,5 +1,7 @@
 // OpenCEditView.cpp : implementation of the COpenCEditView class
 //
+OCCHIO con v. 41 di richedit non va più Find !! e finire ctrl-f3 cmq
+
 
 #include "stdafx.h"
 #include "OpenC.h"
@@ -21,6 +23,8 @@ static char THIS_FILE[] = __FILE__;
 IMPLEMENT_DYNCREATE(COpenCView, CRichEditView)
 // https://www.codeproject.com/articles/A-Very-Simple-Way-to-Use-Richedit-5-0-in-VC6-and-o?msg=3389216#comments-section
 
+static UINT WM_FINDREPLACE = ::RegisterWindowMessage(FINDMSGSTRING);
+
 BEGIN_MESSAGE_MAP(COpenCView, CRichEditView)
 	//{{AFX_MSG_MAP(COpenCView)
 	ON_WM_CREATE()
@@ -29,11 +33,20 @@ BEGIN_MESSAGE_MAP(COpenCView, CRichEditView)
 	ON_COMMAND(ID_EDIT_TROVASELEZIONE, OnEditTrovaselezione)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_TROVASELEZIONE, OnUpdateEditTrovaselezione)
 	ON_WM_MOUSEWHEEL()
+	ON_COMMAND(ID_EDIT_FIND, OnEditFind)
+	ON_COMMAND(ID_EDIT_REPEAT, OnEditRepeat)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_REPEAT, OnUpdateEditRepeat)
+	ON_WM_KEYDOWN()
 	//}}AFX_MSG_MAP
 	// Standard printing commands
 	ON_COMMAND(ID_FILE_PRINT, CRichEditView::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_DIRECT, CRichEditView::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_PREVIEW, CRichEditView::OnFilePrintPreview)
+  ON_UPDATE_COMMAND_UI(ID_INDICATOR_POS, OnUpdatePosIndicator)
+// 2. Mappa il messaggio speciale verso la funzione di gestione MFC
+//	ON_COMMAND(ID_EDIT_FIND, OnEditFindCustom)               // Sovrascrive il comando Trova di MFC
+  ON_COMMAND(ID_EDIT_REPEAT, OnEditTrovaselezione)        // Il tuo Ctrl+F3
+  ON_REGISTERED_MESSAGE(WM_FINDREPLACE, OnFindReplaceCmd)  // Messaggi dalla Dialog
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -45,7 +58,10 @@ COpenCView::COpenCView() {
   //Must be m_strClass, it is a member of CCtrlView
 
 	m_bDelayUpdateItems = FALSE;
-	
+
+	m_pFindDlg = NULL;
+  m_bMatchCase = FALSE;
+  m_bWholeWord = FALSE;
 	}
 
 COpenCView::~COpenCView() {
@@ -54,8 +70,10 @@ COpenCView::~COpenCView() {
 BOOL COpenCView::PreCreateWindow(CREATESTRUCT& cs) {
 	// TODO: Modify the Window class or styles here by modifying
 	//  the CREATESTRUCT cs
-
-
+		
+// Rimuovi gli stili di scrollbar dal frame/vista per evitare il raddoppio
+  cs.style &= ~(WS_VSCROLL | WS_HSCROLL);
+	
 	return CRichEditView::PreCreateWindow(cs);
 	}
 
@@ -123,6 +141,10 @@ int COpenCView::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	
 	GetRichEditCtrl().SetFont(&(((CMainFrame *)theApp.m_pMainWnd)->myFont),TRUE);
 	GetRichEditCtrl().ModifyStyle(WS_VSCROLL | WS_HSCROLL,0);		// altrimenti mi becco pure le barre dell'Edit Ctrl...
+// Assicurati che lo scrollbar appartenga solo ed esclusivamente all'Edit Control
+  DWORD dwStyle = GetRichEditCtrl().GetStyle();
+  dwStyle |= (WS_VSCROLL | WS_HSCROLL | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_DISABLENOSCROLL);
+  ::SetWindowLong(GetRichEditCtrl().GetSafeHwnd(), GWL_STYLE, dwStyle);
 
 	pf.cbSize = sizeof(PARAFORMAT);
 	pf.dwMask = PFM_ALIGNMENT | PFM_TABSTOPS;
@@ -189,6 +211,29 @@ BOOL COpenCView::CreateView(int row, int col, CRuntimeClass* pViewClass, SIZE si
 	return i;
 	}
 
+void COpenCView::OnInitialUpdate() {
+
+  CRichEditView::OnInitialUpdate(); // Oppure la tua classe base
+
+
+  COpenCDoc* pDoc = GetDocument();
+  if (pDoc && GetRichEditCtrl().GetSafeHwnd())    {
+      // Se la vista è appena stata creata ed è vuota
+      if (GetRichEditCtrl().GetTextLength() == 0)        {
+          POSITION pos = pDoc->GetFirstViewPosition();
+          while (pos != NULL)            {
+              CView* pView = pDoc->GetNextView(pos);
+              if (pView != this && pView->IsKindOf(RUNTIME_CLASS(COpenCView)))                {
+                  CString strText;
+                  ((COpenCView*)pView)->GetRichEditCtrl().GetWindowText(strText);
+                  GetRichEditCtrl().SetWindowText(strText);
+                  break;
+              }
+          }
+        }
+    }
+	}
+
 
 
 void COpenCView::OnChar(UINT nChar, UINT nRepCnt, UINT nFlags) {
@@ -242,6 +287,128 @@ long COpenCView::StreamOut(EDITSTREAM es) {
 	}
 
 void COpenCView::OnEditTrovaselezione() {
+
+// gemini 2026
+
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
+
+
+		// 1. Se il cursore è fermo, trova i confini della parola rispettando i margini di riga
+    if (cr.cpMin == cr.cpMax)    {
+        long nPos = cr.cpMin;
+
+        // Ricaviamo l'indice del primo carattere della riga corrente
+        long nLineIndex = (long)ctrl.SendMessage(EM_LINEINDEX, -1, 0);
+        long nStart = 0;
+        long nEnd = 0;
+
+// Gestione speciale per INIZIO FILE (Posizione 0)
+        if (nPos == 0)        {
+            nStart = 0;
+            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, 0);
+
+            // Se la prima parola non è stata trovata correttamente con WB_RIGHT,
+            // usiamo WB_RIGHTSTART per saltare ad esempio eventuali spazi/caratteri iniziali
+            if (nEnd <= 0)            {
+                nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, 0);
+                nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+            }
+
+        }
+
+        else if (nPos == nLineIndex)        {
+            // Inizio riga generico
+            nStart = nPos;
+            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        }
+
+       else        {
+            // Resto del codice preesistente per l'interno della riga...
+            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_LEFT, nPos);
+
+            if (nStart < nLineIndex)            {
+                nStart = nLineIndex;
+            }
+
+            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        }
+
+       
+
+        // Se l'intervallo non è valido (es. cursore su spazi a fine riga), proviamo ad avanzare
+
+        if (nEnd <= nPos)        {
+            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, nPos);
+            nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        }
+
+
+        // Selezioniamo la parola trovata
+
+        if (nEnd > nStart)        {
+            ctrl.SetSel(nStart, nEnd);
+        }
+
+        } 
+
+#if 0		// fa cagare cmq, provare SelectWordAtCaret ecc sotto
+
+// 1. Se il cursore è fermo, trova i confini esatti della parola
+    if (cr.cpMin == cr.cpMax)    {
+			long nPos = cr.cpMin;
+
+   // WB_ISDELIMITER: verifica se il carattere alla posizione nPos è un delimitatore (spazio, tab, punteggiatura)
+        BOOL bOnDelimiter = (BOOL)ctrl.SendMessage(EM_FINDWORDBREAK, WB_ISDELIMITER, nPos);
+
+        long nStart = nPos;
+        long nEnd = nPos;
+
+        if (bOnDelimiter)        {
+            // Se il cursore si trova su uno spazio o delimitatore, avanza alla prossima parola
+            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, nPos);
+            nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        }
+        else        {
+            // Se siamo già sopra una parola:
+            // WB_MOVEWORDLEFT si sposta all'inizio della parola corrente SENZA saltare indietro se siamo già all'inizio
+            // WB_LEFTSTART trova l'inizio esatto della parola contenente nPos
+            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_LEFTSTART, nPos);
+            
+            // Se nStart fallisce o restituisce nPos quando non dovrebbe, proviamo a retrocedere fino al delimitatore
+            if (nStart < 0 || nStart > nPos)            {
+                nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_LEFT, nPos);
+            }
+
+            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        }
+
+        // Seleziona la parola trovata
+        if (nEnd > nStart)        {
+            ctrl.SetSel(nStart, nEnd);
+        }
+    }
+#endif
+
+
+    // 2. Estrazione testo con il metodo sicuro che abbiamo creato
+    CString strFind = GetRichTextSelection();
+    strFind.TrimLeft();
+    strFind.TrimRight();
+
+    if (strFind.IsEmpty())
+        return;
+
+    // Salviamo il testo per i successivi "Trova Successivo"
+    m_strLastSearch = strFind;
+
+    // 3. Esegui la ricerca
+    DoSearchText(m_strLastSearch, TRUE /* Avanti */, m_bMatchCase, m_bWholeWord);
+
+
+#if 0
 	char *lpszFind;
 	int nStartChar,nEndChar;
 	CHARRANGE cha;
@@ -314,11 +481,13 @@ rifo:
 
 	if(!FindText(lpszFind,TRUE,FALSE))		// RIPARTIRE DA INIZIO
 		;
+#endif
 	}
 
 void COpenCView::OnUpdateEditTrovaselezione(CCmdUI* pCmdUI) {
 	
 	}
+
 
 
 BOOL COpenCView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt) {
@@ -353,7 +522,22 @@ BOOL COpenCView::GetWindowPos(RECT *rc) {		// restituisce coordinate relative al
 	}
 
 
+void COpenCView::OnUpdatePosIndicator(CCmdUI* pCmdUI) {
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+    
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
 
+    long nLine = ctrl.LineFromChar(cr.cpMin);
+    long nLineStart = ctrl.LineIndex(nLine);
+    long nCol = cr.cpMin - nLineStart;
+
+    CString strPos;
+    strPos.Format(_T("Ln %d, Col %d"), nLine + 1, nCol + 1);
+
+    pCmdUI->Enable(TRUE);
+    pCmdUI->SetText(strPos);
+}
 
 
 
@@ -1457,3 +1641,338 @@ int CRichEditCtrlEx::CharFromPos(CPoint pt) {
 	}
 
 
+
+BOOL COpenCView::DoSearchText(LPCTSTR lpszFind, BOOL bDown, BOOL bCase, BOOL bWholeWord) {
+
+    if (!lpszFind || lpszFind[0] == _T('\0'))
+        return FALSE;
+
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
+
+    FINDTEXTEXW ft;
+    ::ZeroMemory(&ft, sizeof(ft));
+
+    // Buffer fisso per la stringa Unicode
+    WCHAR szUnicodeFind[1024];
+
+#ifdef _UNICODE
+    // Se il progetto è compilato in Unicode, copia direttamente
+    lstrcpynW(szUnicodeFind, lpszFind, 1024);
+#else
+    // Se il progetto è compilato in ANSI (MBCS), converti manualmente tramite Win32 API
+    ::MultiByteToWideChar(CP_ACP, 0, lpszFind, -1, szUnicodeFind, 1024);
+#endif
+
+    ft.lpstrText = szUnicodeFind;
+
+    // Imposta i flag di ricerca
+    DWORD dwFlags = 0;
+    if (bDown)      dwFlags |= FR_DOWN;
+    if (bCase)      dwFlags |= FR_MATCHCASE;
+    if (bWholeWord) dwFlags |= FR_WHOLEWORD;
+
+    if (bDown)
+    {
+        ft.chrg.cpMin = cr.cpMax;
+        ft.chrg.cpMax = -1; // Cerca fino alla fine del documento
+    }
+    else
+    {
+        ft.chrg.cpMin = cr.cpMin;
+        ft.chrg.cpMax = 0;  // Cerca verso l'inizio
+    }
+
+    // Invio del messaggio nativo Unicode EM_FINDTEXTEXW
+    long nFound = (long)ctrl.SendMessage(EM_FINDTEXTEXW, (WPARAM)dwFlags, (LPARAM)&ft);
+
+    if (nFound != -1)
+    {
+        // Seleziona il testo trovato e centra la vista
+        ctrl.SetSel(ft.chrgText);
+        ctrl.SendMessage(EM_HIDESELECTION, FALSE, FALSE);
+        ctrl.SendMessage(EM_SCROLLCARET, 0, 0);
+        return TRUE;
+    }
+
+    AfxMessageBox(_T("Testo non trovato."), MB_OK | MB_ICONINFORMATION);
+    return FALSE;
+}
+
+CString COpenCView::GetRichTextSelection() {
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+    
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
+
+    long nLen = cr.cpMax - cr.cpMin;
+    if (nLen <= 0)
+        return _T("");
+
+    // Allocazione di sicurezza: raddoppiamo la dimensione in byte per gestire 
+    // l'eventuale terminatore Unicode a 16-bit che RichEdit scrive nel buffer
+    int nBufferChars = (nLen + 2) * 2; 
+    TCHAR* pBuffer = new TCHAR[nBufferChars];
+    ::ZeroMemory(pBuffer, sizeof(TCHAR) * nBufferChars);
+
+    // Invia EM_GETSELTEXT nativo
+    ctrl.SendMessage(EM_GETSELTEXT, 0, (LPARAM)pBuffer);
+
+    CString strResult;
+
+#ifdef _UNICODE
+    strResult = pBuffer;
+#else
+    // Se il controllo ha risposto in WCHAR (Unicode), convertiamo in ANSI
+    if (pBuffer[1] == '\0' && pBuffer[0] != '\0')
+    {
+        // Il buffer contiene una stringa WCHAR (Unicode)
+        WCHAR* pwstr = (WCHAR*)pBuffer;
+        int nAnsiLen = ::WideCharToMultiByte(CP_ACP, 0, pwstr, -1, NULL, 0, NULL, NULL);
+        if (nAnsiLen > 0)
+        {
+            char* pAnsiBuf = new char[nAnsiLen + 1];
+            ::ZeroMemory(pAnsiBuf, nAnsiLen + 1);
+            ::WideCharToMultiByte(CP_ACP, 0, pwstr, -1, pAnsiBuf, nAnsiLen, NULL, NULL);
+            strResult = pAnsiBuf;
+            delete[] pAnsiBuf;
+        }
+    }
+    else
+    {
+        // Il buffer contiene già caratteri ANSI standard
+        strResult = pBuffer;
+    }
+#endif
+
+    delete[] pBuffer; // Ora la memoria viene liberata in modo sicuro
+    return strResult;
+}
+
+
+void COpenCView::SelectWordAtCaret() {
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
+
+    if (cr.cpMin != cr.cpMax)
+        return; // C'è già una selezione
+
+    long nPos = cr.cpMin;
+    long nLen = ctrl.GetTextLength();
+
+    if (nLen == 0)
+        return;
+
+    // Leggiamo un piccolo blocco di testo intorno al cursore (es. 128 caratteri)
+    long nStartBuf = (nPos > 64) ? (nPos - 64) : 0;
+    long nEndBuf   = (nPos + 64 < nLen) ? (nPos + 64) : nLen;
+    long nBufSize  = nEndBuf - nStartBuf;
+
+    TCHAR* pBuf = new TCHAR[nBufSize + 1];
+    ::ZeroMemory(pBuf, sizeof(TCHAR) * (nBufSize + 1));
+
+    TEXTRANGE tr;
+    tr.chrg.cpMin = nStartBuf;
+    tr.chrg.cpMax = nEndBuf;
+    tr.lpstrText  = pBuf;
+
+    ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
+
+    // Indice relativo al buffer
+    long nRelPos = nPos - nStartBuf;
+
+    // Se siamo su uno spazio/delimitatore, avanziamo fino alla prima lettera valida
+    while (nRelPos < nBufSize && _istspace(pBuf[nRelPos]))
+    {
+        nRelPos++;
+    }
+
+    if (nRelPos >= nBufSize)
+    {
+        delete[] pBuf;
+        return;
+    }
+
+    // Troviamo l'inizio della parola andando a sinistra
+    long nSelStartRel = nRelPos;
+    while (nSelStartRel > 0 && (_istalnum(pBuf[nSelStartRel - 1]) || pBuf[nSelStartRel - 1] == _T('_')))
+    {
+        nSelStartRel--;
+    }
+
+    // Troviamo la fine della parola andando a destra
+    long nSelEndRel = nRelPos;
+    while (nSelEndRel < nBufSize && (_istalnum(pBuf[nSelEndRel]) || pBuf[nSelEndRel] == _T('_')))
+    {
+        nSelEndRel++;
+    }
+
+    // Convertiamo gli indici relativi in posizioni assolute del documento
+    long nFinalStart = nStartBuf + nSelStartRel;
+    long nFinalEnd   = nStartBuf + nSelEndRel;
+
+    if (nFinalEnd > nFinalStart)
+    {
+        ctrl.SetSel(nFinalStart, nFinalEnd);
+    }
+
+    delete[] pBuf;
+}
+
+
+// ------------------------------------------------------------------
+// GESTORE DEL MESSAGGIO INVIATO DALLA DIALOG (Trova Successivo / Chiusura)
+// ------------------------------------------------------------------
+LRESULT COpenCView::OnFindReplaceCmd(WPARAM wParam, LPARAM lParam) {
+
+  CFindReplaceDialog* pDlg = CFindReplaceDialog::GetNotifier(lParam);
+
+  if (!pDlg)
+      return 0;
+
+  // Se l'utente ha chiuso la finestra
+  if (pDlg->IsTerminating())    {
+      m_pFindDlg = NULL;
+      return 0;
+		}
+
+  // Se l'utente ha premuto "Trova Successivo"
+  if (pDlg->FindNext())    {
+      m_strLastSearch = pDlg->GetFindString();
+      m_bMatchCase = pDlg->MatchCase();
+      m_bWholeWord = pDlg->MatchWholeWord();
+      BOOL bDown = pDlg->SearchDown();
+
+      DoSearchText(m_strLastSearch, bDown, m_bMatchCase, m_bWholeWord);
+		}
+
+  return 0;
+	}
+
+// ------------------------------------------------------------------
+// COMANDO "TROVA" PERSONALIZZATO (Ctrl+F o da Menu)
+// ------------------------------------------------------------------
+void COpenCView::OnEditFind() {
+
+    // Se la dialog è già aperta, portala in primo piano
+    if (m_pFindDlg != NULL) {
+        m_pFindDlg->SetActiveWindow();
+        return;
+    }
+
+    // Se c'è del testo selezionato, usalo come testo predefinito nella Dialog
+    CString strInitText = GetRichEditCtrl().GetSelText();
+    strInitText.TrimLeft();
+    strInitText.TrimRight();
+    if (!strInitText.IsEmpty())    {
+        m_strLastSearch = strInitText;
+    }
+
+    // Crea e mostra la finestra di dialogo modello di ricerca
+    m_pFindDlg = new CFindReplaceDialog();
+    m_pFindDlg->Create(TRUE, m_strLastSearch, NULL, FR_DOWN, this);
+	}
+
+
+void COpenCView::OnEditRepeat() {
+
+// Se non è mai stata fatta una ricerca e m_strLastSearch è vuota, 
+    // proviamo prima a prendere il testo eventualmente selezionato
+    if (m_strLastSearch.IsEmpty())    {
+        m_strLastSearch = GetRichTextSelection();
+        m_strLastSearch.TrimLeft();
+        m_strLastSearch.TrimRight();
+    }
+
+    // Se abbiamo una stringa di ricerca valida, cerchiamo l'occorrenza successiva
+    if (!m_strLastSearch.IsEmpty())    {
+        DoSearchText(m_strLastSearch, TRUE /* Down */, m_bMatchCase, m_bWholeWord);
+    }
+    else    {
+        // Nessun testo da cercare disponibile: apri la dialog o avvisa
+        OnEditFind();
+    }	
+	}
+
+void COpenCView::OnUpdateEditRepeat(CCmdUI* pCmdUI) {
+	// TODO: Add your command update UI handler code here
+	
+}
+
+void COpenCView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags) {
+
+{
+    BOOL bCtrlPressed  = (::GetKeyState(VK_CONTROL) < 0);
+    BOOL bShiftPressed = (::GetKeyState(VK_SHIFT) < 0);
+
+    if (bCtrlPressed && (nChar == VK_RIGHT || nChar == VK_LEFT))
+    {
+        CRichEditCtrl& ctrl = GetRichEditCtrl();
+        
+        CHARRANGE cr;
+        ctrl.GetSel(cr);
+
+        long nPos = (nChar == VK_RIGHT) ? cr.cpMax : cr.cpMin;
+        long nLen = ctrl.GetTextLength();
+
+        if (nLen == 0) return;
+
+        // Blocco di lettura (128 caratteri prima e dopo)
+        long nStartBuf = (nPos > 128) ? (nPos - 128) : 0;
+        long nEndBuf   = (nPos + 128 < nLen) ? (nPos + 128) : nLen;
+        long nBufSize  = nEndBuf - nStartBuf;
+
+        // Allocazione WCHAR esplicita per evitare corruzione della memoria con RichEdit 5.0
+        WCHAR* pBuf = new WCHAR[nBufSize + 1];
+        ::ZeroMemory(pBuf, sizeof(WCHAR) * (nBufSize + 1));
+
+        TEXTRANGEW tr;
+        tr.chrg.cpMin = nStartBuf;
+        tr.chrg.cpMax = nEndBuf;
+        tr.lpstrText  = pBuf;
+
+        // Usiamo il messaggio nativo Unicode per non sforare nei buffer
+        ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
+
+        long nRelPos = nPos - nStartBuf;
+
+        if (nChar == VK_RIGHT)        {
+            // 1. Consuma prima tutti i caratteri della parola/identificatore su cui ci troviamo
+            while (nRelPos < nBufSize && (iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
+                nRelPos++;
+
+            // 2. Consuma gli spazi o delimitatori successivi per fermarsi ALL'INIZIO della parola dopo
+            while (nRelPos < nBufSize && !(iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
+                nRelPos++;
+        }
+        else // VK_LEFT
+        {
+            // Retrocedi se siamo su uno spazio/delimitatore
+            while (nRelPos > 0 && !(iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
+                nRelPos--;
+
+            // Retrocedi finché trova caratteri alfanumerici OPPURE '_'
+            while (nRelPos > 0 && (iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
+                nRelPos--;
+        }
+
+        long nNewPos = nStartBuf + nRelPos;
+
+        delete[] pBuf; // Deallocazione sicura
+
+        // Gestione selezione (Ctrl+Shift+Freccia) o semplice movimento del cursore
+        if (bShiftPressed)
+            ctrl.SetSel(cr.cpMin, nNewPos);
+        else
+            ctrl.SetSel(nNewPos, nNewPos);
+
+        return; // Intercetta l'evento ed evita la gestione di default di RichEdit
+    }
+    }
+    // Per tutti gli altri tasti, lascia la gestione standard
+    CRichEditView::OnKeyDown(nChar, nRepCnt, nFlags);
+	}

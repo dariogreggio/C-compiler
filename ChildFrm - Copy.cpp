@@ -65,11 +65,12 @@ BOOL CChildFrame::OnCreateClient(LPCREATESTRUCT lpcs,
 // 4. Configurazione delle dimensioni iniziali: 
   // Riga 0 = Altezza massima (cr.Height()), dimensione minima 50px
   // Riga 1 = Altezza 0, dimensione minima 0px (completamente nascosta)
-  m_wndSplitter.SetRowInfo(0, 32767 /*cr.Height()*/, 10 /*50*/);		// meglio lasciar fare a onsize!
-  m_wndSplitter.SetRowInfo(1, 0, 0);
+//  m_wndSplitter.SetRowInfo(0, 32767 /*cr.Height()*/, 10 /*50*/);		// meglio lasciar fare a onsize!
+//  m_wndSplitter.SetRowInfo(1, 0, 0);
 // Ricalcola il layout affinché la riga 1 rimanga del tutto chiusa
 //  m_wndSplitter.RecalcLayout();
 
+	m_wndSplitter.SetSplitState(FALSE); // Parte chiuso
 	m_bInitSplitter=TRUE;
 
 	return i;
@@ -115,13 +116,12 @@ void CChildFrame::OnSize(UINT nType, int cx, int cy) {
 
     CMDIChildWnd::OnSize(nType, cx, cy);
 
-// Se la finestra viene ridimensionata, lascia che CSplitterWnd riadatti i panelli 
-    // rispettando i pesi e l'altezza minima 0 della seconda riga
-    if (::IsWindow(m_wndSplitter.m_hWnd) && nType != SIZE_MINIMIZED)
+// Passa semplicemente il ridimensionamento allo splitter, che userà il suo RecalcLayout
+    if (m_bInitSplitter && nType != SIZE_MINIMIZED)
     {
-//        m_wndSplitter.RecalcLayout();
+        m_wndSplitter.MoveWindow(0, 0, cx, cy);
+    
     }
-
 	}
 
 

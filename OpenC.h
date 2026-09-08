@@ -61,6 +61,7 @@ class CStringEx : public CString {
 		int Decode64();
 		CStringEx FormatTime(int m=0,CTime mT=0);
 		CStringEx FormatSize(DWORD);
+		CStringEx SplitPath(LPCTSTR,BYTE mode);
 		void Print();
 		void Debug();
 		CStringEx() : CString() {};		// servono tutti i costruttori "perché non ne ha di virtual, la CString" !
@@ -267,8 +268,7 @@ public:
 	DWORD Opzioni;
 	BYTE MemoryModel,Warning,AbsRel;
 
-	CMultiDocTemplate *pDocTemplate,*pDocTemplate2;
-	COpenCDoc2 *theOutput;
+	CMultiDocTemplate *pDocTemplate;
 	CString ccName,altreDefine;
 
 	HINSTANCE m_hinstRE41;

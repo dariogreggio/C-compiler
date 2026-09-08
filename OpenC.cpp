@@ -47,11 +47,13 @@ END_MESSAGE_MAP()
 
 COpenCApp::COpenCApp() {
 
- CoInitialize(NULL); //this must be called FIRST!
+	CoInitialize(NULL); //this must be called FIRST!
+
 
 	//m_hinstRE41 is a HINSTANCE type member var of CMyApp
 	m_hinstRE41=LoadLibrary(TEXT("msftedit.dll"));			// per usare RichEdit più recenti!
 	//this DLL must be loaded.
+// ovvero	AfxInitRichEdit2();
 	
 	variabiliKey="variabili";
 	fileApertiKey="fileAperti";
@@ -117,12 +119,6 @@ BOOL COpenCApp::InitInstance() {
 		RUNTIME_CLASS(CChildFrame), // base MDI child frame
 		RUNTIME_CLASS(COpenCView));
 	AddDocTemplate(pDocTemplate);
-	pDocTemplate2 = new CMultiDocTemplate(
-		IDR_CTYPE2,
-		RUNTIME_CLASS(COpenCDoc2),
-		RUNTIME_CLASS(CChildFrame2), // per output MDI child frame
-		RUNTIME_CLASS(COutputView));
-	AddDocTemplate(pDocTemplate2);
 
 	// create main MDI Frame window
 	CMainFrame* pMainFrame = new CMainFrame;
@@ -363,12 +359,12 @@ char *COpenCApp::getNowGMT(char *myBuf) {
 
 void COpenCApp::WriteOutputWndText(char *s,int n) {
 	
-	theOutput->AddText(s,n);
+	((CMainFrame*)m_pMainWnd)->AddText(s,n);
 	}
 
 void COpenCApp::ClearOutputWnd() {
 	
-	theOutput->Cls();
+	((CMainFrame*)m_pMainWnd)->Cls();
 	}
 
 
@@ -386,7 +382,6 @@ void COpenCApp::OnFileNew() {
 	char myBuf[256],myBuf1[64];
 	int i;
 	
-	theOutput=(COpenCDoc2 *)pDocTemplate2->OpenDocumentFile(NULL);
 	i=0;
 	do {
 		wsprintf(myBuf1,"File%u",i);
@@ -449,9 +444,8 @@ void COpenCApp::OnUpdateFileApriprogetto(CCmdUI* pCmdUI) {
 	}
 
 void COpenCApp::OnFileApriprogetto() {
-	// TODO: Add your command handler code here
-	
-}
+
+	}
 
 void COpenCApp::OnFileNuovo() {
 	
@@ -999,6 +993,31 @@ CStringEx CStringEx::FormatSize(DWORD dwFileSize) {
   // another alternative to this approach is to check before calling str.Format, and 
   // have separate cases depending on whether dwRemainder == 0 or not.
   Replace(".00", "");
+
+	return *this;
+	}
+
+CStringEx CStringEx::SplitPath(LPCTSTR path,BYTE mode) {
+	char myBuf[256];
+
+	switch(mode) {
+		case 1:
+			_splitpath(path,myBuf,NULL,NULL,NULL);
+			*this=myBuf;
+			break;
+		case 2:
+			_splitpath(path,NULL,myBuf,NULL,NULL);
+			*this=myBuf;
+			break;
+		case 3:
+			_splitpath(path,NULL,NULL,myBuf,NULL);
+			*this=myBuf;
+			break;
+		case 4:
+			_splitpath(path,NULL,NULL,NULL,myBuf);
+			*this=myBuf;
+			break;
+		}
 
 	return *this;
 	}

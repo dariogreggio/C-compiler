@@ -25,8 +25,6 @@ BEGIN_MESSAGE_MAP(COpenCDoc, CRichEditDoc)
 	//{{AFX_MSG_MAP(COpenCDoc)
 	ON_COMMAND(ID_COMPILA_FILE, OnCompilaFile)
 	ON_UPDATE_COMMAND_UI(ID_COMPILA_FILE, OnUpdateCompilaFile)
-	ON_COMMAND(ID_EDIT_REPEAT, OnEditRepeat)
-	ON_UPDATE_COMMAND_UI(ID_EDIT_REPEAT, OnUpdateEditRepeat)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -183,6 +181,10 @@ void COpenCDoc::OnCompilaFile() {
 	typedef DWORD (__stdcall *ccFunc)(CWnd *,int,char **);		// "stdcall" serve proprio!!
 	ccFunc f;
 
+	
+/*		char *zz=0;
+	*zz=34;*/
+
 	if(((COpenCView*)m_viewList.GetHead())->IsModified() /*IsModified()*/)
 		OnSaveDocument(GetPathName());	
 	ts=GetPathName();
@@ -279,7 +281,7 @@ void COpenCDoc::OnCompilaFile() {
 	if(hInst) {
 		f=(ccFunc)GetProcAddress(hInst,"Compila");
 		if(f) {
-			CWnd *v=theApp.theOutput->getView()->GetParent();
+			CWnd *v=theApp.m_pMainWnd;
 
 			(*f)(v,i,(char **)args);
 			goto fine;
@@ -325,112 +327,6 @@ void COpenCCntrItem::Dump(CDumpContext& dc) const
 }
 #endif
 
-
-
-/////////////////////////////////////////////////////////////////////////////
-// COpenC2Doc
-
-IMPLEMENT_DYNCREATE(COpenCDoc2, CDocument)
-
-BEGIN_MESSAGE_MAP(COpenCDoc2, CDocument)
-	//{{AFX_MSG_MAP(COpenCDoc2)
-	//}}AFX_MSG_MAP
-END_MESSAGE_MAP()
-
-/////////////////////////////////////////////////////////////////////////////
-// COpenCDoc2 construction/destruction
-
-COpenCDoc2::COpenCDoc2() {
-
-	myFont.CreateFont(16,8,0,0,FW_THIN,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH | FF_MODERN,"arial");
-	numErrors=numWarnings=0;
-	}
-
-COpenCDoc2::~COpenCDoc2()
-{
-}
-
-BOOL COpenCDoc2::OnNewDocument() {
-
-	if(!CExDocument::OnNewDocument())
-		return FALSE;
-
-	SetTitle("Output");
-
-	// TODO: add reinitialization code here
-	// (SDI documents will reuse this document)
-
-	return TRUE;
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// COpenCDoc2 serialization
-
-void COpenCDoc2::Serialize(CArchive& ar) {
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// COpenCDoc2 diagnostics
-
-#ifdef _DEBUG
-void COpenCDoc2::AssertValid() const
-{
-	CDocument::AssertValid();
-}
-
-void COpenCDoc2::Dump(CDumpContext& dc) const
-{
-	CDocument::Dump(dc);
-}
-#endif //_DEBUG
-
-/////////////////////////////////////////////////////////////////////////////
-// COpenCDoc2 commands
-
-int COpenCDoc2::AddText(char *s,int m) {
-	int i=0;
-	char myBuf[64],*p;
-	COutputView *v=(COutputView *)getView();
-
-	if(v) {
-		p=(char *)GlobalAlloc(GPTR,strlen(s)+2);
-		strcpy(p,s);
-		v->PostMessage(WM_ADDTEXT,0,(LPARAM)p);
-		i=1;
-		}
-	switch(m) {
-		case 1:
-			numErrors++;
-			break;
-		case 2:
-			numWarnings++;
-			break;
-		}
-
-	SetModifiedFlag(FALSE);
-	return i;
-	}
-
-int COpenCDoc2::Cls() {
-	int i=0;
-	COutputView *v=(COutputView *)getView();
-
-	if(v) {
-		v->PostMessage(WM_CLSWINDOW,0,0);
-		i=1;
-		}
-	numErrors=numWarnings=0;
-	return i;
-	}
-
-
-void COpenCDoc::OnEditRepeat() {
-	
-	}
-
-void COpenCDoc::OnUpdateEditRepeat(CCmdUI* pCmdUI) {
-	
-	}
 
 
 

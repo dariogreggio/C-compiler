@@ -107,8 +107,6 @@ protected:
 	//{{AFX_MSG(COpenCDoc)
 	afx_msg void OnCompilaFile();
 	afx_msg void OnUpdateCompilaFile(CCmdUI* pCmdUI);
-	afx_msg void OnEditRepeat();
-	afx_msg void OnUpdateEditRepeat(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 	};
@@ -134,44 +132,5 @@ public:
 	int WritePrivateProfileTime(int k, CTimeSpan t) { return theApp.WritePrivateProfileTime(prfSection,k,t);};
 	};
 
-
-class COpenCDoc2 : public CExDocument {
-protected: // create from serialization only
-	COpenCDoc2();
-	DECLARE_DYNCREATE(COpenCDoc2)
-
-// Attributes
-public:
-	CFont myFont;
-	DWORD numErrors,numWarnings;
-protected:
-
-
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(COpenCDoc2)
-	public:
-	virtual BOOL OnNewDocument();
-	virtual void Serialize(CArchive& ar);
-	//}}AFX_VIRTUAL
-
-// Implementation
-public:
-	int AddText(char *,int n=-1);
-	int Cls();
-	virtual ~COpenCDoc2();
-#ifdef _DEBUG
-	virtual void AssertValid() const;
-	virtual void Dump(CDumpContext& dc) const;
-#endif
-
-protected:
-
-// Generated message map functions
-protected:
-	//{{AFX_MSG(COpenCDoc2)
-	//}}AFX_MSG
-	DECLARE_MESSAGE_MAP()
-	};
 
 /////////////////////////////////////////////////////////////////////////////

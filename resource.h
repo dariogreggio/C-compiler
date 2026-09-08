@@ -12,6 +12,7 @@
 #define IDI_CTYPE2                      133
 #define IDD_OPZIONI_COMPIL_PAGE2        134
 #define IDD_OPZIONI_COMPIL_PAGE3        136
+#define IDD_OUTPUT_BAR                  138
 #define IDC_CHECK1                      1000
 #define IDC_CHECK2                      1001
 #define IDC_CHECK3                      1002
@@ -34,6 +35,7 @@
 #define IDC_COMBO2                      1018
 #define IDC_RADIO1                      1019
 #define IDC_RADIO2                      1020
+#define IDC_TXT_OUTPUT                  1020
 #define IDC_COMBO3                      1021
 #define IDC_CHECK18                     1022
 #define ID_STRUMENTI_SPY                32771
@@ -62,15 +64,16 @@
 #define IDS_COORDINATECHILD             61453
 #define IDS_WARNING                     61454
 #define IDS_ABSREL                      61455
+#define ID_INDICATOR_POS                61456
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
-#define _APS_NEXT_RESOURCE_VALUE        138
+#define _APS_NEXT_RESOURCE_VALUE        139
 #define _APS_NEXT_COMMAND_VALUE         32791
-#define _APS_NEXT_CONTROL_VALUE         1020
+#define _APS_NEXT_CONTROL_VALUE         1021
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -1,4 +1,28 @@
-class COutputView;
+
+#pragma once
+#include <afxext.h>
+
+class CMySplitterWnd : public CSplitterWnd			// gemini 9/26
+{
+  DECLARE_DYNCREATE(CMySplitterWnd)
+
+public:
+  CMySplitterWnd();
+  virtual ~CMySplitterWnd();
+	BOOL IsSplit() const { return m_bIsSplit; }
+  void SetSplitState(BOOL bSplit) { m_bIsSplit = bSplit; }
+// Override nativo di MFC per il ricalcolo del layout
+  virtual void RecalcLayout();
+
+protected:
+	BOOL m_bIsSplit; // TRUE = 2 viste aperte, FALSE = 100%/0%
+  int  m_nRatio;   // Proporzione riga superiore in decimi (es. 5 = 50%, 7 = 70%
+
+protected:
+  // Intercettiamo il doppio click sulla barra/maniglia dello splitter
+  afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
+  DECLARE_MESSAGE_MAP()
+	};
 
 // ChildFrm.h : interface of the CChildFrame class
 //
@@ -11,7 +35,7 @@ public:
 
 // Attributes
 protected:
-	CSplitterWnd m_wndSplitter;
+	CMySplitterWnd m_wndSplitter;
 	BOOL m_bInitSplitter;
 public:
 
@@ -40,44 +64,6 @@ protected:
 	afx_msg void OnGetMinMaxInfo(MINMAXINFO FAR* lpMMI);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	//}}AFX_MSG
-	DECLARE_MESSAGE_MAP()
-};
-
-/////////////////////////////////////////////////////////////////////////////
-class CChildFrame2 : public CMDIChildWnd // CMiniFrameWnd
-{
-	DECLARE_DYNCREATE(CChildFrame2)
-public:
-	CChildFrame2();           
-
-// Attributes
-public:
-	HBRUSH myBKBrush;
-
-// Operations
-public:
-
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CChildFrameSrc)
-	protected:
-	virtual BOOL CChildFrame2::PreCreateWindow(CREATESTRUCT& cs);
-	//}}AFX_VIRTUAL
-
-// Implementation
-public:
-	virtual ~CChildFrame2();
-
-protected:
-	// Generated message map functions
-	//{{AFX_MSG(CChildFrame2)
-	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
-	afx_msg void OnGetMinMaxInfo(MINMAXINFO FAR* lpMMI);
-	afx_msg void OnClose();
-	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
-	//}}AFX_MSG
-	afx_msg LRESULT OnAddText(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnClsWindow(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
 };
 
