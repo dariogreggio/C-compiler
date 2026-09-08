@@ -106,7 +106,7 @@ void Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_D
     
   }
  
-#if ARCHI
+#if ARCHI || GD24032
 void Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_DEF *C, struct OP_DEF *D) {
   struct LINE *New;
   char myBuf[256];
@@ -202,7 +202,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 			;
 	  a.ofs=o1;
 	  }
-  PROCOut(n,A,&a,0,R);
+  PROCOut(n,A,&a,NULL,R);
   }
       
 void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, enum OPDEF_MODE m2, 
@@ -269,7 +269,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1) 
 	  a.s.n=s1;
 	  a.ofs=0;
 	  }
-  PROCOut(n,A,&a,0);
+  PROCOut(n,A,&a,NULL);
   }
       
 void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2) {
@@ -408,3 +408,32 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 
 #endif
 
+#if GD24032
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, enum OPDEF_MODE m2, 
+									 int s2, enum OPDEF_MODE m3, int s3) {
+  struct OP_DEF a,b,c;
+
+  a.mode=m1;
+  b.mode=m2;
+  c.mode=m3;
+  if(m1) {
+	  a.s.n=s1;
+	  a.ofs=0;
+    if(m2) {
+		  b.s.n=s2;
+		  b.ofs=0;
+			if(m3) {
+				c.s.n=s3;
+				c.ofs=0;
+				}
+		  }
+	  }
+  PROCOut(n,A,&a,&b,&c);
+	// FINIRE!! con 3 numeri
+  }
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2, struct OP_DEF *od3) {
+
+  PROCOut(n,A,od1,od2,od3);
+  }
+      
+#endif

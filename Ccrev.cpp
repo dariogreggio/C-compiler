@@ -9,7 +9,7 @@
 
 void Ccc::subEvEx(uint8_t Pty, int16_t *cond, char *Clabel, struct OPERAND *V) {
 
-  /*Brack=*/isRValue=isPtrUsed=inCast=0;
+  /*Brack=*/isRValue=isPtrUsed=inCast=maxRegUsed=0;
 	Regs->Reset();
   FNRev(Pty,cond,Clabel,V);
 	if(Pty>15)		// se livello + esterno, esco 2026
@@ -65,7 +65,7 @@ uint16_t Ccc::FNEvalExpr(uint8_t Pty, char *C) {
 	struct OPERAND V;
   char Clabel[32];
   
-  Brack=isRValue=isPtrUsed=inCast=0;
+  Brack=isRValue=isPtrUsed=inCast=maxRegUsed=0;
 	ZeroMemory(&V,sizeof(struct OPERAND));
 	ZeroMemory(&VPtr,sizeof(struct VARS));
   ZeroMemory(C,sizeof(union STR_LONG));
@@ -105,7 +105,7 @@ int Ccc::FNEvalECast(char *C, O_TYPE *T, O_SIZE *S) {
 	V.cost=(union STR_LONG *)C;
   TempProg=0;
   i=0;
-  Brack=isRValue=isPtrUsed=inCast=0;
+  Brack=isRValue=isPtrUsed=inCast=maxRegUsed=0;
 	Regs->Reset();
   FNRev(15,&i,Clabel,&V);
   if(*S) {                    // se ho newSize, faccio cast...
@@ -168,7 +168,7 @@ int Ccc::FNEvalCond(char *C, const char *TS, uint16_t cond) {
   struct OPERAND V;
   char MyBuf[128];
     
-  Brack=isRValue=isPtrUsed=inCast=0;
+  Brack=isRValue=isPtrUsed=inCast=maxRegUsed=0;
   GlblOut=LastOut;
   ZeroMemory(&V,sizeof(struct OPERAND));
 	ZeroMemory(&VPtr,sizeof(struct VARS));
@@ -681,7 +681,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 
 					if(__line__== 43) {
 //		isWhat=0;			// DEBUG BREAK
-		ol=0;
+//		ol=0;
 		}
 				if(Pty==14) {
 					if(isRValue>0)
@@ -721,9 +721,8 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 					if(!Co)
 						PROCError(2059,TS);
           Exit=TRUE;
-//          FIn->Seek(OT,CFile::begin);
 					FIn->RestorePosition(OT);
-//					__line__=ol;
+					__line__=ol;
           }
         else {
           *T1S=0;
@@ -735,10 +734,12 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
                     if(V->type & VARTYPE_FUNC) {
 #if MC68000
                       PROCUsaFun(V->var,Regs->D>1,Pty>2 && Pty<14);		//2025, Pty solo se operazione binary
+#elif GD24032
+                      PROCUsaFun(V->var,Regs->D>1,Pty>2 && Pty<14);		//?? qua 2025, Pty solo se operazione binary
 #else
                       PROCUsaFun(V->var,Regs->D>0,Pty>2 && Pty<14);		//2025, Pty solo se operazione binary
 #endif
-//                      V->size=V->var->size;
+                      V->size=V->var->size;		// specie per inline/builtin 2026, verificare altre!
                       V->type &= ~(VARTYPE_FUNC | VARTYPE_FUNC_USED | VARTYPE_FUNC_BODY) /*0xfffffc7f*/;
                       V->Q=VALUE_IS_EXPR_FUNC;
                       }
@@ -2497,9 +2498,8 @@ LUnaryMinus:
 	                  PROCGetType(&R.type,(uint16_t*)&T,&R.tag,(uint32_t*)&R.dim,&attrib,l1);
 	                  }
 	                else {
-//										FIn->Seek(l1,CFile::begin);
 										FIn->RestorePosition(l1);
-//										__line__=ol;
+										__line__=ol;
 //	                  *cond=0;
 	                  FNRev(15,cond,Rlabel,&R);
 	                  T=R.size;
@@ -2539,6 +2539,7 @@ LUnaryMinus:
 	            reg2=0;
 	            subSpezReg((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0),u);
 	            ROut=LastOut;
+//							reg2=1;
 #if ARCHI
   	          if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || (V->Q==VALUE_IS_VARIABILE && ((V->var->classe<CLASSE_AUTO) || (OP!=6 && OP!=7)))) {
 //  	          if((*V->Q==1) || *V->Q==2 || (*V->Q==3 && (V->var->classe<3))) {
@@ -2553,7 +2554,7 @@ LUnaryMinus:
 //							if(0) {
 	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
 #elif GD24032
-	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
+	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || (OP==5 && V->Q==VALUE_IS_VARIABILE)) {		// solo shift/rotate se var qua
 #endif  	            
                 reg2=Regs->Inc((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
                 }
@@ -2596,7 +2597,7 @@ LUnaryMinus:
 	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
 //            if(0) {
 #elif GD24032
-	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE) {
+	            if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || (OP==5 && V->Q==VALUE_IS_VARIABILE)) {		// solo shift/rotate se var qua
 #endif  	            
                 if(!reg2)
                   Regs->Dec((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
@@ -2806,11 +2807,14 @@ myUVvar:
 	                }
 //                ROut=LastOut;
 	              if(reg2 && T==0) {
-    	            SavedR=FNGetMemSize(V->type,V->size,0/*dim*/,0);
+#if GD24032 || MC68000 || I8086
+#else		// 2026?
+		 	            SavedR=FNGetMemSize(V->type,V->size,0/*dim*/,0);
   	              Regs->Save(SavedR);
-                  swap(&ROut,&LastOut);
+	                swap(&ROut,&LastOut);
+#endif
       	          }
-      	        reg2=0;
+      	        reg2=1;
 #if ARCHI 
   	            if((T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE)) || OP==3)
 #elif Z80
@@ -2822,7 +2826,7 @@ myUVvar:
 #elif MC68000 
   	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE))
 #elif GD24032
-  	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || V->Q==VALUE_IS_VARIABILE))
+  	            if(T>=0 && (V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || V->Q==VALUE_IS_D0 || (V->Q==VALUE_IS_VARIABILE && OP==5)))
 #endif  	            
                   {
                   reg2=Regs->Inc((uint8_t)FNGetMemSize(V->type,V->size,0/*dim*/,0));
@@ -2968,7 +2972,7 @@ myURcost:
 #elif GD24032
 		                    u[j].mode=OPDEF_MODE_REGISTRO32;
 		                    u[j].s.n=MAKEPTRREG(R.var->label);
-		                    T=-1;  
+//		                    T=-1;  
 #endif
 	                      break;
 											case CLASSE_AUTO:
@@ -3028,7 +3032,7 @@ myURcost:
 			                      u[j+1].s.n=0;
 			                      u[j+1].ofs=i+2;
 								            }
-	                      	T=-1;
+//	                      	T=-1;
 		                      }
 	                      else 
 	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
@@ -3044,12 +3048,15 @@ myURcost:
 //                  PROCCast(V->type,V->size,R.type,R.size);
 //                  }
 	              if(!SavedR) {
+#if GD24032 || MC68000 || I8086
+#else		// 2026??
 		              if(reg2 && (LastOut!=ROut)) {
 		                swap(&ROut,&LastOut);
 		                SavedR=FNGetMemSize(V->type,V->size,0/*dim*/,0);
 		                Regs->Save(SavedR);
 		                swap(&ROut,&LastOut);
 		                }
+#endif
 	                }
                 switch(SavedR) {
                   case 0:
@@ -3221,7 +3228,9 @@ myURcost:
 		                V->Q=subCMP(TS,*cond,T,V->Q,V->var,V->type,V->size,R.Q,R.type,R.size,V->cost,R.cost,
 											&u[0],&u[1],&u[2],&u[3]);
                     break;
-                  default:		// 8 9 10
+                  case 8:
+                  case 9:
+                  case 10:
 //				            *cond=0;
 #if GD24032
 #else
@@ -3767,8 +3776,11 @@ skippa_condbranch: ;
 						    PROCReadD0(R.var,V->type,FNGetMemSize(V->type,V->size,0/*dim*/,1),0,0,FALSE);
 #endif
 						    }
-              else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC)
+              else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) {
+								if(R.size == 0 && !(R.type & VARTYPE_POINTER))		// void function!
+									PROCError(2440);
     					  PROCCast(V->type,V->size,&R.type,&R.size,-1);
+								}
               else if(R.Q==VALUE_IS_COSTANTE) {
 						    }
 		          if(V->Q==VALUE_IS_EXPR || V->Q==VALUE_IS_EXPR_FUNC || *TS!='=') {
@@ -4991,6 +5003,8 @@ my_aox:
 	    }
     Co++;
     } while(!Exit);
+
+__line__=ol;
 
   if(!AR)
     return AR-1;

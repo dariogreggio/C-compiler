@@ -28,7 +28,7 @@ accetta più di un #else per blocco! e non dà errore se #istruzioni inesistenti
 prende più operatori di seguito... * / 5
 chkptr si potrebbe NON mettere su array... logicamente :) almeno se indice costante
 #if deve prendere espressione!
-#elif non sembra funzionare... v.skybasic
+(ok #elif non sembra funzionare... v.skybasic
 (gli operatori automatici += ecc NON salvano in puntatori /array! (su var sembrano abb .ok
 FASTCALL potrebbe usare anche i registri A su 68000, almeno a3 a4 a5 diciamo
 su 68000 moltiplicazione e divisione POSSONO usare indirizzi variabili come operando... ottimizzare! (solo come WORD direi, e byte quindi)
@@ -245,7 +245,7 @@ int Ccc::CompilaC(int argc, char **argv) {
 	FObj=FCod=NULL;
 	FLst=FErr=NULL;
 
-  Declaring=FuncCalled=SaveFP=ASM=AutoOff=AbsOff=AbsOff2=AbsOff3=0;
+  Declaring=FuncCalled=SaveFP=ASM=AutoOff=0;
 
 #ifdef _DEBUG
 //	debug=3;
@@ -521,7 +521,6 @@ ukswitch:
 	UseIRQ=UseLMul=UseFloat=FALSE;
   SaveFP=FALSE;
   AutoOff=0;
-	AbsOff=AbsOff2=AbsOff3=0;
   m_CPre->PP=TRUE;            // PROCESSA O NO
 	__line__=0;
 
@@ -606,14 +605,14 @@ ukswitch:
   if(!FErr) 
   	PROCError(1037,OUS);
 	
-  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0);
+  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0);
 //  StaticOut=LastOut->prev;
 //  BSSOut=StaticOut;
 #if ARCHI
 #elif Z80
-  PROCOper(LINE_TYPE_ISTRUZIONE,"cseg",OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0);
+  PROCOper(LINE_TYPE_ISTRUZIONE,"cseg",OPDEF_MODE_NULLA,(union SUB_OP_DEF*)0,0);
   if(*TextSegm)
-		PROCOper(LINE_TYPE_ISTRUZIONE,"csect",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&TextSegm,0);
+		PROCOper(LINE_TYPE_ISTRUZIONE,"csect",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&TextSegm,0);
   if(!*DataSegm)
 		_tcscpy(DataSegm,"data");
   PROCOut1(FO3,";",NULL);
@@ -625,7 +624,7 @@ ukswitch:
 #elif I8086
   if(!*TextSegm)
 		_tcscpy(TextSegm,"_TEXT");
-	PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\tSEGMENT",0,NULL);
+	PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\tSEGMENT",0,NULL);
   if(!*DataSegm)
 		_tcscpy(DataSegm,"_DATA");
   PROCOut1(FO3,";",NULL);
@@ -638,7 +637,7 @@ ukswitch:
   if(!*TextSegm)
 		_tcscpy(TextSegm,"_TEXT");
 	if(!(TipoOut & TIPO_SPECIALE))
-		PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\tSEGMENT",0,NULL);
+		PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\tSEGMENT",0,NULL);
   if(!*DataSegm)
 		_tcscpy(DataSegm,"_DATA");
 	if(!(TipoOut & TIPO_SPECIALE)) {
@@ -665,7 +664,7 @@ ukswitch:
 #elif GD24032
   if(!*TextSegm)
 		_tcscpy(TextSegm,"_TEXT");
-	PROCOper(LINE_TYPE_DATA_DEF,"CSECT",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&TextSegm,0);
+	PROCOper(LINE_TYPE_DATA_DEF,"CSECT",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&TextSegm,0);
   if(!*DataSegm)
 		_tcscpy(DataSegm,"_DATA");
 	PROCOut1(FO3,";",NULL);
@@ -682,7 +681,7 @@ ukswitch:
 #elif MICROCHIP
   if(!*TextSegm)
 		_tcscpy(TextSegm,"CODE");
-	PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\t",0,NULL);
+	PROCOper(LINE_TYPE_DATA_DEF,TextSegm,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\t",0,NULL);
   if(!*DataSegm)
 		_tcscpy(DataSegm,"UDATA");
   PROCOut1(FO3,";",NULL);
@@ -698,7 +697,7 @@ ukswitch:
   __line__=1;
 
 
-	try {		// NON va e non si pianta su eccezioni in PROCOper ecc...
+	try {		// NON va e non si pianta su eccezioni in PROCOper ecc... forse dipende dal chiamante, OpenC?
   do {
 		MSG msg;
 
@@ -708,6 +707,7 @@ ukswitch:
 			myLog->print(0,ARGS);
 		  
 		if(*ARGS == '{') {
+			FNLO(ARGS);
 		  PROCBlock();
 		  }
 		else {
@@ -1252,9 +1252,26 @@ skippa_var:
 
 //  PROCV("temp.map");
   if(FLst) {
-    PROCVarList(FLst,(struct VARS *)NULL);
+    PROCVarList(FLst,(struct VARS*)NULL);
 		delete FLst;		FLst=NULL;
     }
+	LVars=Var;
+	while(LVars) {
+		Var=LVars;
+		if(Var->definition) {
+			struct LINE *t;
+			while(Var->definition) {
+				t=Var->definition->next;
+				GlobalFree(Var->definition);
+				Var->definition=t;
+				}
+			}
+	  if(Var->type & VARTYPE_FUNC) 			// anche Pointer
+			GlobalFree(Var->parm);
+		LVars=LVars->next;
+		GlobalFree(Var);
+		}
+
 	if(FErr)
 		delete FErr;
 
@@ -1272,6 +1289,7 @@ skippa_var:
 //	PROCT();
 	delete FObj; FObj=NULL;
   return 1;
+
 fine:
 	return 0;
   } 
@@ -1281,45 +1299,66 @@ int Ccc::PROCBlock() {
   char ARG[128];
   long OT;
 	int ol;
-  char MyBuf[64];
+  char MyBuf[128];
   struct VARS *v;
   char *p;
   
+	if(!InBlock)
+		AutoOff = 0;
+
   InBlock++;
+	if(InBlock >= MAX_BLOCCHI)
+		PROCError(1002,"blocchi nidificati");
+	OldTX[InBlock].AutoOff = min(OldTX[InBlock-1].AutoOff,OldTX[InBlock].AutoOff);
   I=InBlock;    
   do {
 		FIn->SavePosition();
 		OT=FIn->GetPosition();
 		ol=__line__;
-		FNLO(ARG);
+		FNLA(ARG);
 	
 		if(debug) 
 	  	myLog->print(0,">>>%s<<<\n",ARG);
 	  
 		switch(*ARG) {
 		  case 0:                    // fine riga o fine FILE
+				FNLO(ARG);
 //    		PROCError(1004);
 				__line__++;
 		    break;
 		  case '{':
+				FNLO(ARG);
+				Declaring=TRUE;
+				PROCBlock();
+				break;
 		  case ';':
+				FNLO(ARG);
+				break;
 		  case '}':
-				__line__++;
+				FNLO(ARG);
+//				__line__++;
+				goto end_block;
 				break;
 		  default:
-//				FIn->Seek(OT,CFile::begin);
 				FIn->RestorePosition(OT);
-//				__line__=ol;
+				__line__=ol;
 				if(!FNIsStmt()) 
 				  PROCIsDecl();
+				__line__++;
 				break;
 		  }
 		} while(*ARG != '}' && !FIn->Eof());
+end_block:
   if(!I || FIn->Eof())			// bah sarebbe da gestire meglio la } finale
 		PROCError(2054,"}");
+
+	AutoOff = min(OldTX[I].AutoOff,AutoOff);
   if(I>1) {
+//		OldTX[I-1].AutoOff = min(OldTX[I].AutoOff,OldTX[I-1].AutoOff);
+		OldTX[I].AutoOff = 0;
 		switch(*OldTX[I].T) {
 		  case 0:
+
 				break;
 	  	case '&':			// se switch(
 			  swap(&LastOut,&OldTX[I].TX);
@@ -1341,7 +1380,7 @@ int Ccc::PROCBlock() {
 					  M=j;          
           }
 //          myLog->print("case min e max %d %d\n\a",m,M);
-				char MyBuf_def[32];
+				char MyBuf_def[64];
         _tcscpy(MyBuf_def,OldTX[I].B);       // label per "default" se c'è, oppure fine blocco
 			  if(OldTX[InBlock].flag) 
           _tcscat(MyBuf_def,"_");
@@ -1364,13 +1403,13 @@ int Ccc::PROCBlock() {
 							case 1:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_IMMEDIATO8,j);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 							case 2: // me ne fotto :)
 							case 4:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO32,j);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 //							PROCOutLab(MyBuf,"_");
 							}
@@ -1381,14 +1420,14 @@ int Ccc::PROCBlock() {
 //					  PROCOper(movString,Regs->Accu,Regs->DSl);    // non dovrebbe servire, qui
 					  if(OldTX[InBlock].C[1]==1) {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_IMMEDIATO8,j);
-							PROCOper(LINE_TYPE_JUMPC,"jp",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,"jp",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 						  }
 						else {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_IMMEDIATO8,j);
-							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"$",8);
+							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"$",8);
 						  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,Regs->D);
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_IMMEDIATO8,*(((char *)&j)+1));
-							PROCOper(LINE_TYPE_JUMPC,"jp",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,"jp",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 //							PROCOutLab(MyBuf,"_");
 							}
 #elif I8086
@@ -1398,12 +1437,12 @@ int Ccc::PROCBlock() {
 //					  PROCOper(movString,Regs->Accu,Regs->DSl);    // non dovrebbe servire, qui
 					  if(OldTX[InBlock].C[1]==1) {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"cmp",OPDEF_MODE_REGISTRO_LOW8,Regs->D,OPDEF_MODE_IMMEDIATO8,j);
-							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 						  }
 						else {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"cmp",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,j);
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 //							PROCOutLab(MyBuf,"_");
 							}
 #elif MC68000
@@ -1412,17 +1451,17 @@ int Ccc::PROCBlock() {
 							case 1:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.b",OPDEF_MODE_IMMEDIATO8,j,OPDEF_MODE_REGISTRO8,Regs->D);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 							case 2:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.w",OPDEF_MODE_IMMEDIATO16,j,OPDEF_MODE_REGISTRO16,Regs->D);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 							case 4:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.l",OPDEF_MODE_IMMEDIATO32,j,OPDEF_MODE_REGISTRO32,Regs->D);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 //							PROCOutLab(MyBuf,"_");
 							}
@@ -1431,17 +1470,17 @@ int Ccc::PROCBlock() {
 							case 1:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.b",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_IMMEDIATO8,j);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 							case 2:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,j);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 							case 4:
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO32,j);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								break;
 //							PROCOutLab(MyBuf,"_");
 							}
@@ -1449,31 +1488,31 @@ int Ccc::PROCBlock() {
 //					  PROCOper(movString,Regs->Accu,Regs->DSl);    // non dovrebbe servire, qui
 					  if(OldTX[InBlock].C[1]==1) {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"XORLW",OPDEF_MODE_IMMEDIATO8,j);
-							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 						  }
 						else {
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"XORLW",OPDEF_MODE_IMMEDIATO8,j);
-							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"$",8);
+							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"$",8);
 						  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,Regs->D);
 						  PROCOper(LINE_TYPE_ISTRUZIONE,"XORLW",OPDEF_MODE_IMMEDIATO8,*(((char *)&j)+1));
-							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 //							PROCOutLab(MyBuf,"_");
 							}
 #endif
 						}	
 #if ARCHI
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif Z80
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);           // questo è default
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);           // questo è default
 #elif I8086
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif MC68000
 					PROCOper(LINE_TYPE_JUMP,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
-						OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+						OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 #elif GD24032
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 #elif MICROCHIP
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #endif
 //				  LastOut=LastOut->next;
 					}
@@ -1487,50 +1526,50 @@ int Ccc::PROCBlock() {
 #if ARCHI
 							PROCOper(LINE_TYPE_ISTRUZIONE,"SUB",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_IMMEDIATO8,m);
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_IMMEDIATO8,M-m+1);     // +1 per jp nc...???
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 #elif Z80
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sub",OPDEF_MODE_IMMEDIATO16,m);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_IMMEDIATO16,M-m+1);        // +1 per jp nc...
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,5,0);
 #elif I8086
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sub",OPDEF_MODE_IMMEDIATO16,m);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_IMMEDIATO16,M-m+1);        // +1 per jp nc...
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_IMMEDIATO16,0);
 #elif MC68000
 							PROCOper(LINE_TYPE_ISTRUZIONE,"subi.b",OPDEF_MODE_IMMEDIATO8,m,OPDEF_MODE_REGISTRO8,Regs->D);
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.b",OPDEF_MODE_IMMEDIATO8,M-m+1,OPDEF_MODE_REGISTRO8,Regs->D);     // +1 per DBRA...???
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 #elif GD24032
 							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO8,Regs->D+1,OPDEF_MODE_REGISTRO8,Regs->D);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"SUB.b",OPDEF_MODE_REGISTRO8,Regs->D+1,OPDEF_MODE_IMMEDIATO8,m);
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.b",OPDEF_MODE_REGISTRO8,Regs->D+1,OPDEF_MODE_IMMEDIATO8,M-m+1);     // +1 per DJNZ
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 #elif MICROCHIP
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"SUBLW",OPDEF_MODE_IMMEDIATO16,m);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    if(CPUPIC < 2)
 								PROCOper(LINE_TYPE_ISTRUZIONE,"XORLW",OPDEF_MODE_IMMEDIATO16,M-m+1);        // +1 per jp nc...
 							else
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CP",OPDEF_MODE_IMMEDIATO16,M-m+1);        // +1 per jp nc...
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,5,0);
 #endif					    
@@ -1540,94 +1579,94 @@ int Ccc::PROCBlock() {
 							// 2 e 4
 							PROCOper(LINE_TYPE_ISTRUZIONE,"SUB",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO32,m);
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO32,M-m+1);     // +1 per jp nc...???
 							PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 
 #elif Z80
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_IMMEDIATO16,m);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sbc",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    // carry già a 0
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_IMMEDIATO16,M-m+1);     // +1 per jp nc...
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sbc",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
 #elif I8086
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO16,m);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sbc",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    // carry già a 0
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_IMMEDIATO16,M-m+1);     // +1 per jp nc...
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"sbc",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,1);
 #elif MC68000
 						  if(OldTX[InBlock].C[1]==2) {
 								PROCOper(LINE_TYPE_ISTRUZIONE,"subi.w",OPDEF_MODE_IMMEDIATO16,m,OPDEF_MODE_REGISTRO32,Regs->D);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.w",OPDEF_MODE_IMMEDIATO16,M-m+1,OPDEF_MODE_REGISTRO16,Regs->D);     // +1 per DBRA...???
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								}
 							else {			// fare anche per altri! alcuni almeno :)
 								PROCOper(LINE_TYPE_ISTRUZIONE,"subi.l",OPDEF_MODE_IMMEDIATO32,m,OPDEF_MODE_REGISTRO32,Regs->D);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"cmpi.l",OPDEF_MODE_IMMEDIATO32,M-m+1,OPDEF_MODE_REGISTRO32,Regs->D);     // +1 per DBRA...???
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								}
 #elif GD24032
 						  if(OldTX[InBlock].C[1]==2) {
 								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO16,Regs->D+1,OPDEF_MODE_REGISTRO16,Regs->D);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SUB.w",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_IMMEDIATO16,m);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.w",OPDEF_MODE_REGISTRO16,Regs->D+1,OPDEF_MODE_IMMEDIATO16,M-m+1);     // +1 per DJNZ
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								}
 							else {			// fare anche per altri! alcuni almeno :)
 								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_REGISTRO32,Regs->D);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SUB.d",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_IMMEDIATO32,m);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MINORE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.d",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_IMMEDIATO32,M-m+1);     // +1 per DJNZ
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_MAGGIORE_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								}
 #elif MICROCHIP
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_IMMEDIATO16,m);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"IORLW",OPDEF_MODE_REGISTRO_HIGH8,3);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"SUBLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    // carry già a 0
 					    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_IMMEDIATO16,M-m+1);     // +1 per jp nc...
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"SUBLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
-					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+					    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 					    PROCOper(LINE_TYPE_ISTRUZIONE,"ADDWF",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
 #endif
 					    }
 #if ARCHI
 #elif Z80
-      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,0);
 //					    PROCOper(LINE_TYPE_ISTRUZIONE,"rl",2,0);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
 #elif I8086
-      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,0);
 //					    PROCOper(LINE_TYPE_ISTRUZIONE,"rl",2,0);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
 #elif MC68000
 #elif GD24032
 #elif MICROCHIP
-      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"ADDLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,0);
 //					    PROCOper(LINE_TYPE_ISTRUZIONE,"rl",2,0);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"ADDLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,1);
@@ -1639,7 +1678,7 @@ Mm20:   ;
 	          _tcscpy(MyBuf,OldTX[I].B);   
 	          _tcscat(MyBuf,"_T");       // ripreparo add. jump
 					  if(M-m <= i*2)          // se la differenza tra i case estremi è minore del doppio dei casi, jump table
-							PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+							PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 		    		PROCOper(LINE_TYPE_ISTRUZIONE,"ADD",OPDEF_MODE_REGISTRO32,Regs->P,
 							OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_REGISTRO32,Regs->D);
 				    PROCOper(LINE_TYPE_JUMP,"B",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
@@ -1659,24 +1698,24 @@ Mm20:   ;
 						PROCOper(LINE_TYPE_ISTRUZIONE,"lsl.l",OPDEF_MODE_IMMEDIATO8,
 // in effetti non dovrebbe superare 64K mai!							(MemoryModel & 0xf) < MEMORY_MODEL_LARGE ? 1 : 2,OPDEF_MODE_REGISTRO,1);
 							(MemoryModel & 0xf) < MEMORY_MODEL_LARGE ? 1 : 2,OPDEF_MODE_REGISTRO,Regs->D);
-//				    PROCOper(LINE_TYPE_JUMP,"move.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"(8,pc,d0)",0,OPDEF_MODE_REGISTRO,8);
+//				    PROCOper(LINE_TYPE_JUMP,"move.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"(8,pc,d0)",0,OPDEF_MODE_REGISTRO,8);
 						// OCCHIO la merda di easy68k sembra non assemblare correttamente questa sopra... ignora offset 8, CMQ FACCIO diversamente!
-//				    PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"(0,pc,d0)",0); no
+//				    PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"(0,pc,d0)",0); no
 	          _tcscpy(MyBuf,OldTX[I].B);   
 	          _tcscat(MyBuf,"_T");       // ripreparo add. jump
 //	 SERVE!! cmq				  if(M-m <= i*2)          // se la differenza tra i case estremi è minore del doppio dei casi, jump table
 							if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-								PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0,
+								PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0,
 									OPDEF_MODE_REGISTRO32,Regs->P);			// questo mi serve cmq per avere parte alta dell'indirizzo lungo
 								}
 							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0,
+								PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0,
 									OPDEF_MODE_REGISTRO32,Regs->P);			// questo mi serve cmq per avere parte alta dell'indirizzo lungo
 						// se no, basta quello sopra! 			    	
 						if((MemoryModel & 0xf) < MEMORY_MODEL_LARGE) //MEMORY_MODEL_MEDIUM
- 			    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"(a0,d0)",0,OPDEF_MODE_REGISTRO32,Regs->P);
+ 			    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"(a0,d0)",0,OPDEF_MODE_REGISTRO32,Regs->P);
 						else		// in effetti uno switch non dovrebbe superare 64K!
- 			    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&"(a0,d0)",0,OPDEF_MODE_REGISTRO32,Regs->P);
+ 			    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&"(a0,d0)",0,OPDEF_MODE_REGISTRO32,Regs->P);
 						if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 							PROCOper(LINE_TYPE_JUMP,"bra",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 							}
@@ -1690,13 +1729,13 @@ Mm20:   ;
 							PROCOper(LINE_TYPE_ISTRUZIONE,"SLA.w",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_IMMEDIATO8,1);
 							if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 			          wsprintf(MyBuf,"%s%s-$",OldTX[I].B,"_T");       // ripreparo add. jump + registro
-								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&MyBuf,M-m <= i*2 ? 0 : -2);
+								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&MyBuf,M-m <= i*2 ? 0 : -2);
 								}
 							else {
 			          wsprintf(MyBuf,"%s%s",OldTX[I].B,"_T");       // ripreparo add. jump + registro
-								PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&MyBuf,M-m <= i*2 ? 0 : -2);
+								PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF*)&MyBuf,M-m <= i*2 ? 0 : -2);
 								}
-							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"[R0+R1]",0);
+							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"[R0+R1]",0);
 							PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,Regs->D+1);
 							PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_REGISTRO,Regs->D);
 							}
@@ -1705,18 +1744,18 @@ Mm20:   ;
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SLA.d",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_IMMEDIATO8,2);
 								wsprintf(MyBuf,"%s%s",OldTX[I].B,"_T");       // ripreparo add. jump + registro
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-									PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&MyBuf,M-m <= i*2 ? 0 : -4);
+									PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&MyBuf,M-m <= i*2 ? 0 : -4);
 									}
 								else
-									PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&MyBuf,M-m <= i*2 ? 0 : -4);
-								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"[R0+R1]",0);
+									PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF*)&MyBuf,M-m <= i*2 ? 0 : -4);
+								PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"[R0+R1]",0);
 								PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,Regs->D+1);
 								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_REGISTRO,Regs->D);
 								}
 							else {
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SLA.d",OPDEF_MODE_REGISTRO,Regs->D+1,OPDEF_MODE_IMMEDIATO8,2);
 								wsprintf(MyBuf,"[%s%s-%u+R%u]",OldTX[I].B,"_T",M-m <= i*2 ? 0 : 4,1);       // ripreparo add. jump + registro; v. anche ALTROVE per scegliere offset corretto!
-								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 								// si può unire!!
 								}
 							}
@@ -1733,79 +1772,79 @@ Mm20:   ;
 					  switch(OldTX[InBlock].C[1]) {
 							case 1:
 #if ARCHI
-  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i);
+  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif Z80
 			    			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-1);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-1);
 #elif I8086
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-1);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-1);
 #elif MC68000
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-  			    			PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i,
+  			    			PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i,
 										OPDEF_MODE_REGISTRO32,Regs->P);
 									}
 								else
-  			    			PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i,
+  			    			PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i,
 										OPDEF_MODE_REGISTRO32,Regs->P);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif GD24032
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 				          wsprintf(MyBuf,"%s%s-$",OldTX[I].B,"_T");       // 
   			    			PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->P,
-										OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&MyBuf,i);
+										OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&MyBuf,i);
 									}
 								else {
   			    			PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO32,Regs->P,
-										OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&MyBuf,i);
+										OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF*)&MyBuf,i);
 									}
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif MICROCHIP
 			    			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-1);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-1);
 #endif
 								break;
 							case 2:
 							case 4:		// per ora, e v. sotto
 #if ARCHI
-  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i);
+  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i);
 			          _tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif Z80
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,Regs->D+1,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1,
 									OPDEF_MODE_REGISTRO_HIGH8,Regs->D);
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 #elif I8086
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,Regs->D+1,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1,OPDEF_MODE_REGISTRO_HIGH8,Regs->D);
-  			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+  			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 #elif MC68000
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-	  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i,OPDEF_MODE_REGISTRO32,Regs->P);
+	  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i,OPDEF_MODE_REGISTRO32,Regs->P);
 									}
 								else
-	  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,i,OPDEF_MODE_REGISTRO32,Regs->P);
+	  			    		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,i,OPDEF_MODE_REGISTRO32,Regs->P);
 			          _tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif GD24032
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 				          wsprintf(MyBuf,"%s%s-$",OldTX[I].B,"_T");       // 
   			    			PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_VARIABILE_INDIRETTO,
-										(union SUB_OP_DEF *)&MyBuf,i);
+										(union SUB_OP_DEF*)&MyBuf,i);
 									}
 								else {
   			    			PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_VARIABILE_INDIRETTO,
-										(union SUB_OP_DEF *)&MyBuf,i);
+										(union SUB_OP_DEF*)&MyBuf,i);
 									}
 			          _tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
 #elif MICROCHIP
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,Regs->D+1,OPDEF_MODE_REGISTRO_LOW8,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1,OPDEF_MODE_REGISTRO_HIGH8,Regs->D);
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,0);
 #endif
 								break;
 				    	}
@@ -1824,16 +1863,16 @@ Mm20:   ;
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
-				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"-(a0)",0);
+				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"-(a0)",0);
 								// finire!
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SUB",OPDEF_MODE_REGISTRO16,Regs->D+1,OPDEF_MODE_REGISTRO16,Regs->D+1,
 									OPDEF_MODE_IMMEDIATO16,1);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
@@ -1841,27 +1880,27 @@ Mm20:   ;
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cpdr",OPDEF_MODE_NULLA,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
-								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif I8086
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"rep cmpb",OPDEF_MODE_NULLA,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
-								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif MC68000
 //				    	PROCOper(LINE_TYPE_ISTRUZIONE,"cmp.b",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO_INDIRETTO,8,1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
-				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp.b",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"-(a0)",0,
+				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp.b",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"-(a0)",0,
 									OPDEF_MODE_REGISTRO8,Regs->D);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"dbeq.w",OPDEF_MODE_REGISTRO16,Regs->D+1,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								if(MemoryModel & MEMORY_MODEL_RELATIVE)				// gestire
 									;
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_REGISTRO32,Regs->D);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
@@ -1870,22 +1909,22 @@ Mm20:   ;
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.b",
-									OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"[--R16]",0);
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"$+12",0);
+									OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"[--R16]",0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"$+12",0);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"DJNZ.w",OPDEF_MODE_REGISTRO16,Regs->D+1,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								if(MemoryModel & MEMORY_MODEL_RELATIVE)				// gestire
 									;
-								PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
 #elif MICROCHIP
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cpdr",OPDEF_MODE_NULLA,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
-								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #endif
 					      break;
 							case 2:
@@ -1895,16 +1934,16 @@ Mm20:   ;
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
-				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"-(a0)",0);
+				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"-(a0)",0);
 								// finire!
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"SUB",OPDEF_MODE_REGISTRO16,Regs->D+1,OPDEF_MODE_REGISTRO16,Regs->D+1,
 									OPDEF_MODE_IMMEDIATO16,1);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
@@ -1915,20 +1954,20 @@ Mm20:   ;
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J2");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_REGISTRO_LOW8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J3");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								PROCOutLab(OldTX[I].B,"_J2");
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,decString,OPDEF_MODE_REGISTRO,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 								PROCOutLab(OldTX[I].B,"_J3");
 #elif I8086
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,decString,OPDEF_MODE_REGISTRO,Regs->D);
@@ -1937,35 +1976,35 @@ Mm20:   ;
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp",OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J2");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp",OPDEF_MODE_REGISTRO_LOW8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J3");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								PROCOutLab(OldTX[I].B,"_J2");
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,decString,OPDEF_MODE_REGISTRO,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 								PROCOutLab(OldTX[I].B,"_J3");
 #elif MC68000
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
-				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"-(a0)",0,
+				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cmp.l",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"-(a0)",0,
 									OPDEF_MODE_REGISTRO32,Regs->D);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"dbeq.w",OPDEF_MODE_REGISTRO16,Regs->D+1,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								if(MemoryModel & MEMORY_MODEL_RELATIVE)				// gestire
 									;
 								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_REGISTRO32,Regs->D);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
@@ -1974,15 +2013,15 @@ Mm20:   ;
   							_tcscat(MyBuf,"_J");
 								PROCOutLab(OldTX[I].B,"_J");
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"CMP.d",
-									OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"[--R16]",0);
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"$+12",0);
+									OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"[--R16]",0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"$+12",0);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
 								PROCOper(LINE_TYPE_ISTRUZIONE,"DJNZ.w",OPDEF_MODE_REGISTRO16,Regs->D+1,
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								if(MemoryModel & MEMORY_MODEL_RELATIVE)				// gestire
 									;
-								PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf_def,0);
+								PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf_def,0);
 								_tcscpy(MyBuf,OldTX[I].B);       // ripreparo add. tab.
   							_tcscat(MyBuf,"_T");
 #elif MICROCHIP
@@ -1992,20 +2031,20 @@ Mm20:   ;
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_REGISTRO_HIGH8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J2");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->D);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"cp",OPDEF_MODE_REGISTRO_LOW8,Regs->D+1);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J3");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 								PROCOutLab(OldTX[I].B,"_J2");
   			    		PROCOper(LINE_TYPE_ISTRUZIONE,decString,OPDEF_MODE_REGISTRO,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,2);
 				    		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,2);
 								_tcscpy(MyBuf,OldTX[I].B);
   							_tcscat(MyBuf,"_J");
-								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
-								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+								PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_DIVERSO,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
+								PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 								PROCOutLab(OldTX[I].B,"_J3");
 #endif
 								break;
@@ -2013,14 +2052,14 @@ Mm20:   ;
 #if ARCHI
 #elif Z80
       	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,0,
-							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-2);
+							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-2);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 //			    	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,1,2);
 //			    	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,2,2);
 #elif I8086
       	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,0,
-							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-2);
+							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-2);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 //			    	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,1,2);
@@ -2030,7 +2069,7 @@ Mm20:   ;
 #elif GD24032
 
 #elif MICROCHIP
-      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)&MyBuf,-2);
+      	    PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)&MyBuf,-2);
 						PROCOper(LINE_TYPE_ISTRUZIONE,"ADDLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"ADDLW",OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,2);
 //			    	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,1,2);
@@ -2052,38 +2091,38 @@ Mm20:   ;
 		          	}
 		          if(i==-1) {	
 #if ARCHI
-							  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+							  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif Z80 || I8086
-							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif MC68000
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 									wsprintf(MyBuf,"%s-%s_T",OldTX[I].T+1,OldTX[I].B);
 									PROCOper(LINE_TYPE_DATA_DEF,
 										(!(TipoOut & TIPO_SPECIALE)) ? 
 											((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
-										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 									}
 								else
 									PROCOper(LINE_TYPE_DATA_DEF,
 										(!(TipoOut & TIPO_SPECIALE)) ? 
 											((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
-										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #elif GD24032
 								if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM) {
 									wsprintf(MyBuf,"%s-%s_T",OldTX[I].T+1,OldTX[I].B);
-									PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 									}
 								else {
 									if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 										char MyBuf2[64];
 										wsprintf(MyBuf2,"%s-%s_T",MyBuf,OldTX[I].B);
-										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf2,0);
+										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf2,0);
 										}
 									else
-										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 									}
 #elif MICROCHIP
-							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
+							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
 #endif
 		            }
 		          else {  
@@ -2093,31 +2132,31 @@ Mm20:   ;
 									PROCOper(LINE_TYPE_DATA_DEF,
 										(!(TipoOut & TIPO_SPECIALE)) ? 
 											((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
-										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 									}
 								else
 									PROCOper(LINE_TYPE_DATA_DEF,
 										(!(TipoOut & TIPO_SPECIALE)) ? 
 											((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
-										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+										OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
 								if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM) {
 									char MyBuf2[64];
 									wsprintf(MyBuf2,"%s-%s_T",MyBuf,OldTX[I].B);
-									PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf2,0);
+									PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf2,0);
 									}
 								else
 									if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 										char MyBuf2[64];
 										wsprintf(MyBuf2,"%s-%s_T",MyBuf,OldTX[I].B);
-										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf2,0);
+										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf2,0);
 										}
 									else
-										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+										PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif ARCHI
-							  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #else
-							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #endif
 							  }
 						  }
@@ -2129,30 +2168,30 @@ Mm20:   ;
 		          j=*(int *)p;
 						  sprintf(MyBuf,"%s_%x",OldTX[I].B,j);
 #if ARCHI
-						  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+						  PROCOper(LINE_TYPE_DATA_DEF,"DCD\t",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086 
-						  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+						  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MC68000
 						  PROCOper(LINE_TYPE_DATA_DEF,
 								(!(TipoOut & TIPO_SPECIALE)) ? 
 									((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "dd" : "dw") : ((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "\tdc.l" : "\tdc.w"),
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
 							if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM) {
 								char MyBuf2[64];
 								wsprintf(MyBuf2,"%s-%s_T",MyBuf,OldTX[I].B);
-								PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf2,0);
+								PROCOper(LINE_TYPE_DATA_DEF,"DW",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf2,0);
 								}
 							else
 								if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 									char MyBuf2[64];
 									wsprintf(MyBuf2,"%s-%s_T",MyBuf,OldTX[I].B);
-									PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf2,0);
+									PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf2,0);
 									}
 								else
-									PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									PROCOper(LINE_TYPE_DATA_DEF,"DD",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MICROCHIP
-						  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+						  PROCOper(LINE_TYPE_DATA_DEF,"dw",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #endif
 						  }
 					  PROCOutLab(OldTX[I].B,"_N");		// MEGLIO i salti prima, per agevolare un BRAnch PC-relative (68000...
@@ -2164,41 +2203,41 @@ Mm20:   ;
 						  itoa(j,MyBuf,10);
 #if ARCHI
 						  PROCOper(LINE_TYPE_DATA_DEF,(OldTX[InBlock].C[1]==1) ? "DCB\t" : "DCD\t",
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086
 						  PROCOper(LINE_TYPE_DATA_DEF,(OldTX[InBlock].C[1]==1) ? "db\t" : "dw\t",
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MC68000
 							if(!(TipoOut & TIPO_SPECIALE))
 							  PROCOper(LINE_TYPE_DATA_DEF,
 									(OldTX[InBlock].C[1]==1) ? "db\t" : ((OldTX[InBlock].C[1]==2) ? "dw\t" : "dd\t"),
-									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 							else
 							  PROCOper(LINE_TYPE_DATA_DEF,
-									(OldTX[InBlock].C[1]==1) ? "\tdc.b\t" : ((OldTX[InBlock].C[1]==2) ? "\tdc.w\t" : "\tdc.l\t"),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+									(OldTX[InBlock].C[1]==1) ? "\tdc.b\t" : ((OldTX[InBlock].C[1]==2) ? "\tdc.w\t" : "\tdc.l\t"),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
 							PROCOper(LINE_TYPE_DATA_DEF,
 								(OldTX[InBlock].C[1]==1) ? "DB\t" : ((OldTX[InBlock].C[1]==2) ? "DW\t" : "DD\t"),
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MICROCHIP
 						  PROCOper(LINE_TYPE_DATA_DEF,(OldTX[InBlock].C[1]==1) ? "db\t" : "dw\t",
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #endif
 						  }
 #if MC68000
 						if(OldTX[InBlock].C[1]==1) {
 							MyBuf[0]='0'; MyBuf[1]=0;
-							PROCOper(LINE_TYPE_DATA_DEF,"\tds.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);		// ossia ALIGN a word: dice che l'assembler lo fa in automatico, ma...
+							PROCOper(LINE_TYPE_DATA_DEF,"\tds.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);		// ossia ALIGN a word: dice che l'assembler lo fa in automatico, ma...
 							}
 #elif GD24032
 						if(OldTX[InBlock].C[1]==1) {
 							MyBuf[0]='4'; MyBuf[1]=0;
-							PROCOper(LINE_TYPE_DATA_DEF,"\tALIGN",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);		//
+							PROCOper(LINE_TYPE_DATA_DEF,"\tALIGN",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);		//
 							}
 #elif ARCHI
 						if(OldTX[InBlock].C[1]==1) {
 							MyBuf[0]='0'; MyBuf[1]=0;
-							PROCOper(LINE_TYPE_DATA_DEF,"ALIGN",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);		//
+							PROCOper(LINE_TYPE_DATA_DEF,"ALIGN",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);		//
 							}
 // prima facevamo così... controllare					    PROCOut1(FO1,"ALIGN",NULL);
 #endif
@@ -2247,8 +2286,8 @@ Mm20:   ;
 		swap(&OldTX[0].TX,&LastOut);
 	  if(TempSize) {
   	  AutoOff-=TempSize;
-  	  sprintf(MyBuf,"temp = %d",AutoOff);
-  	  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+  	  wsprintf(MyBuf,"temp = %d",AutoOff);
+  	  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 	    }
 		AutoOff &= -STACK_ITEM_SIZE;
 		if(!_tcscmp(CurrFunc->name,"main")) {
@@ -2261,12 +2300,12 @@ Mm20:   ;
 #elif MC68000
 //	  	PROCOper(LINE_TYPE_ISTRUZIONE,"move.l","[__stktop]",Regs->SpS);
 			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"__BaseAbs",0,OPDEF_MODE_REGISTRO32,13/*Regs->AbsS*/);		// cercare PRIMISSIMA var globale!
+	  		PROCOper(LINE_TYPE_ISTRUZIONE,"lea",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"__BaseAbs",0,OPDEF_MODE_REGISTRO32,13/*Regs->AbsS*/);		// cercare PRIMISSIMA var globale!
 				}
 #elif GD24032
 			if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 	  		PROCOper(LINE_TYPE_ISTRUZIONE,"LEA",OPDEF_MODE_REGISTRO32,25 /*Regs->AbsS*/,
-					OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)"__BaseAbs",0);		// cercare PRIMISSIMA var globale!
+					OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF*)"__BaseAbs",0);		// cercare PRIMISSIMA var globale!
 				}
 #elif MICROCHIP
 //	  	PROCOper(LINE_TYPE_ISTRUZIONE,"mov WORD PTR","[__stktop]",Regs->SpS);
@@ -2298,14 +2337,13 @@ Mm20:   ;
 		  else	
 		  	PROCOper(LINE_TYPE_ISTRUZIONE,"pusha",OPDEF_MODE_NULLA);
 #elif MC68000
-			PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"sr",0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-			PROCOper(LINE_TYPE_ISTRUZIONE,"movem.l",OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"a0-a6/d0-d7",0,
+			PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"sr",0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+			PROCOper(LINE_TYPE_ISTRUZIONE,"movem.l",OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"a0-a6/d0-d7",0,
 				OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 #elif GD24032
-			PROCOper(LINE_TYPE_ISTRUZIONE,"STST",
-				OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"sr",0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+			PROCOper(LINE_TYPE_ISTRUZIONE,"STST",OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 			PROCOper(LINE_TYPE_ISTRUZIONE,"STM.d",OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"{R0-R23}",0
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"{R0-R23}",0
 				);
 #elif MICROCHIP
 			if(CPUPIC < 2) {
@@ -2328,60 +2366,64 @@ Mm20:   ;
 
 	  	}
 		/*else beh no*/ if(SaveFP || AutoOff) {
+			if(!(CurrFunc->attrib & FUNC_ATTRIB_NAKED)) {
 //		myLog->print("SaveFP: %d, AutoOff %d, FuncCalled %d, Checkstack %d\n",SaveFP,AutoOff,FuncCalled,CheckStack);
 #if ARCHI
-		  if(FuncCalled || CheckStack || CheckPointers) {
-				_tcscpy(MyBuf,Regs->FpS);
-				_tcscat(MyBuf,",R14");
-				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
-				}
-		  else {
-				_tcscpy(MyBuf,Regs->FpS);
-				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
-				}
+				if(FuncCalled || CheckStack || CheckPointers) {
+					_tcscpy(MyBuf,Regs->FpS);
+					_tcscat(MyBuf,",R14");
+					PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
+						OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
+					}
+				else {
+					_tcscpy(MyBuf,Regs->FpS);
+					PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
+						OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
+					}
 #elif Z80 
-			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER,0);
-#elif I8086
-      if(CPU86<1) {
 				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER,0);
-				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
-				}
+#elif I8086
+				if(CPU86<1) {
+					PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER,0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
+					}
 #elif MC68000
 //			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER,0);
 #elif GD24032
 
 #elif MICROCHIP
-			PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_REGISTRO,10);
-			if(StackLarge) {		// FINIRE
-				}
+				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_REGISTRO,10);
+				if(StackLarge) {		// FINIRE
+					}
 #endif
 #if ARCHI
-	  	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
+		  	PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
 #elif Z80
-      if(!AutoOff) {
-	      PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,0);
-	      PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
-	      }
+				if(!AutoOff) {
+					PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
+					}
 #elif I8086
-      if(!AutoOff) {
-				if(CPU86<1)
-  				/*PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0)*/;
-				else  
-					/*PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"0",0)*/;
-				}
+				if(!AutoOff) {
+					if(CPU86<1)
+  					/*PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0)*/;
+					else  
+						/*PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"0",0)*/;
+					}
 #elif MC68000
 //  			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
 #elif GD24032
 
 #elif MICROCHIP
-      if(!AutoOff) {
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_FRAMEPOINTER,0);
-	      }
+				if(!AutoOff) {
+					PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_FRAMEPOINTER,0);
+					}
 #endif
+				}
 			}
+
 		if(AutoOff) {
+			if(!(CurrFunc->attrib & FUNC_ATTRIB_NAKED)) {
 #if ARCHI
 	  	if(abs(AutoOff) > 32767)		// beh direi almeno normalmente
 				PROCError(1126);
@@ -2418,15 +2460,15 @@ Mm20:   ;
 #if ARCHI
 				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,0,OPDEF_MODE_IMMEDIATO16,-abs(AutoOff));
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif Z80
 				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,0,OPDEF_MODE_IMMEDIATO16,-abs(AutoOff));
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);      // qui ld iy,sp lo fa CHKSTK
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);      // qui ld iy,sp lo fa CHKSTK
 #elif I8086
 				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_IMMEDIATO32,abs(AutoOff),OPDEF_MODE_REGISTRO32,0);
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif MC68000
 				if((MemoryModel & 0xf) < MEMORY_MODEL_MEDIUM) {
 					if(abs(AutoOff)<=256)
@@ -2443,7 +2485,7 @@ Mm20:   ;
 						PROCOper(LINE_TYPE_ISTRUZIONE,"move.l"/*movString*/,OPDEF_MODE_IMMEDIATO32,abs(AutoOff),OPDEF_MODE_REGISTRO32,0);
 					}
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif GD24032
 				if(abs(AutoOff)<=256)
 					PROCOper(LINE_TYPE_ISTRUZIONE,"MOV,b"/*movString*/,OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_IMMEDIATO8,abs(AutoOff));
@@ -2452,11 +2494,11 @@ Mm20:   ;
 				else
 					PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.l"/*movString*/,OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_IMMEDIATO32,abs(AutoOff));
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif MICROCHIP
 				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVLW",OPDEF_MODE_IMMEDIATO16,abs(AutoOff));
 				v=FNCercaVar("_chkstk",0);
-				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);      // qui MOVFF FSR2L, POSTINC1 / MOVFF FSR1L, FSR2L  lo fa CHKSTK
+				PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);      // qui MOVFF FSR2L, POSTINC1 / MOVFF FSR1L, FSR2L  lo fa CHKSTK
 #endif
 				}		// checkstack
 	  	else {
@@ -2480,14 +2522,14 @@ Mm20:   ;
         if(CPU86<1)
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"sub",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_IMMEDIATO16,abs(AutoOff));
 				else  
-				  PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,abs(AutoOff),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"0",0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,abs(AutoOff),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"0",0);
 #elif MC68000
 					PROCOper(LINE_TYPE_ISTRUZIONE,"link",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,AutoOff);
 #elif GD24032
 					PROCOper(LINE_TYPE_ISTRUZIONE,"ENTER",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO32,abs(AutoOff/4));
 					if(OutSource) {
 						wsprintf(MyBuf,"\t ossia %u bytes",abs(AutoOff));
-						PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+						PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 //						PROCOut1(FO2,MyBuf,NULL);
 						}
 #elif MICROCHIP
@@ -2506,12 +2548,14 @@ Mm20:   ;
 					}
 #endif
 				}
+				}		// naked
 	  	}			// AutoOff != 0
 		else {
+			if(!(CurrFunc->attrib & FUNC_ATTRIB_NAKED)) {
 #if ARCHI
 	  	if(FuncCalled || CheckStack || CheckPointers) {
 				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"R14",0);
+					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"R14",0);
 				}
 #elif Z80 || MICROCHIP
 #elif I8086
@@ -2519,34 +2563,36 @@ Mm20:   ;
         if(CPU86<1)
 	  			/*PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0)*/;
 				else  
-				  PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"0",0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,"enter",OPDEF_MODE_IMMEDIATO16,0,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"0",0);
 				}
 #elif MC68000
 			if(SaveFP)
 				PROCOper(LINE_TYPE_ISTRUZIONE,"link",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,0);
 #elif GD24032
 			if(SaveFP)
-				PROCOper(LINE_TYPE_ISTRUZIONE,"ENTER",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,0);
+				PROCOper(LINE_TYPE_ISTRUZIONE,"ENTER",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO32,0);
 #endif    
-	  	}
-		if(Reg<Regs->MaxUser && !(CurrFunc->modif & FUNC_MODIF_FASTCALL)) {
+	  	}		// naked
+			}
+
+		if(Reg<Regs->MaxUser && !(CurrFunc->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE))) {		
 #if ARCHI
-	  	sprintf(MyBuf,"R%u-R%u",Reg,Regs->MaxUser-1);
+	  	wsprintf(MyBuf,"R%u-R%u",Reg,Regs->MaxUser-1);
 	  	PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086
 	  	for(i=Regs->MaxUser-1; i>=Reg; i--)
 	  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,i);
 #elif MC68000
 //	  	for(i=Regs->MaxUser-1; i>=Reg; i--)
 //		  	PROCOper(LINE_TYPE_ISTRUZIONE,"move.l"/*pushString*/,OPDEF_MODE_REGISTRO,i,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-	  	sprintf(MyBuf,"d%u-d%u",Reg,Regs->MaxUser-1);
+	  	wsprintf(MyBuf,"d%u-d%u",Reg,Regs->MaxUser-1);
 	  	PROCOper(LINE_TYPE_ISTRUZIONE,"movem.l"/*pushString*/,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 #elif GD24032
-	  	sprintf(MyBuf,"{R%u-R%u}",Reg,Regs->MaxUser-1);
+	  	wsprintf(MyBuf,"{R%u-R%u}",Reg,Regs->MaxUser-1);
 	  	PROCOper(LINE_TYPE_ISTRUZIONE,"STM.d"/*pushString*/,
-				OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+				OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif MICROCHIP
 	  	for(i=Regs->MaxUser-1; i>=Reg; i--)
 	  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,i);
@@ -2558,18 +2604,19 @@ Mm20:   ;
 		  PROCOutLab(OldTX[1].T);
 		OldTX[1].TX=LastOut;
 		if(SaveFP || AutoOff) {
+			if(!(CurrFunc->attrib & FUNC_ATTRIB_NAKED)) {
 #if ARCHI
 	  	if(FuncCalled || CheckStack || CheckPointers) {
 				_tcscpy(MyBuf,Regs->FpS);
 				_tcscat(MyBuf,",PC");
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 				FuncCalled=FALSE;		// per altro test sotto
 				}
 	  	else {
 				_tcscpy(MyBuf,Regs->FpS);
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 				}
 #elif Z80
 	  	PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_FRAMEPOINTER,0);
@@ -2588,7 +2635,9 @@ Mm20:   ;
 		  	PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,11,OPDEF_MODE_FRAMEPOINTER,0);		// FINIRE!
 				}
 #endif
+	  	}		// naked
 	  	}
+
 		if(CurrFunc->modif & FUNC_MODIF_INTERRUPT) {
 			if(!(CurrFunc->attrib & FUNC_ATTRIB_NAKED)) {
 #if ARCHI
@@ -2616,12 +2665,12 @@ Mm20:   ;
 				PROCOper(LINE_TYPE_ISTRUZIONE,"popf",OPDEF_MODE_NULLA,0);
 #elif MC68000
 				PROCOper(LINE_TYPE_ISTRUZIONE,"movem.l",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"a0-a6/d0-d7",0);
-				PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"sr",0);
+					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"a0-a6/d0-d7",0);
+				PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"sr",0);
 #elif GD24032
 				PROCOper(LINE_TYPE_ISTRUZIONE,"LDM.d",
-					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"{R0-R23}",0,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1);
-				PROCOper(LINE_TYPE_ISTRUZIONE,"LDST",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"sr",0);
+					OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"{R0-R23}",0,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1);
+				PROCOper(LINE_TYPE_ISTRUZIONE,"LDST",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1);
 #elif MICROCHIP
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,9);
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,8);
@@ -2631,7 +2680,7 @@ Mm20:   ;
 				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,3);
 #endif
 			  }
-			if(CurrFunc->modif & FUNC_MODIF_INTERRUPT) {
+
 #if ARCHI
 				//boh?  v. SWI ecc
 #elif Z80
@@ -2641,18 +2690,19 @@ Mm20:   ;
 #elif MC68000
 				PROCOper(LINE_TYPE_ISTRUZIONE,"rte",OPDEF_MODE_NULLA,0);
 #elif GD24032
-				PROCOper(LINE_TYPE_ISTRUZIONE,"RET",OPDEF_MODE_NULLA,0);
+				PROCOper(LINE_TYPE_ISTRUZIONE,"RETI",OPDEF_MODE_NULLA,0);
 #elif MICROCHIP
 				PROCOper(LINE_TYPE_ISTRUZIONE,"RETFIE",OPDEF_MODE_NULLA,0);
 #endif
-			  }
+
 		  }
+
 		if(!(CurrFunc->modif & FUNC_MODIF_INTERRUPT)) {
 #if ARCHI
 			if(FuncCalled) {
 				if(CheckStack || CheckPointers) {
 					PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-						OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)"PC",0);
+						OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)"PC",0);
 					}  
 	  		else
 					PROCOper(LINE_TYPE_ISTRUZIONE,returnString,OPDEF_MODE_NULLA,0);
@@ -2666,24 +2716,24 @@ Mm20:   ;
 
 #if ARCHI
 #elif Z80
-	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"endp",0);
+	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"endp",0);
 #elif I8086
-	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"ENDP",0);
+	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"ENDP",0);
 #elif MC68000
 		if(!(TipoOut & TIPO_SPECIALE))
-		  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"ENDP",0);
+		  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"ENDP",0);
 #elif GD24032
-	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"ENDP",0);
+	  PROCOper(LINE_TYPE_DATA_DEF,CurrFunc->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"ENDP",0);
 #elif MICROCHIP
-//		PROCOper(LINE_TYPE_DATA_DEF,"endp",9,(union SUB_OP_DEF *)&CurrFunc,0);
+//		PROCOper(LINE_TYPE_DATA_DEF,"endp",9,(union SUB_OP_DEF*)&CurrFunc,0);
 #endif
 		swap(&LastOut,&OldTX[1].TX);
-		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"endfunction");
-		if(Reg<Regs->MaxUser && !(CurrFunc->modif & FUNC_MODIF_FASTCALL)) {
+		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"endfunction");
+		if(Reg<Regs->MaxUser && !(CurrFunc->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE))) {
 #if ARCHI
-  		sprintf(MyBuf,"R%u-R%u",Reg,Regs->MaxUser-1);
+  		wsprintf(MyBuf,"R%u-R%u",Reg,Regs->MaxUser-1);
   		PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80
 	  	for(i=Reg; i<Regs->MaxUser; i++)
 	  	  PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,i);
@@ -2693,13 +2743,13 @@ Mm20:   ;
 #elif MC68000
 //	  	for(i=Reg; i<Regs->MaxUser; i++)
 //		  	PROCOper(LINE_TYPE_ISTRUZIONE,"move.l"/*popString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_REGISTRO,i);
-	  	sprintf(MyBuf,"d%u-d%u",Reg,Regs->MaxUser-1);
+	  	wsprintf(MyBuf,"d%u-d%u",Reg,Regs->MaxUser-1);
 	  	PROCOper(LINE_TYPE_ISTRUZIONE,"movem.l"/*pushString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
-	  	sprintf(MyBuf,"{R%u-R%u}",Reg,Regs->MaxUser-1);
-	  	PROCOper(LINE_TYPE_ISTRUZIONE,"LDM.d"/*pushString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+	  	wsprintf(MyBuf,"{R%u-R%u}",Reg,Regs->MaxUser-1);
+	  	PROCOper(LINE_TYPE_ISTRUZIONE,"LDM.d"/*popString*/,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
+				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif MICROCHIP
 	  	for(i=Reg; i<Regs->MaxUser; i++)
 	  	  PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,i);
@@ -2738,6 +2788,8 @@ Mm20:   ;
 		LastOut=OldTX[1].TX;
 		*OldTX[1].T=0;
 		OldTX[1].TX=0;
+		OldTX[1].AutoOff=0;
+	  OldTX[1].id = __line__;		// v. altre, cmq ok qua
 		AutoOff=0;
 		Declaring=TRUE;		// v. C89 C99 :)
 		Reg=Regs->MaxUser;
@@ -2751,12 +2803,32 @@ Mm20:   ;
 		Ottimizza(RootOut);
 		// fare ricorsivamente fino a quando non ci sono più miglioramenti! 2026
 
-
-    PROCObj(FO4);            // flusha la funzione
-    if(OutList) {
-      PROCVarList(FLst,CurrFunc);
-      }
-    // cancella le variabili locali...
+		if(CurrFunc->modif & FUNC_MODIF_INLINE) {		// salvo il contenuto della inline! prima che venga flushata
+			struct LINE *sl1=CurrFunc->definition,*sl2;
+			i=0; j=0;
+			CurrFunc->definition=sl2=(struct LINE*)GlobalAlloc(GPTR,sizeof(struct LINE));
+			while(sl1 && (sl1->type != LINE_TYPE_COMMENTO || _tcsnicmp(sl1->rem,"----------",10))) {
+//				PROCOut(sl->type,sl->opcode,&sl->s1,&sl->s2/*,&sl->s3*/);
+				sl2->type=sl1->type;
+				_tcscpy(sl2->opcode,sl1->opcode);
+				sl2->s1=sl1->s1;
+				sl2->s2=sl1->s2;
+				_tcscpy(sl2->rem,sl1->rem);
+				sl2->next=(struct LINE*)GlobalAlloc(GPTR,sizeof(struct LINE));
+				sl2=sl2->next;
+				sl1=sl1->next;
+				i++;
+				if(i>25 && !j) {		// diciamo :)
+					PROCWarn(4710,"function too large for inlining");
+					j=1;
+					}
+				}
+			}
+		PROCObj(FO4);            // flusha la funzione (ndr DEVE necessariamente cancellare quel che c'è o si incasina ...2026 per inline
+		if(OutList) {
+			PROCVarList(FLst,CurrFunc);
+			}
+		// cancella le variabili locali...
 		while(CurrFuncGotos) {			    // cancello i goto
 			struct VARS *g=CurrFuncGotos->next;
 			GlobalFree(CurrFuncGotos);
@@ -2798,7 +2870,7 @@ int Ccc::PROCIsDecl() {
 		i=FNIsClass(T);             // per gestire interrupt, pascal ecc.
 		if(i>=0) {
 		  if(i>=16) {
-				modif=i >> 4;
+				modif |= i >> 4;
 				}
 		  else {
 				v=i;
@@ -2809,9 +2881,8 @@ int Ccc::PROCIsDecl() {
 		  FNLO(T);                 
 		  }
 		else {
-//		  FIn->Seek(OldTextp2,CFile::begin);
 			FIn->RestorePosition(OldTextp2);
-//			__line__=ol;
+			__line__=ol;
 			}
 		} while(i>=0);
 	/*if(!_tcscmp(T,"const"))	{	// GESTIRE! usare ; v. anche di là
@@ -2823,30 +2894,28 @@ int Ccc::PROCIsDecl() {
   if(/*(m==0) && */(v<0) && (t==VARTYPE_NOTYPE) && (InBlock>0)) {
 // SE NON SPECIFICA LA CLASSE, NE IL TIPO E SIAMO IN UN BLOCCO...
 		if(Declaring) {
-		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"----------------------------------------");    // SEPARA LE DICHIARAZIONI DAL RESTO DELLA FUNZIONE
+		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"----------------------------------------");    // SEPARA LE DICHIARAZIONI DAL RESTO DELLA FUNZIONE
 		  Declaring=FALSE;     
 		  }
 		if(OutSource) {
-			__line__=FIn->getLineFromPosition();
-		  wsprintf(MyBuf,"<%5u> (%5u): ",__line__,FIn->lineno);
-		  FNGetLine(OldTextp,MyBuf+17);		// rimettere 10, toglier!
+		  wsprintf(MyBuf,"<%5u>: ",__line__);
+		  FNGetLine(OldTextp,MyBuf+9);		// 
 //			MyBuf[_tcslen(MyBuf)-1]=0;		// tolgo CR se no diventa doppio
-		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 		  }
 		FIn->RestorePosition(OldTextp);
-//		FIn->Seek(OldTextp,CFile::begin);
-//		__line__=ol;
+		__line__=ol;
 		FNEvalExpr(16,MyBuf);
 // ...ALLORA E' UN'ESPRESSIONE
 		PROCCheck(';');
+		__line__=ol;
 		}
   else {
 		if(OutSource) {
-			__line__=FIn->getLineFromPosition();
-		  wsprintf(MyBuf,"<%5u> (%5u): ",__line__,FIn->lineno);
-		  FNGetLine(OldTextp,MyBuf+17);		// rimettere 10, toglier!
-//			MyBuf[_tcslen(MyBuf)-2]=0;		// tolgo CR se no diventa doppio
-		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+		  wsprintf(MyBuf,"<%5u>: ",__line__);
+		  FNGetLine(OldTextp,MyBuf+9);		// 
+//			MyBuf[_tcslen(MyBuf)-1]=0;		// tolgo CR se no diventa doppio
+		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 		  }
 		if(Declaring) {
 // SE SI PUO' ANCORA DICHIARARE... v. C89 C99
@@ -2857,9 +2926,9 @@ int Ccc::PROCIsDecl() {
 				  Class=(enum VAR_CLASSES)v;
 				}           // SE SI SPECIFICAVA UNA CLASSE LEGGI IL PROSSIMO ITEM
 			if(FNIsType(T)==VARTYPE_NOTYPE) {
-//				FIn->Seek(OldTextp,CFile::begin);   //  SE NON SI SPECIFICAVA (O SI SPECIFICA) UN TIPO TORNA INDIETRO
+//			  SE NON SI SPECIFICAVA (O SI SPECIFICA) UN TIPO TORNA INDIETRO
 				FIn->RestorePosition(OldTextp);
-//				__line__=ol;
+				__line__=ol;
 				}
 
 			if(!_tcscmp(T,"unsigned") || !_tcscmp(T,"signed")) {
@@ -2908,15 +2977,17 @@ primogiro:
 				} while(*MyBuf==',');       // TUTTA UNA SERIE DI DICHIARAZIONI
 		  }
 		else {
-		  PROCError(1001,"no more allocation allowed");
+		  PROCError(2143,"no more allocation allowed");
 //		  PROCError(2062,"type"); o anche 2143 "...before type"
 		  }
 		      // qui non è bello... tiene conto delle funz
 		if(*MyBuf=='{')
-      FIn->unget('{');		//FIn->Seek(-1,CFile::current);
+      FIn->unget('{');	
 		else {
-		  if(*MyBuf!=';')
-		    PROCCheck(';');				
+		  if(*MyBuf != ';')
+		    PROCCheck(';');
+			else
+				__line__=ol;
 		  }  
 		}      
   return 0;
@@ -2931,21 +3002,43 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
   struct VARS *V;
 	int ol;
 	int8_t ndim=0;
-	bool isInitialized;
+	bool isInitialized,dontAllocate=0;
 	COutputFile *myFO=NULL;			// file temporaneo per inizializzazione array di array o di stringhe
   
   *S=0;
   if((int32_t)(int16_t)Size==-2)		// marker per aggregato... MIGLIORARE
 		return -1;
   OldTextp=FIn->GetPosition();
-  FNLO(nome);             // LEGGO UN ITEM
 	ol=__line__;
+  FNLO(nome);             // LEGGO UN ITEM
   // PRINT "Classe:"Class%" Tipo:"~type%" Size:"Size%" Dim:"dim%
-  V=FNCercaVar(nome,TRUE);     // SE LA VARIABILE GIA' ESISTE...
-  if(V) {
-		if((Size != V->size) || ((V->classe>CLASSE_EXTERN) && (Class != V->classe))) 
+  V=FNCercaVar(nome,TRUE);     // SE LA VARIABILE GIA' ESISTE... (nel blocco)
+/*  if(V) {
+//		if((Size != V->size) || ((V->classe>CLASSE_EXTERN) && (Class != V->classe))) 
+		if(V->classe>CLASSE_EXTERN && Class >= V->classe)
 	  	PROCError(2086,nome);
 // SE LA DIMENSIONE E' DIVERSA O LA CLASSE, ERRORE
+		} non è ancora ok per le static/global , ok gemini 2026*/
+	if(V) {
+		if(V->classe > CLASSE_EXTERN) {
+			// 1. Se le classi non coincidono (es. STATIC vs GLOBAL) -> ERRORE
+			if(Class != V->classe)
+				PROCError(2086,nome);
+			// 2. Se la classe è la stessa ma cambiano tipo o dimensione (es. long vs float) -> ERRORE
+			else if((V->type & ~VARTYPE_FUNC_USED) != Type || V->size != Size || V->type & VARTYPE_INITIALIZED)
+				PROCError(V->type & VARTYPE_FUNC ? 2371 : 2086,nome);
+			// 3. Se siamo dentro una funzione (AUTO/REGISTER), vieta QUALSIASI ridefinizione nello stesso blocco
+			else if(Class >= CLASSE_AUTO)		// var locali in diversi blocchi allo stesso livello ...
+				PROCError(2086,nome);
+			// Se arriviamo qui: sono due 'int x;' globali identiche (tentative definition valida)
+			if(Class < CLASSE_AUTO)
+				dontAllocate=TRUE;
+			} 
+		else {
+			// Gestione EXTERN e Prototipi di funzioni
+			if(V->type != Type)
+				PROCError(2086,nome);
+			}
 		}
   if(!InBlock && (Class>CLASSE_STATIC)) {
 		PROCWarn(2071,nome);
@@ -2965,6 +3058,8 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
 	if(Type & VARTYPE_FUNC && (Type & VARTYPE_CONST))			// solo C++?? ma...
 //	  if(!(Type & VARTYPE_POINTER)) 
 		PROCError(2071,nome);
+	if(attrib & FUNC_ATTRIB_NAKED && Class == CLASSE_AUTO)
+		PROCWarn(2215,nome);
 
 	if(Type & VARTYPE_CONST) {
 		char tempPath[256];
@@ -3006,8 +3101,10 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
 		while(*FNLA(MyBuf)=='[') {
 		  while(*FNLO(MyBuf) != ']');
 		  }
-//		  myLog->print("Array: %s, tipo: %x, size %x\n",nome,type,Size);
+//		  myLog->print(0,"Array: %s, tipo: %x, size %x\n",nome,type,Size);
 		isInitialized=*FNLA(MyBuf) == '=';
+		if(isInitialized)
+			V->type |= VARTYPE_INITIALIZED;
 
 		switch(Class) {
 		  case CLASSE_EXTERN:
@@ -3125,18 +3222,18 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
 				  }
 				else {
 #if MC68000
-				  AutoOff-=(v+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  ALTRIMENTI NEGATIVI (e pari
+				  OldTX[InBlock].AutoOff-=(v+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  ALTRIMENTI NEGATIVI (e pari
 #elif GD24032
-				  AutoOff-=(v+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  ALTRIMENTI NEGATIVI (e pari
+				  OldTX[InBlock].AutoOff-=(v+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  ALTRIMENTI NEGATIVI (e pari
 #else
-				  AutoOff-=v;         // ALTRIMENTI NEGATIVI
+				  OldTX[InBlock].AutoOff-=v;         // ALTRIMENTI NEGATIVI
 #endif
 				  }
 //				sprintf(V->label,"%d",AutoOff);
-				MAKEPTROFS(V->label)=AutoOff;			// 
+				MAKEPTROFS(V->label)=OldTX[InBlock].AutoOff;			// 
 				if(OutSource) {
   				sprintf(MyBuf,"%s = %d",nome,MAKEPTROFS(V->label));
-				  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+				  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 				  }
 				if(*FNLA(MyBuf) == '=') {
 				  PROCError(1002,"init auto array");		// c'è anche altrove;  forse C99 ecc??
@@ -3148,7 +3245,9 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
 
 		}		// se array
   else {
-		isInitialized=*FNLA(MyBuf) == '=';
+		isInitialized= *FNLA(MyBuf) == '=';
+		if(isInitialized)
+			V->type |= VARTYPE_INITIALIZED;
     Size=FNGetMemSize(Type,Size,0/*dim*/,1);
 		switch(Class) {
 // ALLOCO VAR. NORMALE
@@ -3304,38 +3403,38 @@ L5080:
 					(!(Type & (VARTYPE_UNION | VARTYPE_STRUCT | VARTYPE_ARRAY /*0x1C00*/))))) {
 //	  			AutoOff=(AutoOff & -STACK_ITEM_SIZE)-Size;	mah credo fosse sbagliato
 #if MC68000									// verificare per altri
-					if(AutoOff & 1)			// pari cmq
-						AutoOff--;
+					if(OldTX[InBlock].AutoOff & 1)			// pari cmq
+						OldTX[InBlock].AutoOff--;
 #elif GD24032
-					if(AutoOff & 1)			// pari cmq VERIFICARE QUA
-						AutoOff--;
+					if(OldTX[InBlock].AutoOff & 1)			// pari cmq VERIFICARE QUA
+						OldTX[InBlock].AutoOff--;
 #endif
-				  AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;
+				  OldTX[InBlock].AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;
 		  		}
 			  else {
 #if MC68000
-					if(Size>=2) {
-						if(AutoOff & 1)			// pari cmq
-							AutoOff--;
-						AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  pari
+					if(Size>=2  /*STACK_ITEM_SIZE*/) {
+						if(OldTX[InBlock].AutoOff & 1)			// pari cmq
+							OldTX[InBlock].AutoOff--;
+						OldTX[InBlock].AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  pari
 						}
 					else {
-						AutoOff-=Size;
+						OldTX[InBlock].AutoOff-=Size;
 						}
 #elif GD24032
-					if(Size>=2) {
-						if(AutoOff & 1)			// pari cmq VERIFICARE
-							AutoOff--;
-						AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  pari
+					if(Size>=4 /*STACK_ITEM_SIZE*/) {
+						if(OldTX[InBlock].AutoOff & 1)			// pari cmq VERIFICARE
+							OldTX[InBlock].AutoOff--;
+						OldTX[InBlock].AutoOff-=(Size+STACK_ITEM_SIZE-1) & -STACK_ITEM_SIZE;         //  pari
 						}
 					else {
-						AutoOff-=Size;
+						OldTX[InBlock].AutoOff-=Size;
 						}
 #else
-					AutoOff-=Size;		// verificare per altri
+					OldTX[InBlock].AutoOff-=Size;		// verificare per altri
 #endif
 					}
-				MAKEPTROFS(V->label)=AutoOff;
+				MAKEPTROFS(V->label)=OldTX[InBlock].AutoOff;
 		  	}			// non parm
 			else {
 	// GESTISCO IL PARAMETRO
@@ -3360,8 +3459,8 @@ L5080:
 //			sprintf(V->label,"%d",AutoOff);
 			if(OutSource) {
   			itoa(AutoOff,MyBuf,10);
- 				sprintf(MyBuf,"%s = %d",nome,MAKEPTROFS(V->label));
-			  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+ 				wsprintf(MyBuf,"%s = %d",nome,MAKEPTROFS(V->label));
+			  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 			  }
 			break;
 
@@ -3372,45 +3471,48 @@ L5080:
 //		  	sprintf(V->label,"%d",t1);
   			MAKEPTRREG(V->label)=t1;
 		  	if(isParm) {
-					if(!(V->func->modif & FUNC_MODIF_FASTCALL)) {
-						AutoOff+=STACK_ITEM_SIZE; 
+					if(!(V->func->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE))) {
+						OldTX[InBlock].AutoOff+=STACK_ITEM_SIZE; 
 //					FNGetFPStr(MyBuf,AutoOff,NULL);
 #if ARCHI
 						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,MAKEPTRREG(V->label),
-							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff);
+							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff);
 #elif Z80
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff);
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff+1);
+						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff);
+						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff+1);
 						PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,0);
 						PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,MAKEPTRREG(V->label));
 #elif I8086
 						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,MAKEPTRREG(V->label),
-							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff);
+							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff);
 #elif MC68000
 						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,MAKEPTRREG(V->label),
-							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff);
+							OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff);
 #elif GD24032
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff
+						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff
 							,OPDEF_MODE_REGISTRO32,MAKEPTRREG(V->label));
 #elif MICROCHIP
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff);
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,AutoOff+1);
+						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff);
+						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,OldTX[InBlock].AutoOff+1);
 						PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,0);
 						PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,MAKEPTRREG(V->label));
 #endif
 // PARAMETRO REGISTRO opp fastcall
 						}
+					else if(V->func->modif & FUNC_MODIF_INLINE) {
+		  			MAKEPTRREG(V->label)=Regs->MaxUser-1-t1;			// inizio a usare da D0/R0/AL
+						}
 					else {			// aggiusto #registro 
-		  			MAKEPTRREG(V->label)=Regs->MaxUser-t1;
+		  			MAKEPTRREG(V->label)=Regs->MaxUser-1-t1;			// inizio a usare da D0/R0/AL
 						}
 						}
 		  	if(OutSource) {
 		  	  sprintf(MyBuf,"register %s = %s",(*Regs)[V],nome);
-					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 					}
 				  }
 				else {
-					if(!(V->func->modif & FUNC_MODIF_FASTCALL)) 
+					if(!(V->func->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE)))
 						;
 					else
 						PROCWarn(4042,"nessun registro disponibile");
@@ -3473,25 +3575,26 @@ L5080:
 				if(InBlock>0)
 				  PROCError(2599,nome);
 				InBlock++;
+			  OldTX[InBlock].id = __line__;		// o rand()? v. altrove
 				Declaring=TRUE;
 				Regs->Reset();
 				CurrFunc=V;
 // COMINCIO AD ALLOCARE LE VARIABILI locali parm
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0);
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0);
 #if ARCHI
 				AutoOff=STACK_ITEM_SIZE;
 				PROCOutLab(nome);            // INDIRIZZO FUNZIONE
 #elif Z80
 				AutoOff=2*STACK_ITEM_SIZE;		// (was : in DclVar aggiungiamo subito 2, PRIMA; (SEMBRA strano, 2025: dovremmo partire da 2+2 ossia caller address e vecchio FramePtr
 				if(V->classe == CLASSE_GLOBAL)
-				  PROCOper(LINE_TYPE_DATA_DEF,"public",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-				PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"proc",0);            // INDIRIZZO FUNZIONE
+				  PROCOper(LINE_TYPE_DATA_DEF,"public",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
+				PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"proc",0);            // INDIRIZZO FUNZIONE
 #elif I8086
 				AutoOff=2*STACK_ITEM_SIZE;		// MemoryModel
 				if(V->classe == CLASSE_GLOBAL)
-  				PROCOper(LINE_TYPE_DATA_DEF,"PUBLIC\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+  				PROCOper(LINE_TYPE_DATA_DEF,"PUBLIC\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 				PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,
-					(union SUB_OP_DEF *)((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "PROC FAR" : "PROC NEAR"),0);
+					(union SUB_OP_DEF*)((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? "PROC FAR" : "PROC NEAR"),0);
 #elif MC68000
 				if((MemoryModel & 0xf) >= MEMORY_MODEL_LARGE)
 					AutoOff=2*4;		// (was: in DclVar aggiungiamo subito 2, PRIMA; (v.Z80
@@ -3499,29 +3602,28 @@ L5080:
 					AutoOff=2*4;
 				if(V->classe == CLASSE_GLOBAL) {
 					if(!(TipoOut & TIPO_SPECIALE))
-  					PROCOper(LINE_TYPE_DATA_DEF,"public\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+  					PROCOper(LINE_TYPE_DATA_DEF,"public\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 					}
 				if(!(TipoOut & TIPO_SPECIALE))
-					PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"PROC",0);
+					PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"PROC",0);
 				else
-					PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"",0);		// se metto ":" easy68k si incazza @#$%
+					PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"",0);		// se metto ":" easy68k si incazza @#$%
 #elif GD24032
 				AutoOff=2*4;
 				if(V->classe == CLASSE_GLOBAL) {
- 					PROCOper(LINE_TYPE_DATA_DEF,"PUBLIC\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+ 					PROCOper(LINE_TYPE_DATA_DEF,"PUBLIC\t",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 					}
-				PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"PROC",0);
+				PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"PROC",0);
 #elif MICROCHIP
 				AutoOff=STACK_ITEM_SIZE;
 				if(V->classe == CLASSE_GLOBAL)
-				  PROCOper(LINE_TYPE_DATA_DEF,"GLOBAL",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-			  PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)":",0);
+				  PROCOper(LINE_TYPE_DATA_DEF,"GLOBAL",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
+			  PROCOper(LINE_TYPE_DATA_DEF,V->label,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)":",0);
 #endif
 				OldTX[0].TX=LastOut;
 				*OldTX[0].T=0;
-//				FIn->Seek(t,CFile::begin);
 				FIn->RestorePosition(t);
-//				__line__=ol;
+				__line__=ol;
 				FNLO(T);
 				if(*T != ')') {
 // CI SONO PARAMETRI
@@ -3545,7 +3647,7 @@ L5080:
 								FNLO(T);
 								}
 							else {
-								if(!(V->modif & FUNC_MODIF_FASTCALL)) 		// 
+								if(!(V->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE)))
 									Class=CLASSE_AUTO;
 								else
 									Class=CLASSE_REGISTER;
@@ -3566,13 +3668,13 @@ L5080:
 	  					if(Type & VARTYPE_POINTER && Size==0)
 								Size=PTR_SIZE;     // scavalco VOID, ma non void*
 	  					if(FNGetMemSize(Type,Size,0/*dim*/,0) != 0) {     // scavalco VOID, ma non void*
-								if(!(V->modif & FUNC_MODIF_FASTCALL)) 		// 
+								if(!(V->modif & FUNC_MODIF_FASTCALL)) 		// e inline pure
 									parmPtr=(int*)V->parm;
 								else
 									parmPtr=(int*)V->parm;
 								i=totParm;
 								if(parmPtr[0]) {		// se c'è già stato un prototipo per la funzione, ricontrollo i parm
-									if(parmPtr[i*2+1]!=Type || parmPtr[i*2+2]!=Size)
+									if(parmPtr[i*2+1] != Type || parmPtr[i*2+2] != Size)
 									  PROCError(2082,nome);		// mettere sia nome funzione che parm diverso...
 									}
 								parmPtr[i*2+1]=Type;
@@ -3598,9 +3700,8 @@ L5080:
 // DICHIARAZIONE OLD STYLE                 // non è completa, non controlla parm con lista
   					*(int *)V->parm=0;
 						PROCWarn(4131);
-//						FIn->Seek(t2,CFile::begin);
 						FIn->RestorePosition(t2);
-//						__line__=ol;
+						__line__=ol;
 						FNLO(T);
 						do {
 						  v=FNIsClass(T);
@@ -3611,7 +3712,7 @@ L5080:
 								t2=FIn->GetPosition();
 								}
 							else {
-								if(!(V->modif & FUNC_MODIF_FASTCALL)) 		// 
+								if(!(V->func->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE)))
 									Class=CLASSE_AUTO;
 								else
 									Class=CLASSE_REGISTER;
@@ -3628,9 +3729,8 @@ L5080:
 						  t2=FIn->GetPosition();
 						  FNLO(T);
 						  } while(*T != '{');
-//						FIn->Seek(t2,CFile::begin);
 						FIn->RestorePosition(t2);
-//						__line__=ol;
+						__line__=ol;
 						}
 				  }
 //				else
@@ -3658,7 +3758,7 @@ L5080:
 #endif
 				InBlock=0;
 				Declaring= TRUE;
-    		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"----------------------------------------");
+    		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"----------------------------------------");
 	// serve quando la funzione è vuota
 				LastOut=LastOut->prev;
 //				OldTX[0].TX=LastOut;
@@ -3677,31 +3777,31 @@ L5080:
 	  	    if(!V)
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
 //				  PROCOper(LINE_TYPE_CALL,"BL __CLArgs",NULL,NULL,NULL,NULL);
-	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO32,1,
-						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,12);
+						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,12);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO32,0,
-						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,8);
+						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,8);
 //				  PROCOper(LINE_TYPE_ISTRUZIONE,storString,"STR R0,[",Regs->FpS,",#8]",NULL,NULL);
 				  FuncCalled=TRUE;
 #elif Z80
 		      V=FNCercaVar("_CLArgs",0);
 	  	    if(!V)
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
-	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,7,OPDEF_MODE_REGISTRO_HIGH8,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,6,OPDEF_MODE_REGISTRO_LOW8,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,5,OPDEF_MODE_REGISTRO_HIGH8,1);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,4,OPDEF_MODE_REGISTRO_LOW8,1);
+	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,7,OPDEF_MODE_REGISTRO_HIGH8,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,6,OPDEF_MODE_REGISTRO_LOW8,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,5,OPDEF_MODE_REGISTRO_HIGH8,1);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,4,OPDEF_MODE_REGISTRO_LOW8,1);
 #elif I8086
 		      V=FNCercaVar("_CLArgs",0);
 	  	    if(!V)
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
-	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"mov WORD PTR",
-						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)1,4,OPDEF_MODE_REGISTRO16,0);
+						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)1,4,OPDEF_MODE_REGISTRO16,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"mov WORD PTR",
-						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,2,OPDEF_MODE_REGISTRO16,1);
+						OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,2,OPDEF_MODE_REGISTRO16,1);
 					// MemoryModel!
 #elif MC68000
 		      V=FNCercaVar("_CLArgs",0);
@@ -3709,10 +3809,10 @@ L5080:
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
 					if(MemoryModel & MEMORY_MODEL_RELATIVE) {
 						// finire!
-		      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+		      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 						}
 					else
-		      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+		      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,8);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,1,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,4);
 					// MemoryModel!
@@ -3721,22 +3821,22 @@ L5080:
 	  	    if(!V)
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
 					if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-	          wsprintf(MyBuf,"%s-$",V->label);       // ripreparo add. jump + registro
-	      		PROCOper(LINE_TYPE_CALL,"CALLR",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&MyBuf,0);
+	          wsprintf(MyBuf,"%s-$",V->label);       // 
+	      		PROCOper(LINE_TYPE_CALL,"CALLR",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&MyBuf,0);
 						}
 					else
-	      		PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
+	      		PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,8,OPDEF_MODE_REGISTRO32,0);
 				  PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,4,OPDEF_MODE_REGISTRO32,1);
 #elif MICROCHIP
 		      V=FNCercaVar("_CLArgs",0);
 	  	    if(!V)
 	    		  V=PROCAllocVar("_CLArgs",VARTYPE_FUNC,CLASSE_EXTERN,0,0,0,0);	
-	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,7,OPDEF_MODE_REGISTRO_HIGH8,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,6,OPDEF_MODE_REGISTRO_LOW8,0);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,5,OPDEF_MODE_REGISTRO_HIGH8,1);
-				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF *)0,4,OPDEF_MODE_REGISTRO_LOW8,1);
+	      	PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,7,OPDEF_MODE_REGISTRO_HIGH8,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,6,OPDEF_MODE_REGISTRO_LOW8,0);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,5,OPDEF_MODE_REGISTRO_HIGH8,1);
+				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,(union SUB_OP_DEF*)0,4,OPDEF_MODE_REGISTRO_LOW8,1);
 #endif
 				  }
 				if(V->modif & FUNC_MODIF_INTERRUPT) {
@@ -3746,9 +3846,8 @@ L5080:
 				AutoOff=0;
 				}
 			else {
-//				FIn->Seek(t,CFile::begin);
 				FIn->RestorePosition(t);
-//				__line__=ol;
+				__line__=ol;
 				FNLO(T);
 				if(*T != ')') {
 				  if(*T=='.' || FNIsType(T) != VARTYPE_NOTYPE) {
@@ -3763,9 +3862,8 @@ L5080:
 								parmPtr[i*2+2]=0;
 								parmPtr[0]=i+1;
 //					    myLog->print("trovo ... e scrivo a %x\n",p+2+i*8);
-//        				FIn->Seek(t2,CFile::begin);
 								FIn->RestorePosition(t2);
-//								__line__=ol;
+								__line__=ol;
 							  break;
 							  }
 							Size=INT_SIZE;
@@ -3942,8 +4040,7 @@ L5080:
 	//				if(Type & VARTYPE_ARRAY) 
 	// c'è già sopra					PROCError(1002,"inizializzazione array auto");		// forse C99 ecc??
 					FIn->RestorePosition(OldTextp);
-	//				FIn->Seek(OldTextp,CFile::begin);     
-	//				__line__=ol;
+					__line__=ol;
 	//				*MyBuf=0;
 					FNEvalExpr(15,MyBuf);
 					break;
@@ -3952,36 +4049,40 @@ L5080:
 		default:
 do_declare_ext:
 			FIn->unget(*MyBuf);		//FIn->Seek(-1,CFile::current);     
+			__line__=ol;
 		  break;
 		}
 
-  if(*S) {
-		if(Type & VARTYPE_CONST) {
-			int ch;
-			myFO->Seek(0,CFile::begin);
-			while((ch=myFO->get()) != EOF)			// inserisco l'array!
-				FO3->put(ch);
-			PROCOut1(FO3,S," ;",nome,NULL);
+	if(!dontAllocate) {
+		if(*S) {
+			if(Type & VARTYPE_CONST) {
+				int ch;
+				myFO->Seek(0,CFile::begin);
+				while((ch=myFO->get()) != EOF)			// inserisco l'array!
+					FO3->put(ch);
+				PROCOut1(FO3,S," ;",nome,NULL);
+				}
+			else {
+				if(MemoryModel & MEMORY_MODEL_RELATIVE)
+					;
+				if(!isInitialized)
+					PROCOut1(FO2,S," ;",nome,NULL);
+				else
+					PROCOut1(FO1,S," ;",nome,NULL);
+		//				PROCOut1((*S==' ' /*|| *S=='\t' pare ok così 2025*/ ) ? FO2 : FO1,S," ;",nome,NULL);
+				}
+	#if ARCHI
+			if(_tcscmp(S,"ALIGN"))
+				PROCOut1(FO1,"ALIGN",NULL);
+	#elif Z80 || I8086 || MICROCHIP
+	#elif MC68000 
+	//	  if(_tcscmp(S,"ALIGN"))
+	//			PROCOut1(FO2,"\tds.w 0",NULL);		// boh no so a cosa servisse, cmq ossia ALIGN a word
+	#elif GD24032
+	#endif      
 			}
-		else {
-			if(MemoryModel & MEMORY_MODEL_RELATIVE)
-				;
-			if(!isInitialized)
-				PROCOut1(FO2,S," ;",nome,NULL);
-			else
-				PROCOut1(FO1,S," ;",nome,NULL);
-	//				PROCOut1((*S==' ' /*|| *S=='\t' pare ok così 2025*/ ) ? FO2 : FO1,S," ;",nome,NULL);
-			}
-#if ARCHI
-	  if(_tcscmp(S,"ALIGN"))
-	    PROCOut1(FO1,"ALIGN",NULL);
-#elif Z80 || I8086 || MICROCHIP
-#elif MC68000 
-//	  if(_tcscmp(S,"ALIGN"))
-//			PROCOut1(FO2,"\tds.w 0",NULL);		// boh no so a cosa servisse, cmq ossia ALIGN a word
-#elif GD24032
-#endif      
-	  }      
+		}
+	
 	if(myFO) {
 		myFO->Close();
 		CFile::Remove(myFO->GetFilePath());
@@ -3992,21 +4093,24 @@ do_declare_ext:
   }
 	 
 int Ccc::subAsm(char *s) {
-  char MyBuf[64],buf[3][64];
+  char MyBuf[64],buf[3][64],ch;
   struct VARS *V;
-  int i,l;
+  int i,ol;
   long ot;
 	int8_t state=0;
 	bool go=FALSE;
-	struct OP_DEF u[2];
+	struct OP_DEF u[3];
   
-//  FIn->Seek(FNGetLine(FIn->GetPosition(),MyBuf),CFile::begin);
   *MyBuf=0;
 	*buf[0]=*buf[1]=*buf[2]=0;
+	ZeroMemory(&u,sizeof(u));
+
   FNLO(s);
-	l=FIn->getLineFromPosition();
-  while(!go) {
+	ot=FIn->GetPosition();
+	ol=__line__;
+  do {
 //    l=__line__;
+		  myLog->print(0,"SUBASM: %s,  %d, ",s,state);
 		switch(state) {
 			case 0:		// istruzione
 				_tcscpy(buf[0],s);
@@ -4019,36 +4123,34 @@ int Ccc::subAsm(char *s) {
 					_tcscat(buf[0],s);
 					}
 #elif GD24032
+
 #else
 				// ev altre varianti...
 #endif
 				state++;
-			  u[0].mode=OPDEF_MODE_IMMEDIATO32;
-				u[0].ofs=0;
-				ZeroMemory(&u[0].s,sizeof(union SUB_OP_DEF));
 				break;
 			case 1:		// 1st op
 			case 2:		// 2nd op
+#if ARCHI || GD24032
+			case 3:		// 3nd op		(Archimedes, GD24032
+#endif
 			  if(*s==',') {
-					state++;
-				  u[1].mode=OPDEF_MODE_NULLA /*OPDEF_MODE_IMMEDIATO32*/;
-					u[1].ofs=0;
-					ZeroMemory(&u[1].s,sizeof(union SUB_OP_DEF));
 					}
 				else {
 					if(FNIsOp(s,0)) {
-  					_tcscat(buf[state],s);
+//  					_tcscat(buf[state],s);
+						// virgola, implicita; oppure parentesi, ++ ecc
+						state--;
 						}
-/* fare, volendo					else if(FNReg(s)) {
-					  u[state].mode=OPDEF_MODE_REGISTRO32;
-						}*/
+					else if(i=Regs->FNIsReg(s)) {		// 
+					  u[state-1].mode=OPDEF_MODE_REGISTRO32;
+					  u[state-1].s.n=i-1;
+						}
 					else if(V=FNCercaVar(s,FALSE)) {
 						switch(V->classe) {
 							case CLASSE_EXTERN:
 							case CLASSE_GLOBAL:
 							case CLASSE_STATIC:
-      					_tcscat(buf[state],V->label);
-//								_tcscpy(u[state-1].s.label,V->label);
 							  u[state-1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
 								_tcscpy(u[state-1].s.label,V->label);
 								break;
@@ -4061,22 +4163,16 @@ int Ccc::subAsm(char *s) {
 #else
 					      sprintf(MyBuf," %s%+d",Regs->FpS,i);
 #endif
-      					_tcscat(buf[state],MyBuf);
-//								u[state-1].s.n=MAKEPTROFS(V->label);
 							  u[state-1].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
-								u[state-1].s.n=MAKEPTROFS(V->label);
+								u[state-1].ofs=MAKEPTROFS(V->label);
 								break;
 							case CLASSE_REGISTER:
-      					_tcscat(buf[state],(*Regs)[V]);
-//								u[state-1].s.n=MAKEPTRREG(V->label);
 							  u[state-1].mode=OPDEF_MODE_REGISTRO32;
 								u[state-1].s.n=MAKEPTRREG(V->label);
 								break;
 							}
-//						u[state-1].s.v=V;
 						}
 					else {
-  					_tcscat(buf[state],s);
 #if MC68000
 			      if(*s=='#' || isdigit(*s))
 						  u[state-1].mode=OPDEF_MODE_IMMEDIATO32;
@@ -4087,7 +4183,9 @@ int Ccc::subAsm(char *s) {
 			      if(isdigit(*s))
 						  u[state-1].mode=OPDEF_MODE_IMMEDIATO32;
 #endif
+					  u[state-1].s.n=atoi(s);
 						}
+					state++;
 					}
 				break;
 			default:
@@ -4096,24 +4194,35 @@ int Ccc::subAsm(char *s) {
 			}
 	  if(*s=='}') {
 			FIn->RestorePosition(ot);
-			go=TRUE;
+			__line__=ol;
+			return 0;
 	    }
-		ot=FIn->GetPosition();
-		FNLO(s); 
-	  if(l != FIn->getLineFromPosition() /*__line__*/) {
-//	    FIn->Seek(ot,CFile::begin);
-			FIn->RestorePosition(ot);
-//			__line__=l;
-			go=TRUE;
-	    }
-  	}
+		else {
+			ot=FIn->GetPosition();
+			ch=FIn->get();
+			if(ch=='\n') {
+	//			FIn->RestorePosition(ot);
+				go=TRUE;
+				}
+			else {
+				FIn->unget(ch);
+				FNLO(s); 
+				}
+			}
+
+		} while(!go);
+
 //  PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_NULLA,0);		// ATTENZIONE lim max= sizeof(opcode), SPEZZARE operandi
-  PROCOper(LINE_TYPE_ISTRUZIONE,buf[0],OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)buf[1],0,
-		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)buf[2],0);
-//   PROCOper(LINE_TYPE_ISTRUZIONE,buf[0],&u[0],&u[1]);  FINIRE sopra, con registri, numeri ecc!
+
+#if ARCHI || GD24032
+  if(buf[2][0])
+	  PROCOper(LINE_TYPE_ISTRUZIONE,buf[0],&u[0],&u[1],&u[2]); 
+	else
+#endif
+	  PROCOper(LINE_TYPE_ISTRUZIONE,buf[0],&u[0],&u[1]);  
 	
   
-  return 0;
+  return 1;
   }
 
 int Ccc::FNIsStmt() {
@@ -4132,22 +4241,38 @@ rifoStmt:
 	ol=__line__;
   t=LastOut;
   FNLO(TS);
-  switch(*(WORD *)TS) {
+  switch(*(WORD*)TS) {
+		case '#':
+			FNLO(MyBuf);
+			FNLO(MyBuf);
+			__line__=atoi(MyBuf);
+			FNLO(MyBuf);
+			_tcsncpy(__file__,MyBuf+1,_tcslen(MyBuf)-2);
+			__file__[_tcslen(MyBuf)-2]=0;
+			FIn->get();		// mangio il CR per non alterare contatore line!
+			Declaring=OldDcl;
+			return TRUE;
+			break;
 		case 'a_':
 			if(!_tcscmp(TS,"_asm")) {                 // CODICE Assembly
 				if(*FNLA(MyBuf) == '{') {
 					FNLO(MyBuf);
-	//			  FNLO(MyBuf);
-					for(;;) {
-						subAsm(MyBuf);
-						if(!*MyBuf || *MyBuf == '}') {
-							FNLO(MyBuf);
-							break;
+				  FNLA(MyBuf);
+					if(*MyBuf!='}') {		// safety se vuoto!
+						for(;;) {
+							subAsm(MyBuf);
+							FNLA(MyBuf);
+							if(!*MyBuf || *MyBuf == '}') {
+								FNLO(MyBuf);
+								break;
+								}
 							}
 						}
+					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\");
 					}
 				else {
 					subAsm(MyBuf);
+					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\");
 					}
 				}
 			else
@@ -4159,19 +4284,19 @@ rifoStmt:
 				while(T1) {
 					if(*OldTX[T1].B) {
 	#if ARCHI
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 	#elif Z80
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 	#elif I8086
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 	#elif MC68000
 						PROCOper(LINE_TYPE_JUMP,((MemoryModel & 0xf) <= MEMORY_MODEL_MEDIUM) ? jmpShortString : jmpString,
-							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 #elif GD24032
 						PROCOper(LINE_TYPE_JUMP,jmpShortString,
-							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+							OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 	#elif MICROCHIP
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].B,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].B,0);
 	#endif
 						T1=1;
 						}
@@ -4221,17 +4346,17 @@ rifoStmt:
 				while(T1) {
 					if(*OldTX[T1].C) {
 	#if ARCHI
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 	#elif Z80
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 	#elif I8086
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 	#elif MC68000
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 #elif GD24032
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 	#elif MICROCHIP
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[T1].C,0);
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[T1].C,0);
 	#endif
 						T1=1;
 						}
@@ -4309,17 +4434,17 @@ rifoStmt:
 	//		_tcscat(TS,"_else");
 				LastOut=OldTX[I].TX->prev;
 	#if ARCHI
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 	#elif Z80
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 	#elif I8086
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 	#elif MC68000
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 #elif GD24032
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 	#elif MICROCHIP
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)TS,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)TS,0);
 	#endif
 				t1=LastOut;
 				LastOut=OldTX[I].TX;
@@ -4376,7 +4501,7 @@ rifoStmt:
 						wsprintf(MyBuf,"|%5u| : %s=%u",__line__,AS,enum_cnt);
 	//					FNGetLine(OldTextp,MyBuf+10);		// complicato... lascio solo nomi
 	//					MyBuf[_tcslen(MyBuf)-2]=0;		// tolgo CR se no diventa doppio
-						PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+						PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 						}
 					FNLA(MyBuf);
 					if(*MyBuf == ',')
@@ -4422,48 +4547,46 @@ rifoStmt:
 					} while(I);
 		//    t2=LastOut;
 				l1=FIn->GetPosition();
-	//			FIn->Seek(l,CFile::begin);
 				FIn->RestorePosition(l);
-	//			__line__=ol;
+				__line__=ol;
 				if(*FNLA(MyBuf) != ';') {
 		//      _tcscpy(MyBuf,"!");
 					_tcscpy(MyBuf,T1S);
 					FNEvalCond(MyBuf,T1S,TRUE);
 					}
 				t2=LastOut;
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"endfor");
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"endfor");
 				PROCCheck(';');
 	//		*MyBuf=0;
 				FNEvalExpr(16,MyBuf);                 // 2° expr
 	#if ARCHI
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif Z80
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif I8086
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif MC68000
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif MICROCHIP
 				_tcscpy(MyBuf,T1S);
 				_tcscat(MyBuf,"_");
-				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+				PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#endif
 				PROCOutLab(T1S);
-	//			FIn->Seek(l1,CFile::begin);
 				FIn->RestorePosition(l1);
-	//			__line__=ol;
+				__line__=ol;
 				_tcscpy(OldTX[InBlock+1].T,T1S);
 	//			_tcscat(T1S,"_");  
 				_tcscpy(MyBuf,T1S);
@@ -4478,17 +4601,17 @@ rifoStmt:
 				if(*FNLA(MyBuf) != ';') {
 	  			FNLO(MyBuf);
 	#if ARCHI
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif Z80
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif I8086
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif MC68000
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif MICROCHIP
-	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+	  			PROCOper(LINE_TYPE_JUMPGOTO,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#endif
 		  		}
 				else
@@ -4531,15 +4654,15 @@ rifoStmt:
 					FNLO(MyBuf);
 	#if ARCHI
 	#elif Z80
-					PROCOper(LINE_TYPE_ISTRUZIONE,"csect",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,"csect",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#elif I8086
-					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\tSEGMENT",0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\tSEGMENT",0);
 	#elif MC68000
-					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\tSEGMENT",0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\tSEGMENT",0);
 #elif GD24032
-					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"\tSEGMENT",0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"\tSEGMENT",0);
 	#elif MICROCHIP
-					PROCOper(LINE_TYPE_ISTRUZIONE,"CODE",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_ISTRUZIONE,"CODE",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 	#endif
 					}
 				Declaring=OldDcl;
@@ -4547,6 +4670,10 @@ rifoStmt:
 			else
 				goto noStmt;
 			break;
+//		case 'il':			// #line! ma arriva sopra col cancelletto, per forza
+//			FNLO(MyBuf);
+//			FNLO(MyBuf);
+//			break;
 		case 'er':		
 			if(!_tcscmp(TS,"return")) {
 				if(*FNLA(MyBuf) != ';') {
@@ -4592,7 +4719,7 @@ rifoStmt:
 				*((int *)p)=0;
 				swap(&t2,&LastOut);
 				PROCLoops(NULL,TS,"",t2);
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"endswitch");// SISTEMARE! esce DOPO la label finale
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"endswitch");// SISTEMARE! esce DOPO la label finale
 				}
 			else
 				goto noStmt;
@@ -4628,8 +4755,8 @@ rifoStmt:
 					i=FNEvalCond(MyBuf,OldTX[I].B,TRUE);
 					PROCCheck(')');
 	//			  if(i)
-						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)(OldTX[I].T+1),0);
-					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"enddo");
+						PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)(OldTX[I].T+1),0);
+					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"enddo");
 					PROCOutLab(OldTX[I].B);
 					*OldTX[I].T=0;
 					*OldTX[I].B=0;
@@ -4643,27 +4770,27 @@ rifoStmt:
 					_tcscpy(MyBuf,TS);
 					FNEvalCond(MyBuf,TS,TRUE);
 					PROCCheck(')');
-					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,"endwhile");
+					PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"endwhile");
 					t2=LastOut;
 					_tcscpy(MyBuf,TS);
 #if ARCHI
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif I8086
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MC68000
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif GD24032
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif MICROCHIP
 					_tcscat(MyBuf,"_");
-					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+					PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #endif
 					*MyBuf=' ';
 					_tcscpy(MyBuf+1,TS);
@@ -4677,38 +4804,24 @@ rifoStmt:
 			break;
 		default:
 noStmt:		
-			if(*FNLA(MyBuf)==':') {
+			FNLA(MyBuf);
+			if(*MyBuf==':') {
 				if(!FNCercaGoto(TS)) {
-					struct VARS *g,*g2,*g3;
-
-					g=(struct VARS *)GlobalAlloc(GPTR,sizeof(struct VARS)); 
-					if(!g) {
-						PROCError(1001,"Fine memoria GOTO");
-						}
-					if(CurrFuncGotos) {
-						g2=g3=CurrFuncGotos;
-						while(g2) {
-							g3=g2;
-							g2=g2->next;
-							}
-						g3->next=g;
-						}
-					else {
-						CurrFuncGotos=g;
-						}
-					_tcsncpy(g->label,TS,sizeof(g->label)-1);		// uso questo e non Name...
-					g->next=(struct VARS *)NULL;
-					PROCOutLab(TS,"_",CurrFunc->name);
+					PROCAllocGoto(TS);
+					PROCOutLab(TS,CurrFunc->label);
 					}
 				else
 					PROCError(2045,TS);
 				FNLO(TS);
 				goto rifoStmt;       // la label da sola non fa stmt...
 				}
+/*			else if(*MyBuf=='{') {
+				*OldTX[InBlock+1].T=0;
+				PROCLoops(NULL,TS,MyBuf,LastOut);
+				}*/
 			else {
-	//		  FIn->Seek(OldTextp,CFile::begin);
 				FIn->RestorePosition(OldTextp);
-	//			__line__=ol;
+				__line__=ol;
 				Declaring=OldDcl;
 				return FALSE;
 				}
@@ -4719,11 +4832,10 @@ noStmt:
 		}
   if(OutSource) {    
 		swap(&t,&LastOut);
-			__line__=FIn->getLineFromPosition();
 		wsprintf(MyBuf,"|%5d| : ",__line__);
 		FNGetLine(OldTextp,MyBuf+10);
 //		MyBuf[_tcslen(MyBuf)-2]=0;		// tolgo CR se no diventa doppio
-		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+		PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 		swap(&t,&LastOut);
 		}
   return TRUE;
@@ -4784,7 +4896,7 @@ int Ccc::PROCGenCondBranch(const char *Alabel, int T, int8_t *VQ, O_SIZE Size) {
 				_tcscat(LastOut->s1.s.label,b+3);
 				}
 		  }
-	  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+	  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 		*/
 
 		if(i==VALUE_IS_EXPR_FUNC || (*VQ & VALUE_IS_CONDITION_VALUE)) {
@@ -4835,7 +4947,7 @@ int Ccc::PROCGenCondBranch(const char *Alabel, int T, int8_t *VQ, O_SIZE Size) {
 //		    if(!V || V==-1 || V==-2)       // NO su 16 bit
 //		      if(V == -14 || V==-15) {      // non si capisce...
 				    PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO16,0,OPDEF_MODE_REGISTRO16,0);
-//	  		    PROCOper(LINE_TYPE_ISTRUZIONE,"or",1,(union SUB_OP_DEF *)Regs->Accu,1,(union SUB_OP_DEF *)Regs->Accu);
+//	  		    PROCOper(LINE_TYPE_ISTRUZIONE,"or",1,(union SUB_OP_DEF*)Regs->Accu,1,(union SUB_OP_DEF*)Regs->Accu);
 
 //	  	      }
 //	  	    else { 
@@ -4946,35 +5058,35 @@ int Ccc::PROCGenCondBranch(const char *Alabel, int T, int8_t *VQ, O_SIZE Size) {
     *VQ=CONDIZ_DIVERSO & 0xf;                // converto una var in cond != 0
 		}
 #if ARCHI
-  PROCOper(LINE_TYPE_JUMPC,jmpCondString /*B*/,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+  PROCOper(LINE_TYPE_JUMPC,jmpCondString /*B*/,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #elif Z80
   if(T)
     *VQ ^= 1;
   if(*VQ==CONDIZ_MAGGIORE /*0x83  (OPDEF_MODE_REGISTRO_INDIRETTO*/)
-    PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"$+5",0);
-  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+    PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"$+5",0);
+  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
   if(*VQ==CONDIZ_MINORE_UGUALE)
-    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #elif I8086
-  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #elif MC68000
   PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B /*| 0x80  verificare*/,
-		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #elif GD24032
   PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,B /*| 0x80  verificare*/,
-		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #elif MICROCHIP
   if(T)
     *VQ ^= 1;
   if(*VQ==CONDIZ_MAGGIORE  /*0x83/*OPDEF_MODE_REGISTRO_INDIRETTO*/) {
 		if(CPUPIC<2)
-			PROCOper(LINE_TYPE_JUMPC,"GOTO",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"$+5",0);
+			PROCOper(LINE_TYPE_JUMPC,"GOTO",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"$+5",0);
 		else
-			PROCOper(LINE_TYPE_JUMPC,"GOTO/BRA",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)"$+5*2",0);
+			PROCOper(LINE_TYPE_JUMPC,"GOTO/BRA",OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)"$+5*2",0);
 		}
-  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,B,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
   if(*VQ==CONDIZ_MINORE_UGUALE)
-    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Alabel,0);
+    PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)Alabel,0);
 #endif
 
   return 0;
@@ -5008,12 +5120,12 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
   i=*VQ & 0x3f;
 //  i &= 0xbf;
   FNGetLabel(MyBuf1,2);
-  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,FNGetCondString(i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf1,0);
+  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,FNGetCondString(i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
 	if((*VQ & VALUE_HAS_CONDITION) && *Clabel) {          // or logico ||
     PROCOutLab(Clabel);
 	  }
   PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,Regs->D,OPDEF_MODE_IMMEDIATO16,1);
-  PROCOper(LINE_TYPE_JUMP,jmpCondString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)FNGetLabel(MyBuf,1),0);
+  PROCOper(LINE_TYPE_JUMP,jmpCondString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
 	if(!(*VQ & VALUE_HAS_CONDITION) && *Clabel) {           // and logico &&
     PROCOutLab(Clabel);
 	  }
@@ -5035,12 +5147,12 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 	if(i<=-10)
     i+=10;
   FNGetLabel(MyBuf1,2);
-  PROCOper(LINE_TYPE_JUMPC,"j",OPDEF_MODE_CONDIZIONALE,FNGetCondString(-i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf1,0);
+  PROCOper(LINE_TYPE_JUMPC,"j",OPDEF_MODE_CONDIZIONALE,FNGetCondString(-i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
 	if(*VQ<=-20 && *Clabel) {          // or logico ||
     PROCOutLab(Clabel);
 	  }
   PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,1);
-  PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)FNGetLabel(MyBuf,1),0);
+  PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
 	if(*VQ>-20 && *Clabel) {           // and logico &&
     PROCOutLab(Clabel);
 	  }
@@ -5052,7 +5164,7 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 //  FNGetLabel(MyBuf1,2);
 //  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,
 //		FNGetCondString(i & VALUE_IS_CONDITION ? (i & 0xf) : (CONDIZ_UGUALE ^ (i & 1)),TRUE),
-//		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf1,0);
+//		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
   PROCOper(LINE_TYPE_JUMPC /* per formato istruzione..*/,"s",OPDEF_MODE_CONDIZIONALE,
 		FNGetCondString(i & VALUE_IS_CONDITION ? i : CONDIZ_UGUALE | ((i ^ 1) & 1),FALSE),
 		OPDEF_MODE_REGISTRO32,Regs->D);
@@ -5060,7 +5172,7 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 //    PROCOutLab(Clabel);
 //	  }
 //  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO32,1,OPDEF_MODE_REGISTRO32,Regs->D);
-//  PROCOper(LINE_TYPE_JUMP,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)FNGetLabel(MyBuf,1),0);
+//  PROCOper(LINE_TYPE_JUMP,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
 //	if(!(*VQ & VALUE_HAS_CONDITION) && *Clabel) {           // and logico &&
 //    PROCOutLab(Clabel);
 //	  }
@@ -5076,7 +5188,7 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 //  FNGetLabel(MyBuf1,2);
 //  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,
 //		FNGetCondString(i & VALUE_IS_CONDITION ? (i & 0xf) : (CONDIZ_UGUALE ^ (i & 1)),TRUE),
-//		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf1,0);
+//		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
   PROCOper(LINE_TYPE_JUMPC /* per formato istruzione..*/,"s",OPDEF_MODE_CONDIZIONALE,
 		FNGetCondString(i & VALUE_IS_CONDITION ? i : CONDIZ_UGUALE | ((i ^ 1) & 1),FALSE),
 		OPDEF_MODE_REGISTRO32,Regs->D);
@@ -5084,7 +5196,7 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 //    PROCOutLab(Clabel);
 //	  }
 //  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO32,1,OPDEF_MODE_REGISTRO32,Regs->D);
-//  PROCOper(LINE_TYPE_JUMP,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)FNGetLabel(MyBuf,1),0);
+//  PROCOper(LINE_TYPE_JUMP,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
 //	if(!(*VQ & VALUE_HAS_CONDITION) && *Clabel) {           // and logico &&
 //    PROCOutLab(Clabel);
 //	  }
@@ -5099,12 +5211,12 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
   i=*VQ & 0x3f;
 //  i &= 0xbf;
   FNGetLabel(MyBuf1,2);
-  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,FNGetCondString(i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf1,0);
+  PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,FNGetCondString(i,TRUE),OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
 	if((*VQ & VALUE_HAS_CONDITION) && *Clabel) {          // or logico ||
     PROCOutLab(Clabel);
 	  }
   PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,Regs->D,OPDEF_MODE_IMMEDIATO16,1);
-  PROCOper(LINE_TYPE_JUMP,"GOTO",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)FNGetLabel(MyBuf,1),0);
+  PROCOper(LINE_TYPE_JUMP,"GOTO",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
 	if(!(*VQ & VALUE_HAS_CONDITION) && *Clabel) {           // and logico &&
     PROCOutLab(Clabel);
 	  }
@@ -5146,23 +5258,23 @@ int Ccc::PROCReturn() {
 		}
   else {
 #if ARCHI
-		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,NULL);
+		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,NULL);
 #elif Z80
-		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 #elif I8086
-		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 #elif MC68000
 		if(MemoryModel & MEMORY_MODEL_RELATIVE)
-			PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+			PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 		else
-			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 #elif GD24032
 		if(MemoryModel & MEMORY_MODEL_RELATIVE)
-			PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+			PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 		else
-			PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+			PROCOper(LINE_TYPE_JUMP,jmpShortString /*jmpString 512KB dovrebbero bastare!*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 #elif MICROCHIP
-		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)OldTX[1].T,0);
+		PROCOper(LINE_TYPE_JUMP,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)OldTX[1].T,0);
 #endif
 		}      
 	
@@ -5231,6 +5343,9 @@ int Ccc::PROCLoops(const char *T, const char *T1, const char *T2, struct LINE *S
   _tcscpy(OldTX[I].B,T1);
   _tcscpy(OldTX[I].C,T2);
   if(*FNLA(MyBuf) == '{') {
+		Declaring=TRUE;
+	  OldTX[I].id = __line__;		// o rand()?
+		FNLO(MyBuf);
 		PROCBlock();
 		}
   else {   
@@ -5248,11 +5363,10 @@ rifoIsStmt:
 	  	}
 		else {
 		  if(OutSource) {
-			__line__=FIn->getLineFromPosition();
 				wsprintf(MyBuf,"|%5d| : ",__line__);
 				FNGetLine(FIn->GetPosition(),MyBuf+10);
 //				MyBuf[_tcslen(MyBuf)-2]=0;		// tolgo CR se no diventa doppio
-				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF *)0,0,MyBuf);
+				PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,MyBuf);
 				}
 	  	FNEvalExpr(15,MyBuf);
 	  	}
@@ -5286,10 +5400,10 @@ struct VARS *Ccc::FNCercaVar(const char *N, bool M) {
 		  }
 		V=Var;
 		while(V) {
-//        myLog->print("Cercavar\a: %s <> %s\n",N,*V->name);
+//        myLog->print(0,"Cercavar\a: %s <> %s, livello %u",N,V->name,Bl);
 		  if(!V->tag) {
 				if(V->func==F) {
-				  if(V->block==Bl) {
+				  if(V->block==Bl && V->blockId==OldTX[Bl].id) {
 						if(!_tcscmp(N,V->name)) { 
 						  return V;
 						  }
@@ -5354,13 +5468,19 @@ fineMem:
 	V->name[MAX_NAME_LEN]=0;
   V->size=Size;
   V->block=InBlock;
+  V->blockId=OldTX[InBlock].id;
   V->func=CurrFunc;
   V->classe=Class;
   V->modif=Modif;
+	V->definition=NULL;
   if(Type & VARTYPE_FUNC) {			// anche Pointer
   	if(!(V->parm=(char *)GlobalAlloc(GPTR,256)))
   	  goto fineMem;
 	  *((int *)V->parm)=-1;                // no lista parm
+		if(Modif & FUNC_MODIF_INLINE) {
+			if(!(Type & VARTYPE_FUNC_POINTER))
+				V->definition=LastOut;		// ma poi viene cancellata... occorre copiare (v.)
+			}
 	  }
 	else
 		V->parm=0;
@@ -5404,6 +5524,29 @@ noPascal:
 	
   return V;
   }
+
+struct VARS *Ccc::PROCAllocGoto(const char *label) {
+	struct VARS *g,*g2,*g3;
+
+	g=(struct VARS *)GlobalAlloc(GPTR,sizeof(struct VARS)); 
+	if(!g) {
+		PROCError(1001,"Fine memoria GOTO");
+		}
+	if(CurrFuncGotos) {
+		g2=g3=CurrFuncGotos;
+		while(g2) {
+			g3=g2;
+			g2=g2->next;
+			}
+		g3->next=g;
+		}
+	else {
+		CurrFuncGotos=g;
+		}
+	_tcsncpy(g->label,label,sizeof(g->label));		// uso questo e non Name...
+	g->next=(struct VARS *)NULL;
+	return g;
+	}
 
 struct VARS *Ccc::FNCercaGoto(const char *N) {
   register int Bl;
@@ -5715,1518 +5858,6 @@ int Ccc::PROCCast(O_TYPE T1, O_SIZE S1, O_TYPE *T2, O_SIZE *S2, int8_t reg) {
   }
 
 
-int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salvare reg, r1 per copiare in altro reg.
-  int I,T=0;
-	int16_t i,j;
-  int totParm,prParm=0;
-  int *parmPtr;
-	O_TYPE parmType;
-	O_SIZE parmSize;
-  char Clabel[32],MyBuf[64];
-  struct LINE *t,*t1;
-  struct VARS RPtr;
-  struct OPERAND R;
-  union STR_LONG RCost;
-	bool parmProto;
-#if MC68000 || GD24032
-	char pushString2[16]={0},movString2[16]={0};
-#endif
-			  
-  if(debug)
-    myLog->print(0,"USAFUN %x\n",V);           
-		   
-  I=0;
-  ZeroMemory(&R,sizeof(struct OPERAND));
-  ZeroMemory(&RPtr,sizeof(struct VARS));
-  ZeroMemory(&RCost,sizeof(union STR_LONG));
-	*Clabel=0;
-  
-#if ARCHI		
-  FuncCalled=TRUE;
-#elif Z80 || I8086 || MC68000 || GD24032 || MICROCHIP
-#endif    
-	if(!(V->type & VARTYPE_FUNC_POINTER)) {
-		V->type |= VARTYPE_FUNC_USED;         // funzione usata almeno una volta  
-		// siccome ora questa V è una copia, vado a settare il flag di quella vera
-		FNCercaVar(V->name,0)->type |= VARTYPE_FUNC_USED;
-		}
-  if(tosave1)
-    Regs->Save();
-	parmPtr=(int*)V->parm;
-	if(parmPtr) {
-		totParm=parmPtr[0];		// il primo int è il #parm da prototipo
-		parmPtr++;
-		if(debug)
-		  myLog->print(0,"La fun %s ha %d parm\n",V->name,totParm);
-		}
-	else {
-		totParm=-1;
-	  }	
-  if(*FNLA(MyBuf) != ')') {
-		if(!PascalCall && !(V->modif & FUNC_MODIF_PASCAL)) {
-		  t1=LastOut;
-		  t=0;
-		  }
-		do {
-		  R.Q=0;
-		  R.size=0;
-		  R.type=0l;
-			R.var=&RPtr;
-			R.cost=&RCost;
-//		  isRValue=isPtrUsed=0;
-// no!			Regs->Reset();
-		  i=0;
-		  FNRev(14,&i,Clabel,&R);
-
-      if(totParm != -1 && prParm<totParm) {
-				parmType=parmPtr[0];
-				parmSize=parmPtr[1];
-				parmProto=TRUE;
-				}
-			else {
-				parmType=R.type;
-				parmSize=R.size;
-				parmProto=FALSE;
-				}
-
-		  i=FNGetMemSize(parmType,parmSize,0/*dim*/,1);
-		  j=FNGetMemSize(R.type,R.size,0/*dim*/,1);
-
-#if MC68000
-			_tcscpy(pushString2,pushString);
-			_tcscpy(movString2,movString);		// in pratica qua son la stessa cosa :)
-			switch(i) {
-				case 1:		// il 68000 mantiene cmq SP pari anche se pusho un byte (il secondo esce 0, credo
-					if(!parmProto) 	// se non c'è un prototipo char, estendo (specie per printf
-						goto forced_size2;
-					_tcscat(pushString2,
-						parmType & VARTYPE_POINTER ? ((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM ? ".l" : ".w") : ".b");
-					_tcscat(movString2,
-						parmType & VARTYPE_POINTER ? ((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM ? ".l" : ".w") : ".b");
-					break;
-				case 2:
-forced_size2:
-					_tcscat(pushString2,
-						parmType & VARTYPE_POINTER ? ((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM ? ".l" : ".w") : ".w");
-					_tcscat(movString2,
-						parmType & VARTYPE_POINTER ? ((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM ? ".l" : ".w") : ".w");
-					break;
-				case 4:
-					_tcscat(pushString2,".l");
-					_tcscat(movString2,".l");
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#endif    
-#if GD24032
-			_tcscpy(pushString2,pushString);
-			_tcscpy(movString2,movString);		// in pratica qua son la stessa cosa :)
-			switch(i) {
-				case 1:		// il 68000 mantiene cmq SP pari anche se pusho un byte (il secondo esce 0, credo
-					if(!parmProto) 	// se non c'è un prototipo char, estendo (specie per printf
-						goto forced_size2;
-					_tcscat(pushString2,parmType & VARTYPE_POINTER ? ".d" : ".b");
-					_tcscat(movString2,parmType & VARTYPE_POINTER ? ".d" : ".b");
-					break;
-				case 2:
-forced_size2:
-					_tcscat(pushString2,parmType & VARTYPE_POINTER ? ".d" : ".w");
-					_tcscat(movString2,parmType & VARTYPE_POINTER ? ".d" : ".w");
-					break;
-				case 4:
-					_tcscat(pushString2,".d");
-					_tcscat(movString2,".d");
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#endif    
-
-		if(!(V->modif & FUNC_MODIF_FASTCALL)) {		// se fastcall, se pascal si potrebbero usare i registri al rovescio...
-#if ARCHI
-			I+=STACK_ITEM_SIZE;
-#elif Z80 
-			switch(i) {
-				case 1:
-					I+=parmType & VARTYPE_POINTER /*puntatore*/ ? getPtrSize(parmType) : STACK_ITEM_SIZE;
-					break;
-				case 2:
-					I+=STACK_ITEM_SIZE;
-					break;
-				case 4:
-					I+=2*STACK_ITEM_SIZE;
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#elif MC68000 || I8086
-			switch(i) {
-				case 1:
-				case 2:
-					I += parmType & VARTYPE_POINTER /*puntatore*/ ? getPtrSize(parmType)
-						: STACK_ITEM_SIZE;		//
-					break;
-				case 4:
-					I += 2*STACK_ITEM_SIZE;
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#elif GD24032
-			switch(i) {
-				case 1:
-				case 2:
-					I += parmType & VARTYPE_POINTER /*puntatore*/ ? getPtrSize(parmType)
-						: STACK_ITEM_SIZE;		//
-					break;
-				case 4:
-					I += STACK_ITEM_SIZE;
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#elif MICROCHIP
-			switch(i) {
-				case 1:
-					I+=parmType & VARTYPE_POINTER /*puntatore*/ ? getPtrSize(parmType) : STACK_ITEM_SIZE;
-					break;
-				case 2:
-					I+=2*STACK_ITEM_SIZE;
-					break;
-				case 4:
-					I+=4*STACK_ITEM_SIZE;
-					break;
-				case 0:
-					PROCError(4099);
-					break;
-				default:
-					PROCError(1002,"dim. parametro troppo grande (array/struct)");
-					break;
-				}   
-#endif
-			}		// fastcall
-		else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-#elif GD24032
-#elif MICROCHIP
-#endif
-			}
-
-
-
-
-
-
-		if(R.Q==VALUE_IS_D0) {
-			if(!(V->modif & FUNC_MODIF_FASTCALL)) {
-#if ARCHI
-				// CREDO VADAN TUTTE FATTE COME 68000!! 2025
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/0,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,10);
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/1,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,10);
-#elif Z80 
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/0,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,10);
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/1,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,10);
-#elif I8086
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/0,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,10);
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/1,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,10);
-#elif MC68000
-/*mah non serve, v,sotto
-				PROCReadD0(R.var,parmType,parmSize,0,0,0);
-				switch(i) {
-					case 1:
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 2:                    
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-			  	case 4:
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}*/
-#elif GD24032
-#elif MICROCHIP
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/0,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,10);
-				PROCReadD0(R.var,parmType,parmSize,/*0,*/1,0,0);
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_REGISTRO,10);
-#endif
-				}
-			else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-				PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,prParm+1);
-#elif GD24032
-				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_REGISTRO32,Regs->D);
-#elif MICROCHIP
-#endif
-				}
-			}
-		else if(R.Q==VALUE_IS_EXPR || R.Q==VALUE_IS_EXPR_FUNC) {			// se è risultato di un'espressione, pare
-			if(!(V->modif & FUNC_MODIF_FASTCALL)) {
-#if ARCHI
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,10);
-#elif Z80 
-	  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_REGISTRO16,10);
-#elif I8086
-				switch(i) {		// VERIFICARE!
-					case 1:			// minimo 16bit anche qua? sì pare di sì
-						if(!parmProto /*&& parmSize != 1*/) {	// se non c'è un prototipo char, estendo
-							if(parmType & VARTYPE_UNSIGNED)
-								PROCOper(LINE_TYPE_ISTRUZIONE,"and",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,"cbw",OPDEF_MODE_REGISTRO16,Regs->D);
-							}
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						break;
-					case 2:                    
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						break;
-			  	case 4:
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-#elif MC68000
-				switch(i) {
-					case 1:			// DEVO castare a 16bit! per stack dispari AH NO NON SERVE :) PERO' serve cmq, v. 
-						if(!parmProto /*&& parmSize != 1*/) {	// se non c'è un prototipo char, estendo
-							if(parmType & VARTYPE_UNSIGNED)
-								PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-							}
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 2:                    
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-			  	case 4:
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-#elif GD24032
-				switch(i) {
-					case 1:			// DEVO castare a 16bit! per stack dispari AH NO NON SERVE :) PERO' serve cmq, v. 
-						if(!parmProto /*&& parmSize != 1*/) {	// se non c'è un prototipo char, estendo
-							if(parmType & VARTYPE_UNSIGNED)
-								PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,0x00ff);
-							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,Regs->D);
-							}
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D);
-						break;
-					case 2:                    
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D);
-						break;
-			  	case 4:
-						PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-#elif MICROCHIP
-#endif
-				}		// fastcall
-			else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-				PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,prParm+1);
-#elif GD24032
-				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_REGISTRO32,Regs->D);
-#elif MICROCHIP
-#endif
-				}
-			}		// VALUE_IS_EXPR
-	  else if(R.Q==VALUE_IS_VARIABILE) {
-			if(!(V->modif & FUNC_MODIF_FASTCALL)) {
-/*				if(R.var->classe==CLASSE_REGISTER) {
-#if ARCHI
-				  PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER,"!,{",Regs[R.var],"}");
-#elif Z80 || I8086
-			  	PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(R.var->label));   // manca il cast
-#elif MC68000
-			  	PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,MAKEPTRREG(R.var->label),OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);   // manca il cast
-#elif GD24032
-#elif MICROCHIP
-					if(CPUPIC<2) {
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(R.var->label));   // manca il cast
-						}
-					else {
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,MAKEPTRREG(R.var->label));   // manca il cast
-						}
-#endif
-			  	goto L19440;
-			  	}
-				else BAH DIREI CAZZATA antica :) ci sono i cast, sign-extension ecc... sempre */{
-#if ARCHI || Z80 
-	        if(totParm != -1 && prParm<totParm)
-					  ReadVar(R.var,parmType,parmSize,0,0);
-					else  
-					  ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,0);
-// FARE COME 68000!
-//					if(R.size==1)
-//						PROCCast(0,2,R.type,R.size);
-
-#elif I8086
-//  				if(CPU86<2)             // push word ptr [#] è ok anche su 8086
-//	  			  ReadVar(R.var,VARTYPE_PLAIN_INT);
-
-					switch(R.var->classe) {	// questo codice e' copiato pari-pari da ReadVar per l'8086, sostituendo PUSH a MOV e R.var a V
-																	// magari unire le due cose!
-						case CLASSE_EXTERN:
-						case CLASSE_GLOBAL:
-						case CLASSE_STATIC:
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,"mov",OPDEF_MODE_REGISTRO8,0,
-										OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-									PROCOper(LINE_TYPE_ISTRUZIONE,"cbw",OPDEF_MODE_NULLA);
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,0);
-									break;
-								case 2:                    
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-									break;
-			  				case 4:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,2);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_AUTO:
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,"mov",OPDEF_MODE_REGISTRO8,0,
-										OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-									PROCOper(LINE_TYPE_ISTRUZIONE,"cbw",OPDEF_MODE_NULLA);
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,0);
-									break;
-								case 2:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-									break;
-			  				case 4:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label)+1);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_REGISTER:
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,"mov",OPDEF_MODE_REGISTRO8,0,
-										OPDEF_MODE_REGISTRO8,MAKEPTRREG(R.var->label));
-									PROCOper(LINE_TYPE_ISTRUZIONE,"cbw",OPDEF_MODE_NULLA);
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,0);
-									break;
-								case 2:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D,
-										OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-									break;
-								case 4:
-									if(CPU86<3)
-										PROCError(4099);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-			  				}
-							break;
-						}
-						
-			  	goto L19440;
-#elif MC68000
-					switch(R.var->classe) {	// (questo codice era copiato pari-pari da ReadVar per l'8086, sostituendo PUSH a MOV e R.var a V
-																	// magari unire le due cose!
-						case CLASSE_EXTERN:
-						case CLASSE_GLOBAL:
-						case CLASSE_STATIC:
-							switch(i) {
-								case 1:			// DEVO castare a 16bit! per stack dispari AH NO NON SERVE :)
-									PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0,
-										OPDEF_MODE_REGISTRO16,Regs->D);
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0,
-											OPDEF_MODE_REGISTRO16,Regs->D);
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,R.var->type & VARTYPE_ARRAY ? OPDEF_MODE_VARIABILE_INDIRETTO : OPDEF_MODE_VARIABILE,
-										// ev memorymodel...
-											(union SUB_OP_DEF *)&R.var->label,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-			  				case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"clr.l",OPDEF_MODE_REGISTRO32,Regs->D);
-										if(j==1) {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0,
-												OPDEF_MODE_REGISTRO8,Regs->D);
-											if(!(R.type & VARTYPE_UNSIGNED))
-												PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0,
-												OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										if(!(R.type & VARTYPE_UNSIGNED))
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,R.var->type & VARTYPE_ARRAY ? OPDEF_MODE_VARIABILE_INDIRETTO : OPDEF_MODE_VARIABILE,
-											(union SUB_OP_DEF *)&R.var->label,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_AUTO:
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),OPDEF_MODE_REGISTRO16,Regs->D);
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),
-											OPDEF_MODE_REGISTRO16,Regs->D);
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,OPDEF_MODE_REGISTRO16,Regs->D);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-										}
-									else {
-										if(R.var->type & VARTYPE_ARRAY) {
-			  							PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_REGISTRO32,Regs->D);
-											PROCOper(LINE_TYPE_ISTRUZIONE,"addi.w",OPDEF_MODE_IMMEDIATO16,MAKEPTROFS(R.var->label),OPDEF_MODE_REGISTRO32,Regs->D);
-											// memorymodel
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,
-												0,MAKEPTROFS(R.var->label),OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-											}
-										}
-									break;
-			  				case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"clr.l",OPDEF_MODE_REGISTRO32,Regs->D);
-										if(j==1) {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"move.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),
-												OPDEF_MODE_REGISTRO32,Regs->D);
-											if(!(R.type & VARTYPE_UNSIGNED))
-												PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"move.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),
-												OPDEF_MODE_REGISTRO16,Regs->D);
-											}
-										if(!(R.type & VARTYPE_UNSIGNED))
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-										}
-									else {
-										if(R.var->type & VARTYPE_ARRAY) {
-			  							PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_REGISTRO32,Regs->D);
-											PROCOper(LINE_TYPE_ISTRUZIONE,"addi.l",OPDEF_MODE_IMMEDIATO32,MAKEPTROFS(R.var->label),OPDEF_MODE_REGISTRO32,Regs->D);
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,
-												0,MAKEPTROFS(R.var->label),OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-											}
-										}
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_REGISTER:
-							switch(i) {
-								case 1:
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,
-												OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,MAKEPTRREG(R.var->label),
-										OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"andi.w",OPDEF_MODE_IMMEDIATO16,0x00ff,
-												OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label),
-										OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(j==1) {
-											if(!(R.type & VARTYPE_UNSIGNED)) {
-												PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-												PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-												}
-											else
-												PROCOper(LINE_TYPE_ISTRUZIONE,"andi.l",OPDEF_MODE_IMMEDIATO16,0x000000ff,		// risparmio un'istruzione...  ma verificare tempi e spazio!
-													OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-											}
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label),
-											OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label),
-											OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-			  				}
-							break;
-						}
-						
-			  	goto L19440;
-#elif GD24032
-					switch(R.var->classe) {	// (questo codice era copiato pari-pari da ReadVar per l'8086, sostituendo PUSH a MOV e R.var a V
-																	// magari unire le due cose!
-						case CLASSE_EXTERN:
-						case CLASSE_GLOBAL:
-						case CLASSE_STATIC:
-							switch(i) {
-								case 1:			// 
-									PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D);
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,R.var->type & VARTYPE_ARRAY ? OPDEF_MODE_VARIABILE_INDIRETTO : OPDEF_MODE_VARIABILE,
-										// ev memorymodel...
-											(union SUB_OP_DEF *)&R.var->label,0);
-									break;
-			  				case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.d",OPDEF_MODE_REGISTRO32,Regs->D);
-										if(j==1) {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO8,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-											if(!(R.type & VARTYPE_UNSIGNED))
-												PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-											}
-										if(!(R.type & VARTYPE_UNSIGNED))
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.d",OPDEF_MODE_REGISTRO32,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D);
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,R.var->type & VARTYPE_ARRAY ? OPDEF_MODE_VARIABILE_INDIRETTO : OPDEF_MODE_VARIABILE,
-											(union SUB_OP_DEF *)&R.var->label,0);
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_AUTO:
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,Regs->D);
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),
-											OPDEF_MODE_REGISTRO16,Regs->D);
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D);
-										}
-									else {
-										if(R.var->type & VARTYPE_ARRAY) {
-			  							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_FRAMEPOINTER,0);
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.w",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO16,MAKEPTROFS(R.var->label));
-											// memorymodel
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,
-												0,MAKEPTROFS(R.var->label));
-											}
-										}
-									break;
-			  				case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.d",OPDEF_MODE_REGISTRO32,Regs->D);
-										if(j==1) {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-											if(!(R.type & VARTYPE_UNSIGNED))
-												PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-											}
-										if(!(R.type & VARTYPE_UNSIGNED))
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.l",OPDEF_MODE_REGISTRO32,Regs->D);
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D);
-										}
-									else {
-										if(R.var->type & VARTYPE_ARRAY) {
-			  							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_FRAMEPOINTER,0);
-											PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO32,MAKEPTROFS(R.var->label));
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,
-												0,MAKEPTROFS(R.var->label));
-											}
-										}
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							break;
-						case CLASSE_REGISTER:
-							switch(i) {
-								case 1:
-									if(!parmProto) {		// se non c'è un prototipo char, estendo
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label),OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO8,MAKEPTRREG(R.var->label));
-									break;
-								case 2:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(R.type & VARTYPE_UNSIGNED)
-											PROCOper(LINE_TYPE_ISTRUZIONE,"AND.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label),OPDEF_MODE_IMMEDIATO16,0x00ff);
-										else
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-										}
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label));
-									break;
-								case 4:
-									if(j<i)	{	// solo se la var è + piccola del parm...
-										if(j==1) {
-											if(!(R.type & VARTYPE_UNSIGNED)) {
-												PROCOper(LINE_TYPE_ISTRUZIONE,"SE.w",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-												PROCOper(LINE_TYPE_ISTRUZIONE,"SE.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-												}
-											else
-												PROCOper(LINE_TYPE_ISTRUZIONE,"AND.d",		// risparmio un'istruzione...  ma verificare tempi e spazio!
-													OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label),OPDEF_MODE_IMMEDIATO16,0x000000ff);
-											}
-										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-											}
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-									break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-			  				}
-							break;
-						}
-						
-			  	goto L19440;
-#elif MICROCHIP
-					switch(i) {
-			  		case 4:
-							ReadVar(R.var,parmType,parmSize,0,3,0);
-//				  			PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-				  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-							ReadVar(R.var,parmType,parmSize,0,2,0);
-				  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-						case 2:
-							ReadVar(R.var,parmType,parmSize,0,1,0);
-				  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-						case 1:
-							ReadVar(R.var,parmType,parmSize,0,0,0);
-				  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-							break;
-						case 0:
-							PROCError(4099);
-							break;
-						default:
-							PROCError(1002,"dim. parametro troppo grande (array/struct)");
-							break;
-						}
-#endif
-			  	}
-				}		// fastcall
-		else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-				switch(R.var->classe) {
-					case CLASSE_EXTERN:
-					case CLASSE_GLOBAL:
-					case CLASSE_STATIC:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0,
-							OPDEF_MODE_REGISTRO32,prParm+1);
-						break;
-					case CLASSE_AUTO:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label),
-							OPDEF_MODE_REGISTRO32,prParm+1);
-						break;
-					case CLASSE_REGISTER:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label),
-							OPDEF_MODE_REGISTRO32,prParm+1);
-						break;
-					}
-			  goto L19440;
-#elif GD24032
-				switch(R.var->classe) {
-					case CLASSE_EXTERN:
-					case CLASSE_GLOBAL:
-					case CLASSE_STATIC:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,
-							OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&R.var->label,0);
-						break;
-					case CLASSE_AUTO:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
-						break;
-					case CLASSE_REGISTER:
-						PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
-						break;
-					}
-			  goto L19440;
-#elif MICROCHIP
-#endif
-				}
-			}		// value_is_variable
-		else if(R.Q & VALUE_IS_COSTANTE) {
-			if(!(V->modif & FUNC_MODIF_FASTCALL)) {
-#if ARCHI || Z80
-			  PROCUseCost(R.Q,parmType /*R.type*/,parmSize /*R.size*/,R.cost,FALSE);
-#elif I8086
-				if(CPU86<1) {
-				  PROCUseCost(R.Q,parmType,parmSize,R.cost,FALSE);
-					}
-				else {
-					// questo codice e' copiato pari-pari da UseCost per l'8086, sostituendo PUSH a MOV
-					// magari unire le due cose!
-					if(T & (VARTYPE_FLOAT | VARTYPE_IS_POINTER)) { 
-						if(R.Q == 9) {
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)RCost.s,0);
-			//	  		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,"OFFSET DGROUP:",C->s,NULL);
-							}
-						else {
-	  					PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,RCost.l);
-							}
-						}
-					else {
-						if(R.Q==VALUE_IS_COSTANTE) {
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO8,RCost.l);
-									break;
-								case 2:
-								case 4:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,LOWORD(RCost.l));
-									if(i==4) {
-		  							PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,HIWORD(RCost.l));
-		  							}
-	  							break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							}
-						else {
-							switch(i) {
-								case 1:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)RCost.s,0);
-			//		        PROCOper(LINE_TYPE_ISTRUZIONE,movString,Regs->DSl,"OFFSET DGROUP:",C->s,NULL);
-									break;
-								case 2:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)RCost.s,0);
-			//		        PROCOper(LINE_TYPE_ISTRUZIONE,movString,Regs->D,"OFFSET DGROUP:",C->s,NULL);
-									break;
-								case 4:
-									PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)RCost.s,0);
-			//		        PROCOper(LINE_TYPE_ISTRUZIONE,"lds",Regs->D,C->s);
-	  							break;
-								case 0:
-									PROCError(4099);
-									break;
-								default:
-									PROCError(1002,"dim. parametro troppo grande (array/struct)");
-									break;
-								}
-							}
-						}
-			  	goto L19440;
-					}
-#elif MC68000
-// non serve, v.sotto			  PROCUseCost(R.Q,parmType,parmSize,R.cost,FALSE);
-#elif GD24032
-#elif MICROCHIP
-				switch(i) {
-			  	case 4:
-						PROCUseCost(R.Q,parmType /*R.type*/,parmSize /*R.size*/,R.cost,FALSE,3);		// FINIRE
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-						PROCUseCost(R.Q,parmType /*R.type*/,parmSize /*R.size*/,R.cost,FALSE,2);
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-					case 2:
-						PROCUseCost(R.Q,parmType /*R.type*/,parmSize /*R.size*/,R.cost,FALSE,1);
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-					case 1:
-						PROCUseCost(R.Q,parmType /*R.type*/,parmSize /*R.size*/,R.cost,FALSE,0);
-			  		PROCOper(LINE_TYPE_ISTRUZIONE,storString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,10);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-#endif
-				}		// fastcall
-			else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-//non serve					PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_IMMEDIATO32,R.cost->l,OPDEF_MODE_REGISTRO32,prParm+1);
-#elif GD24032
-#elif MICROCHIP
-#endif
-				}
-			}		// if COSTANTE
-		else {
-      if(totParm != -1 && prParm<totParm)
-        PROCCast(parmType,parmSize,&R.type,&R.size,-1);
-      }
-		
-			
-
-
-
-
-			// potrebbero SERVIRE i cast delle costanti, byte ecc...?
-		if(!(V->modif & FUNC_MODIF_FASTCALL)) {
-#if ARCHI
-			sprintf(MyBuf,"R%u",Regs->D);
-	  	PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-				OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
-#elif Z80
-		  if(i==4) {
-	  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,Regs->D+1);
-  		  }
-  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,Regs->D);
-#elif I8086
-		  if(R.Q == VALUE_IS_COSTANTE) {
-				switch(i) {
-					case 1:
-						if(CPU86<1)
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						else
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(R.cost->l)));
-						break;
-					case 2:
-						if(CPU86<1)
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						else
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,LOWORD(R.cost->l));
-						break;
-					case 4:
-						if(CPU86<1) {
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D+1);
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-							}
-						else {
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,HIWORD(R.cost->l));
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_IMMEDIATO16,LOWORD(R.cost->l));
-							}
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-		  else if(R.Q == VALUE_IS_VARIABILE) {
-// già fatto sopra		  			PROCOper(LINE_TYPE_ISTRUZIONE,"culooo"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-			else if(R.Q == VALUE_IS_COSTANTEPLUS) {
-				switch(i) {
-					case 1:
-						if(CPU86<1)
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						else
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 2:
-						if(CPU86<1)
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						else
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 4:
-						if(CPU86<1)
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,Regs->D);
-						else
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-			else if(R.Q == VALUE_IS_D0) {
-	 			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-				}
-#elif MC68000
-//  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-		  if(R.Q == VALUE_IS_COSTANTE) {
-				switch(i) {
-					case 1:				// DEVO castare a 16bit! per stack dispari AH NO NON SERVE :)
-						if(!LOBYTE(LOWORD(R.cost->l)))
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,"clr.b",OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						else
-		  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(R.cost->l)),
-								OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 2:
-						if(!LOWORD(R.cost->l))
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,"clr.w",OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						else
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO16,LOWORD(R.cost->l),
-								OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 4:
-						if(!R.cost->l)
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,"clr.l",OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						else
-			  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO32,R.cost->l,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-		  else if(R.Q == VALUE_IS_VARIABILE) {
-// già fatto sopra		  			PROCOper(LINE_TYPE_ISTRUZIONE,"culooo"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-			else if(R.Q == VALUE_IS_COSTANTEPLUS) {
-				switch(i) {
-					case 1:		// ha senso questo? boh ok
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,"move.b #"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 2:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,"move.w #"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 4:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,"move.l #"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-			else if(R.Q == VALUE_IS_D0) {
-  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-#elif GD24032
-//  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-		  if(R.Q == VALUE_IS_COSTANTE) {
-				switch(i) {
-					case 1:				// DEVO castare a 16bit! per stack dispari AH NO NON SERVE :)
-	  				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(R.cost->l)));
-						break;
-					case 2:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO16,LOWORD(R.cost->l));
-						break;
-					case 4:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_IMMEDIATO32,R.cost->l);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-		  else if(R.Q == VALUE_IS_VARIABILE) {
-// già fatto sopra		  			PROCOper(LINE_TYPE_ISTRUZIONE,"culooo"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-			else if(R.Q == VALUE_IS_COSTANTEPLUS) {
-				switch(i) {
-					case 1:		// ha senso questo? boh ok
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 2:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 4:
-		  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-						break;
-					case 0:
-						PROCError(4099);
-						break;
-					default:
-						PROCError(1002,"dim. parametro troppo grande (array/struct)");
-						break;
-					}
-				}
-			else if(R.Q == VALUE_IS_D0) {
-  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-				}
-#elif MICROCHIP
-//		  if(i==4) {
-//	  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-//	  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-//	  		PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-//	  	  PROCOper(LINE_TYPE_ISTRUZIONE,"MOVWF",OPDEF_MODE_REGISTRO_HIGH8,10 /*Regs->D+1*/);
-//	  	  PROCOper(LINE_TYPE_ISTRUZIONE,"MOVWF",OPDEF_MODE_REGISTRO_HIGH8,10 /*Regs->D+1*/);
-//	  	  PROCOper(LINE_TYPE_ISTRUZIONE,"MOVWF",OPDEF_MODE_REGISTRO_HIGH8,10 /*Regs->D+1*/);
-//  		  I+= 3 /*STACK_ITEM_SIZE*/ ;
-//  		  }
-//		  if(i==2) {
-//		  	PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-//	  	  PROCOper(LINE_TYPE_ISTRUZIONE,"MOVWF",OPDEF_MODE_REGISTRO_HIGH8,10 /*Regs->D+1*/);
-//  		  I+= 1 /*STACK_ITEM_SIZE*/ ;
-//  		  }
-//  	  PROCOper(LINE_TYPE_ISTRUZIONE,"MOVWF",OPDEF_MODE_REGISTRO_HIGH8,10 /*Regs->D*/);
-//	  	PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFF",OPDEF_MODE_REGISTRO,14,OPDEF_MODE_REGISTRO,10);
-#endif
-				}		// fastcall
-			else {
-#if ARCHI
-#elif Z80 
-#elif I8086
-#elif MC68000
-		  if(R.Q == VALUE_IS_COSTANTE) {
-				// ottimizzare ev. e gestire <8 <255 ecc!
-  				PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_IMMEDIATO32,R.cost->l,OPDEF_MODE_REGISTRO32,prParm+1);
-				}
-		  else if(R.Q == VALUE_IS_VARIABILE) {
-// già fatto sopra		  			PROCOper(LINE_TYPE_ISTRUZIONE,"culooo"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-			else if(R.Q == VALUE_IS_COSTANTEPLUS) {
-	  			PROCOper(LINE_TYPE_ISTRUZIONE,"move.l #"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_REGISTRO32,prParm+1);
-				}
-			else if(R.Q == VALUE_IS_D0) {
-  			PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_REGISTRO32,prParm+1);
-				}
-#elif GD24032
-		  if(R.Q == VALUE_IS_COSTANTE) {
-				// ottimizzare ev. e gestire <8 <255 ecc!
-  				PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_IMMEDIATO32,R.cost->l);
-				}
-		  else if(R.Q == VALUE_IS_VARIABILE) {
-// già fatto sopra		  			PROCOper(LINE_TYPE_ISTRUZIONE,"culooo"/*pushString2*/,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
-				}
-			else if(R.Q == VALUE_IS_COSTANTEPLUS) {
-	  			PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d "/*pushString2*/,OPDEF_MODE_REGISTRO32,prParm+1,
-						OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)R.cost->s,0);
-				}
-			else if(R.Q == VALUE_IS_D0) {
-  			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm+1,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-				}
-#elif MICROCHIP
-#endif
-			}
-
-
-
-
-
-
-L19440:
-  	  prParm++;
-			if(parmPtr)
-		    parmPtr+=2;		// mi sposto al tipo e size del prossimo parm
-
-			if(OutSource) {
-				char myBuf[32];
-				wsprintf(myBuf,"parm %u",prParm);
-				_tcscat(LastOut->rem,myBuf);
-				}
-
-			if(!PascalCall && !(V->modif & FUNC_MODIF_PASCAL)) {
-				if(!t)
-				  t=LastOut;
-				LastOut=t1;
-				}
-//		  I+=STACK_ITEM_SIZE;
-
-		  FNLO(MyBuf);          
-		  if((*MyBuf != ',') && (*MyBuf != ')')) 
-				PROCError(2059,MyBuf);
-
-			if(parmPtr) {                              // se finisce con ... (var args)
-				if(parmPtr[0] == -1)
-					totParm=-1;		// ...da qui in poi do tutto buono!
-				}
-		  } while(*MyBuf != ')');
-		if(!PascalCall && !(V->modif & FUNC_MODIF_PASCAL)) {
-		  LastOut=t;
-		  }
-		}
-  else {
-	  FNLO(MyBuf);
-	  }
-//	myLog->print("totparm %d, prparm %d\n",totParm,prParm);  
-  if(totParm != -1 && prParm!=totParm) {
-    wsprintf(MyBuf,"%s, #%u",V->name,prParm);
-    PROCError(2116,MyBuf);
-    }
-#if ARCHI
-	if(V->type & VARTYPE_FUNC_POINTER) {
-		switch(V->classe) {
-			case CLASSE_EXTERN:
-			case CLASSE_GLOBAL:
-			case CLASSE_STATIC:
-			  PROCOper(LINE_TYPE_ISTRUZIONE,"ADR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-				break;
-			case CLASSE_AUTO:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"LDR",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(V->label));
-				break;
-			case CLASSE_REGISTER:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOV",OPDEF_MODE_REGISTRO32,Regs->P,OPDEF_MODE_REGISTRO32,MAKEPTRREG(V->label));
-				break;
-			}
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-		}
-	else
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,
-			OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-#elif Z80 
-	if(V->type & VARTYPE_POINTER) {
-	  PROCOper(LINE_TYPE_ISTRUZIONE,"ld",OPDEF_MODE_REGISTRO16,Regs->P,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-		}
-	else
-	  PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-#elif I8086 
-	if(V->type & VARTYPE_POINTER) {
-	  PROCOper(LINE_TYPE_ISTRUZIONE,"mov",OPDEF_MODE_REGISTRO16,Regs->P,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-		}
-	else
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,
-			OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-#elif MC68000
-	if(V->type & VARTYPE_FUNC_POINTER) {
-		switch(V->classe) {
-			case CLASSE_EXTERN:
-			case CLASSE_GLOBAL:
-			case CLASSE_STATIC:
-			  PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0,OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			case CLASSE_AUTO:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(V->label),OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			case CLASSE_REGISTER:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(V->label),OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			}
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-		}
-	else {
-		if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-		  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-			}
-		else
-		  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-		}
-#elif GD24032
-	if(V->type & VARTYPE_FUNC_POINTER) {
-		switch(V->classe) {
-			case CLASSE_EXTERN:
-			case CLASSE_GLOBAL:
-			case CLASSE_STATIC:
-			  PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0,OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			case CLASSE_AUTO:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(V->label),OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			case CLASSE_REGISTER:
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(V->label),OPDEF_MODE_REGISTRO32,Regs->P);
-				break;
-			}
-	  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-		}
-	else {
-		if(MemoryModel & MEMORY_MODEL_RELATIVE) {
-      wsprintf(MyBuf,"%s-$",V->label);       // ripreparo add. jump + registro
-			PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? "JR" : "CALLR",OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&MyBuf,0);
-			}
-		else
-			PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V->label,0);
-		}
-#elif MICROCHIP
-	//CPUPIC
-  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&V,0);
-#endif
-  if(I && !(V->attrib & FUNC_ATTRIB_NORETURN)) {
-#if ARCHI
-		PROCOper(LINE_TYPE_ISTRUZIONE,"ADD",OPDEF_MODE_STACKPOINTER,13,OPDEF_MODE_STACKPOINTER,13,
-			OPDEF_MODE_IMMEDIATO16,I);			//
-#elif Z80
-		if(I > 127) 
-		  PROCError(2127);
-		if(I<16) {                // 16 è la dimensione di ld iy,nn; add iy,sp; ld sp,iy
-	  	for( ; I>0; I-=2) {
-				PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,3);
-				}
-	  	}
-		else {
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO16,I);
-			PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_STACKPOINTER,0);
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,0,OPDEF_MODE_FRAMEPOINTER,0);
-			}
-#elif I8086
-		if(I > 32767) 
-		  PROCError(2127);
-		PROCOper(LINE_TYPE_ISTRUZIONE,"add",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_IMMEDIATO16,I);
-#elif MC68000
-		if(!((MemoryModel & 0xf) >= MEMORY_MODEL_MEDIUM)) {
-			if(I > 32767) 
-			  PROCError(2127);
-			if(I<=8 /*&& !V->size*/)
-				PROCOper(LINE_TYPE_ISTRUZIONE,"addq.w",OPDEF_MODE_IMMEDIATO16,I,OPDEF_MODE_STACKPOINTER,0);
-			else
-				PROCOper(LINE_TYPE_ISTRUZIONE,"adda.w",OPDEF_MODE_IMMEDIATO16,I,OPDEF_MODE_STACKPOINTER,0);
-			}
-		// se non void, e condizionale, RILEGGerei D0 dopo pop/adda .. però in effetti ADDA non tocca i flag, quindi... MANCO ADDQ se su An :)
-		else {
-			if(I<=8 /*&& !V->size*/)
-				PROCOper(LINE_TYPE_ISTRUZIONE,"addq.l",OPDEF_MODE_IMMEDIATO32,I,OPDEF_MODE_STACKPOINTER,0);
-			else
-				PROCOper(LINE_TYPE_ISTRUZIONE,"adda.l",OPDEF_MODE_IMMEDIATO32,I,OPDEF_MODE_STACKPOINTER,0);
-			}
-#elif GD24032
-			PROCOper(LINE_TYPE_ISTRUZIONE,"ADD.d",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_IMMEDIATO32,I);
-#elif MICROCHIP
-		if(I > 127) 
-		  PROCError(2127);
-		if((StackLarge==0 && I<4) || (StackLarge!=0 && I<6)) {           // 4 è la dimensione di {save W} movlw n addwf fsr2,1 [movlw 0 addwfc fsr2,1] {restore W}
-	  	for( ; I>0; I--) {			
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVFW",OPDEF_MODE_REGISTRO,11);
-				}
-	  	}
-		else {
-			PROCOper(LINE_TYPE_ISTRUZIONE,"MOVLW",OPDEF_MODE_IMMEDIATO8,I);
-			PROCOper(LINE_TYPE_ISTRUZIONE,"ADDWF",OPDEF_MODE_STACKPOINTER,0,OPDEF_MODE_IMMEDIATO8,"F,ACCESS");
-			if(StackLarge) {
-				PROCOper(LINE_TYPE_ISTRUZIONE,"MOVLW",OPDEF_MODE_IMMEDIATO8,0 /* I >> 8*/);
-				PROCOper(LINE_TYPE_ISTRUZIONE,"ADDWFC",OPDEF_MODE_FRAMEPOINTER,0,OPDEF_MODE_IMMEDIATO8,"F,ACCESS");
-				}
-			}
-#endif
-		}
-  if(tosave1 || tosave2) {
-#if ARCHI
-    I=tosave1 ? Regs->D : Regs->D+1;
-		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,Regs->D+1,OPDEF_MODE_REGISTRO32,Regs->D);
-#elif Z80
-    I=tosave1 ? Regs->D : Regs->D+1;
-		i=FNGetMemSize(V,1);    // è una funz...
-		if(i>2) {
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,I+1,OPDEF_MODE_REGISTRO_LOW8,1);
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,I+1,OPDEF_MODE_REGISTRO_HIGH8,1);
-			}
-		if(i>1) {
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,I,OPDEF_MODE_REGISTRO_HIGH8,0);
-			}
-		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,I,OPDEF_MODE_REGISTRO_LOW8,0);
-#elif I8086
-    I=tosave1 ? Regs->D : Regs->D+1;
-		if(FNGetMemSize(V,1) >2) {    // è una funz...
-  		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO16,I+1,OPDEF_MODE_REGISTRO16,1);
-			}
-		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,I,OPDEF_MODE_REGISTRO_HIGH8,0);
-#elif MC68000
-//    I=tosave1 ? Regs->D : Regs->D+1;
-		if(Regs->D>0)		// mah provare 2025
-			PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_REGISTRO32,Regs->D /*I*/);
-#elif GD24032
-		if(Regs->D>0)		// mah provare 2026
-			PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D /*I*/,OPDEF_MODE_REGISTRO32,0);
-#elif MICROCHIP
-    I=tosave1 ? Regs->D : Regs->D+1;
-		i=FNGetMemSize(V,1);    // è una funz...
-		if(i>2) {
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,I+1,OPDEF_MODE_REGISTRO_LOW8,1);
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,I+1,OPDEF_MODE_REGISTRO_HIGH8,1);
-			}
-		if(i>1) {
-			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,I,OPDEF_MODE_REGISTRO_HIGH8,0);
-			}
-		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_LOW8,I,OPDEF_MODE_REGISTRO_LOW8,0);
-#endif
-	  }  
-  if(tosave1)
-    Regs->Get();
-  
-  return 0;
-  }
 
 struct CONS *Ccc::FNAllocCost(const char *A, uint8_t mode, O_TYPE Type) {
   int i;
@@ -7627,27 +6258,27 @@ void Ccc::CHECKPOINTER() {
 #if ARCHI
 		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,0,OPDEF_MODE_REGISTRO,Regs->P);
   	v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif Z80
 		PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,OPDEF_MODE_REGISTRO_HIGH8,Regs->P);
 		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO_LOW8,Regs->P);
   	v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif I8086
 		if(CPU86<3)
 			;
 		PROCOper(LINE_TYPE_ISTRUZIONE,"or",OPDEF_MODE_REGISTRO16,Regs->P,OPDEF_MODE_REGISTRO16,Regs->P,0);
 //	  PROCOper(LINE_TYPE_JUMP,"jnz","$+3",NULL);
   	v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif MC68000
 		PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);
   	v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif GD24032
 		PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->P);
   	v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #elif MICROCHIP
 		if(v->type & VARTYPE_ROM) {
 			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,0,OPDEF_MODE_REGISTRO,8);
@@ -7660,7 +6291,7 @@ void Ccc::CHECKPOINTER() {
 				PROCOper(LINE_TYPE_ISTRUZIONE,"IORWF",OPDEF_MODE_REGISTRO_HIGH8,0,OPDEF_MODE_VARIABILE,"TBLPTRU");
 			}
 		v=FNCercaVar("_chkptr",0);
-		PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,4,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v->label,0);
+		PROCOper(LINE_TYPE_JUMPC,jmpString,OPDEF_MODE_CONDIZIONALE,CONDIZ_UGUALE,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&v->label,0);
 #endif
 		}
 	}
@@ -7851,6 +6482,9 @@ int8_t REGISTRI::Inc(int8_t S) {
 
 		ToDec=S;
 //      Assegna(D); 
+
+		myCC->maxRegUsed=D;
+
 		return 0;
 		}
 	};
@@ -7871,6 +6505,7 @@ void REGISTRI::Dec(int8_t S) {
 //	    D=0;
 		myCC->PROCError(1001,"Regs Dec");
 		}
+
 	}         
 
 int8_t REGISTRI::IncP() {
@@ -7937,10 +6572,10 @@ void REGISTRI::Save() {
 		char MyBuf[64];
 		sprintf(MyBuf,"R0-R%u",D-1);
 		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-			OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+			OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086 
 		for(i=0; i<D; i++)
-			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF *)&i,0);
+			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF*)&i,0);
 #elif MC68000
 		for(i=0; i<D; i++)
 			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,i,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
@@ -7950,10 +6585,10 @@ void REGISTRI::Save() {
 #elif MICROCHIP
 		for(i=0; i<D; i++) {
 			if(CPUPIC < 2) {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			else {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			}
 #endif
@@ -7972,10 +6607,10 @@ void REGISTRI::Save(int8_t n) {
 	char MyBuf[64];
 	sprintf(MyBuf,"R%d-R%d",D,D+n-1);
 	myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1,
-		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086 
 	for(i=D; i<(D+n); i++)
-		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF *)&i,0,NULL);
+		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF*)&i,0,NULL);
 	ToGet=n;  
 #elif MC68000
 	for(i=D; i<(D+n); i++)
@@ -7988,10 +6623,10 @@ void REGISTRI::Save(int8_t n) {
 #elif MICROCHIP
 	for(i=D; i<(D+n); i++) {
 		if(CPUPIC < 2) {
-			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 			}
 		else {
-			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 			}
 		}
 	ToGet=n;  
@@ -8007,10 +6642,10 @@ void REGISTRI::Get() {
 		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,0);
 		sprintf(MyBuf,"R%u-R%u",D,D+ToGet-1);
 		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-			OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+			OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086 
 		for(i=D+ToGet-1; i>=D; i--)
-			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF *)&i,0);
+			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF*)&i,0);
 #elif MC68000
 		for(i=D+ToGet-1; i>=D; i--)
 			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_REGISTRO32,i);
@@ -8020,10 +6655,10 @@ void REGISTRI::Get() {
 #elif MICROCHIP
 		for(i=D+ToGet-1; i>=D; i--) {
 			if(CPUPIC < 2) {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			else {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			}
 #endif
@@ -8034,10 +6669,10 @@ void REGISTRI::Get() {
 //		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,0,NULL);
 		sprintf(MyBuf,"R0-R%u",D-1);
 		myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,
-			OPDEF_MODE_REGISTRI,(union SUB_OP_DEF *)MyBuf,0);
+			OPDEF_MODE_REGISTRI,(union SUB_OP_DEF*)MyBuf,0);
 #elif Z80 || I8086
 		for(i=D-1; i>=0; i--)
-			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF *)&i,0);
+			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO16,(union SUB_OP_DEF*)&i,0);
 #elif MC68000
 		for(i=D-1; i>=0; i--)
 			myCC->PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_STACKPOINTER_INDIRETTO,+1,OPDEF_MODE_REGISTRO16,i);
@@ -8047,10 +6682,10 @@ void REGISTRI::Get() {
 #elif MICROCHIP
 		for(i=D-1; i>=0; i--) {
 			if(CPUPIC < 2) {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			else {
-				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF *)&i,0);
+				myCC->PROCOper(LINE_TYPE_ISTRUZIONE,popString,OPDEF_MODE_REGISTRO,(union SUB_OP_DEF*)&i,0);
 				}
 			}
 #endif
@@ -8092,6 +6727,100 @@ void REGISTRI::Reset() {
 	D=0; P=8;
 #endif
 	}
+
+int REGISTRI::FNIsReg(const char *s) {
+  int i;
+  
+//  rn=(struct COND *)bsearch((void *)&rc,Reg,sizeof(Reg)/sizeof(struct REGS),sizeof(Reg[0]),(int (*)(const void *, const void *))subCmpReg);
+
+#if ARCHI
+  if(strlen(s) > 3)
+    return 0;
+  i=0;
+  while(i<32) {
+    if(!stricmp(s,DT[i])) { 
+      return i+1;     
+      }          
+    i++;
+    }
+
+#elif Z80
+  if(strlen(s) > 2) {
+    if(!stricmp(s,DT[16]))
+      return 16+1 | 0x100;
+    else  
+      return 0;
+    }
+  i=0;
+  while(DT[i]) {
+    if(!stricmp(s,DT[i]) && DT[i][1]) { 
+      return i+1 | 0x100;     
+      }          
+    i++;
+    }
+  i=0;
+  while(DT[i]) {
+    if(!stricmp(s,DT[i]) && !DT[i][1]) { 
+      return i+1;     
+      }          
+    i++;
+    }
+
+#elif PIC==16 || PIC==18
+  i=0;
+  while(Reg[i].s) {
+    if(!stricmp(s,Reg[i].s) && !Reg[i].s[1]) { 
+      return i+1;     
+      }          
+    i++;
+    }
+
+#elif GD24032
+  if(strlen(s) > 3)
+    return 0;
+  i=0;
+  while(i<32) {
+    if(i<33 /* WP e PC non vanno qua, SP sì 2026!*/ && !stricmp(s,DT[i])) { 
+      return i+1;     
+      }          
+    i++;
+    }
+
+#elif I8086
+  i=0;
+  while(i<16) {
+    if(!stricmp(s,DT[i]) && DT[i][2] && DT[i][3]) {			// 32bit
+      return i+1 | 0x400;
+      }          
+    i++;
+    }
+  i=0;
+  while(i<16) {
+    if(!stricmp(s,DT[i]) && DT[i][2]) {		// 16bit
+      return i+1 | 0x200;
+      }          
+    i++;
+    }
+  i=0;
+  while(i<16) {
+    if(!stricmp(s,DT[i])) {
+      return (DT[i][1]=='H' || DT[i][1]=='L') ? i+1 : (i+1 | 0x100);
+      }          
+    i++;
+    }
+#elif MC68000
+  i=0;
+  while(i<16) {
+    if(!stricmp(s,DT[i])) {			// 
+      return i+1;
+      }          
+    i++;
+    }
+
+#endif
+  return 0;
+  }
+
 
 
 
@@ -9883,9 +8612,7 @@ uint32_t CSourceFile::getLineFromPosition(long pos) {
 	uint32_t oldpos=GetPosition();
 	uint16_t line=1;
 	char ch;
-
-	return lineno;		// tanto non va cmq ed è ovviamente lentissimo
-
+	
 	if(pos==-1)
 		pos=GetPosition();
 	Seek(0,CFile::begin);

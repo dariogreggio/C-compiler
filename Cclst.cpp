@@ -66,7 +66,7 @@ struct ERRORE Errs[]={
   2059,1,"syntax error",
   2062,1,"unexpected",/*anche 2132*/
   2064,1,"not a function:",/*2063 anche ok*/
-  2065,1,"undefined:",
+  2065,1,"undefined:",			//undeclared identifier
   2068,1,"illegal cast",
   2070,1,"illegal sizeof operand",
   2071,1,"bad storage class",
@@ -94,18 +94,23 @@ struct ERRORE Errs[]={
   2127,1,"stack allocation exceeds size (128)" /*anche 1126*/,
   2137,1,"empty character constant",
   2141,3,"value out of range for enum"/*anche 4341*/,
+  2143,1,"syntax error : missing ';' before 'type'",
   2149,1,"named bitfield cannot have zero width",
   2153,1,"hex constant must have at least one digit",
   2156,1,"pragma must be outside function",
   2166,1,"l-value specifies const object",
+  2187,1,"syntax error : 'void' was unexpected",
   2200,1,"warning treated as error",
   2205,1,"can't initialize extern variable",
+	2215,1,"local variable '%s' in naked function '%s' allocated without stack frame",
   2221,1,"'.' left operand points to struct/union, use ->",/*anche 2231*/
   2222,1,"'->' left operand has struct/union type, use .",/*anche 2232*/
   2223,1,"left operand must point to struct/union type",/*anche 2227*/
   2224,1,"left operand must have struct/union type",/*anche 2228*/
   2297,1,"operand is illegal (not integer)",
-  2371,1,"redefinition (different basic types):",/*anche altri*/
+// anche ,gemini	2301,1,"local variable '%s' in naked function '%s' allocated without stack frame"
+  2371,1,"redefinition (different basic types):",/*anche altri*/		// questa per funzioni
+  2440,1,"cannot convert from 'void' to ",		// e mettere il tipo :)
   2599,1,"local functions are not supported",
    3001,1,"interrupt function returning a value",
    3002,1,"interrupt function with parms",
@@ -113,6 +118,7 @@ struct ERRORE Errs[]={
   4005,1,"macro redefinition",
   4013,3,"function undefined; assuming extern returning int",
   4018,3,"signed/unsigned mismatch",
+	4033,3,"must return a value",
   4035,1,"function with no return value",
   4042,1,"bad storage class",
   4047,1,"different levels of indirection",
@@ -130,6 +136,7 @@ struct ERRORE Errs[]={
   4309,3,"truncation of constant value",
   4701,3,"local variable used without initialization",
   4705,4,"statement has no effect",
+  4710,4,"function not inlined",
   4761,3,"integral size mismatch in argument; conversion supplied",
   0,0,NULL
   };
@@ -541,7 +548,7 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
 #endif
   }
   
-int Ccc::PROCObj(COutputFile *FO) {
+int Ccc::PROCObj(COutputFile *FO,bool doDelete) {
   struct LINE *TEXT,*t;
   
   TEXT=RootOut;
@@ -642,6 +649,11 @@ int Ccc::PROCObj(COutputFile *FO) {
 						FO->put(',');
 			    subObj(FO,&TEXT->s3);
 			    }  
+#elif GD24032
+		    if(TEXT->s3.mode) {
+					FO->put('\t');
+			    subObj(FO,&TEXT->s3);
+			    }  
 #endif
         break;
 			case LINE_TYPE_JUMPGOTO:
@@ -652,8 +664,7 @@ int Ccc::PROCObj(COutputFile *FO) {
 			      FO->put('\t'); 				  // prima delle istruzioni TAB
 				    FO->printf("%s",TEXT->opcode);
 			      FO->put('\t');
-						_tcscat(TEXT->s1.s.label,"_");
-						_tcscat(TEXT->s1.s.label,CurrFunc->name);
+						_tcscat(TEXT->s1.s.label,CurrFunc->label);
 				    subObj(FO,&TEXT->s1);
 						}
 					else
@@ -676,7 +687,7 @@ int Ccc::PROCObj(COutputFile *FO) {
 		  FO->putcr();
     t=TEXT;
     TEXT=TEXT->next;
-    if(t!=RootOut)
+    if(t!=RootOut && doDelete)
       LastOut=PROCDelLista(RootOut,LastOut,t);
 		//ev. PROCDelLastLine(t);
     }
@@ -703,7 +714,7 @@ int Ccc::PROCError(int Er, const char *a) {
 		_tcscat(errBuf,myBuf);
 		if(FErr) {
 			FErr->println(errBuf);
-			FNGetLine(FIn->GetPosition()-80,myBuf);			// SISTEMARE posizione...
+			FNGetLine(FIn->GetPosition(),myBuf);			// SISTEMARE posizione...
 			FErr->println(myBuf);
 			}
 	  if(debug) {

@@ -24,7 +24,7 @@ char *Ccc::FNLO(char *s) {
       }
     if(ch=='\n') {
 //      getc(FIn);
-//      __line__++;
+      __line__++;
       
 //  if(debug)
 //    printf("FNLO vuoto\n");
@@ -75,8 +75,8 @@ char *Ccc::FNLO(char *s) {
     *p=0;
     if(!Exit) {
       ch=FIn->get();
-//	    if(ch=='\n')
-//	      __line__++;
+	    if(ch=='\n')
+	      __line__++;
 			}
     } while(!Exit);
 
@@ -97,8 +97,8 @@ char *Ccc::FNLO(char *s) {
   if((*s==ch) && !*(s+1)) {               // creo gli operatori a due caratteri
 rifo:  
     ch1=FIn->get();
-//    if(ch1=='\n')
-//      __line__++;
+    if(ch1=='\n')
+      __line__++;
     switch(ch1) {
       case '&':
       case '+':
@@ -123,9 +123,9 @@ Op3:
 			      if(ch==EOF) {
 			        break;
 			        }
-/*				    if(ch=='\n')
+				    if(ch=='\n')
 							__line__++;
-*/
+
 
 			      if(ch=='*') {
 			        ch1=FIn->get();
@@ -175,7 +175,7 @@ Op3:
 do_unget:
 	      FIn->unget(ch1);			//FIn->Seek(-1,CFile::current);
 		    if(ch1=='\n')
-					if(!*s)
+//					if(!*s)
 						__line__--;
         break;
       }
@@ -210,9 +210,8 @@ char *Ccc::FNLA(char *s) {
   l=FIn->GetPosition();
 	FIn->SavePosition();
   FNLO(s);
-//  FIn->Seek(l,CFile::begin);
 	FIn->RestorePosition(l);
-//  __line__=ol;
+  __line__=ol;
   
   return s;
   }
@@ -414,9 +413,9 @@ rifo:
 //  __line__++;
   
   l2=FIn->GetPosition();
-//  FIn->Seek(l,CFile::begin);
 	FIn->RestorePosition(l);
-//	__line__=ol;
+	__line__=ol;
+
   return l2;
   }
 

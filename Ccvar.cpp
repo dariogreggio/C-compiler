@@ -99,27 +99,27 @@ enum Ccc::ARITM_OP Ccc::FNGetAritElem(int8_t *OP, char *OS, struct OPERAND *O, i
       while(*p) {
         if(!isprint(*p)) {
 #if ARCHI
-          sprintf(T1S+i,"\"+CHR$%d+\"",*p);
+          wsprintf(T1S+i,"\"+CHR$%d+\"",*p);
 #elif Z80 || I8086 || MICROCHIP
 					if(T1S[i-1] != '\"')
-            sprintf(T1S+i,"\",%u,\"",*p);
+            wsprintf(T1S+i,"\",%u,\"",*p);
           else                           
-            sprintf(T1S+i-1,"%u,\"",*p);
+            wsprintf(T1S+i-1,"%u,\"",*p);
 #elif MC68000 
 					if(!(TipoOut & TIPO_SPECIALE)) {
 						if(T1S[i-1] != '\"')
-							sprintf(T1S+i,"\",%u,\"",*p);
+							wsprintf(T1S+i,"\",%u,\"",*p);
 						else                           
-							sprintf(T1S+i-1,"%u,\"",*p);
+							wsprintf(T1S+i-1,"%u,\"",*p);
 						}
 					else {
-						sprintf(T1S+i,"%u\',\'",*p);			// v. anche in inizializza/costanti dc.b
+						wsprintf(T1S+i,"%u\',\'",*p);			// v. anche in inizializza/costanti dc.b
 						}
 #elif GD24032
 					if(T1S[i-1] != '\"')
-						sprintf(T1S+i,"\",%u,\"",*p);
+						wsprintf(T1S+i,"\",%u,\"",*p);
 					else                           
-						sprintf(T1S+i-1,"%u,\"",*p);
+						wsprintf(T1S+i-1,"%u,\"",*p);
 #endif
           i=_tcslen(T1S);
           }
@@ -563,9 +563,8 @@ rifo_attr:
       OT=TT;
 			}*/
 
-//    FIn->Seek(OT,CFile::begin);
 		FIn->RestorePosition(OT);
-//		__line__=ol;
+		__line__=ol;
     J=0;
     while(*FNLA(MyBuf)=='*') {
       J++;
@@ -592,9 +591,8 @@ rifo_attr:
 		if(*AS == ')')		// patch urfida perché trova una parentesi di espressione dopo un cast e la interpreta come funzione
 			*t &= ~VARTYPE_FUNC;
 
-		//    FIn->Seek(OT,CFile::begin);
 		FIn->RestorePosition(OT);
-//		__line__=ol;
+		__line__=ol;
     }      
     
   return 0;

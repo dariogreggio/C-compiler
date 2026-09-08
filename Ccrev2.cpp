@@ -3074,10 +3074,16 @@ myMul4_:
 //       		PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:                                
-					if(Optimize & OPTIMIZE_CONST && !VCost->l)		// :)
-						break; 
+					if(Optimize & OPTIMIZE_CONST) {
+						if(!VCost->l) {		// :)
+							}
+						else if(VCost->l == 1) {		// :)
+							VQ=VALUE_IS_EXPR;		
+							break;
+							}
+						}
 					l=VCost->l;
-					VQ=VALUE_IS_EXPR;
+					goto is_cost1_m;
 //			    PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT2:		// in AutoAssign arriva sempre solo questo!
@@ -3135,6 +3141,7 @@ myMul4_:
 					else {
 						if(VQ==VALUE_IS_0 || VQ==VALUE_IS_D0)		// 0... non so bene perché, se espressione forse
 							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_REGISTRO8,Regs->D);
+is_cost1_m:
 						if(!LOBYTE(LOWORD(l)))
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.b",u[0].mode,&u[0].s,u[0].ofs);
 						else if(LOBYTE(LOWORD(l)) == 1)
@@ -3188,10 +3195,16 @@ myMul4_:
 //       		PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:                                
-					if(Optimize & OPTIMIZE_CONST && !VCost->l)		// :)
-						break; 
+					if(Optimize & OPTIMIZE_CONST) {
+						if(!VCost->l) {		// :)
+							}
+						else if(VCost->l == 1) {		// :)
+							VQ=VALUE_IS_EXPR;		
+							break;
+							}
+						}
 					l=VCost->l;
-					VQ=VALUE_IS_EXPR;
+					goto is_cost2_m;
 //			    PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT2:		// in AutoAssign arriva sempre solo questo!
@@ -3253,6 +3266,7 @@ myMul4_:
 					else {
 						if(VQ==VALUE_IS_0 || VQ==VALUE_IS_D0)		// 0... non so bene perché, se espressione forse
 							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_REGISTRO16,Regs->D);
+is_cost2_m:
 						if(!LOBYTE(LOWORD(l)))
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.w",u[0].mode,&u[0].s,u[0].ofs);
 						else if(LOBYTE(LOWORD(l)) == 1)
@@ -3306,10 +3320,16 @@ myMul4_:
 //       		PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT1:                                
-					if(Optimize & OPTIMIZE_CONST && !VCost->l)		// :)
-						break; 
+					if(Optimize & OPTIMIZE_CONST) {
+						if(!VCost->l) {		// :)
+							}
+						else if(VCost->l == 1) {		// :)
+							VQ=VALUE_IS_EXPR;		
+							break;
+							}
+						}
 					l=VCost->l;
-					VQ=VALUE_IS_EXPR;
+					goto is_cost4_m;
 //			    PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
       		break;
     		case MODE_IS_CONSTANT2:		// in AutoAssign arriva sempre solo questo!
@@ -3367,6 +3387,7 @@ myMul4_:
 					else {
 						if(VQ==VALUE_IS_0 || VQ==VALUE_IS_D0)		// 0... non so bene perché, se espressione forse
 							PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.d",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_REGISTRO32,Regs->D);
+is_cost4_m:
 						if(!LOBYTE(LOWORD(l)))
 							PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.d",u[0].mode,&u[0].s,u[0].ofs);
 						else if(LOBYTE(LOWORD(l)) == 1)
@@ -4527,6 +4548,7 @@ myDiv4:
   }
 
 uint8_t Ccc::FNIs1Bit(uint32_t t) {
+#if 0
   register uint32_t i,j=0;
 	uint8_t k,i1;
   
@@ -4541,6 +4563,37 @@ uint8_t Ccc::FNIs1Bit(uint32_t t) {
     return k+1;
   else
     return 0;   
+#endif
+
+	// gemini 3/9/26
+	// 1. Verifica se t ha ESATTAMENTE un bit a 1 (e t non è zero)
+  if (t == 0 || (t & (t - 1)) != 0)
+    return 0; // Più di un bit (o zero bit)
+
+    // 2. Calcola l'indice del bit + 1
+/*#if defined(__GNUC__) || defined(__clang__)
+  return __builtin_ctz(t) + 1; // Count Trailing Zeros hardware
+#elif defined(_MSC_VER)
+  unsigned long index;
+  _BitScanForward(&index, t);
+  return (uint8_t)(index + 1);
+#else*/
+  // Fallback portabile in C puro con algoritmo De Bruijn (senza cicli)
+  static const uint8_t MultiplyDeBruijnBitPosition[32] = {
+    1, 2, 29, 3, 30, 15, 25, 4, 31, 23, 12, 16, 26, 18, 5, 9,
+    32, 28, 14, 24, 22, 11, 17, 27, 27, 13, 21, 10, 20, 19, 8, 7
+	  };
+  return MultiplyDeBruijnBitPosition[(uint32_t)(t * 0x077CB531U) >> 27];
+
+	// OVVERO: 2. Scansione bit via hardware x86 nativa (386+)
+/*  uint32_t index;
+  __asm {
+    bsf eax, t       ; Cerca l'indice del primo bit a 1 da destra
+    mov index, eax   ; Salva l'indice (0..31)
+		}
+  return (uint8_t)(index + 1);*/
+//#endif
+
   }
 
 uint8_t Ccc::FNIsPower2(uint32_t t) {
@@ -4823,11 +4876,21 @@ myAOX1:
 							if(Optimize & OPTIMIZE_CONST && !LOBYTE(LOWORD(i))) {	// :)
 								if(m=='&')
 									PROCOper(LINE_TYPE_ISTRUZIONE,"clr.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
-								else 
+								goto done1;
+								}
+							else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
+								if(m=='|') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"st.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+									goto done1;
+									}
+								else if(m=='^') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"not.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+									goto done1;
+									}
+								else if(m=='&')
 									goto done1;
 								}
-							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+							PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 							}
 						else if(VQ==VALUE_IS_VARIABILE) {
 							switch(VVar->classe) {
@@ -4840,8 +4903,19 @@ myAOX1:
 										else 
 											goto done1;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+									else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"st.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done1;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done1;
+											}
+										else if(m=='&')
+											goto done1;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
 									break;
 								case CLASSE_AUTO:
 									if(Optimize & OPTIMIZE_CONST && !LOBYTE(LOWORD(i))) {	// :)
@@ -4850,8 +4924,19 @@ myAOX1:
 										else 
 											goto done1;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"st.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done1;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done1;
+											}
+										else if(m=='&')
+											goto done1;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 									break;
 								case CLASSE_REGISTER:
 									if(Optimize & OPTIMIZE_CONST && !LOBYTE(LOWORD(i))) {	// :)
@@ -4860,8 +4945,19 @@ myAOX1:
 										else 
 											goto done1;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && LOBYTE(LOWORD(i))==0xff) {	// :)
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"st.b",OPDEF_MODE_REGISTRO8,MAKEPTRREG(VVar->label));
+											goto done1;
+											}
+										else if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.b",OPDEF_MODE_REGISTRO8,MAKEPTRREG(VVar->label));
+											goto done1;
+											}
+										else if(m=='&')
+											goto done1;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)),OPDEF_MODE_REGISTRO8,MAKEPTRREG(VVar->label));
 									break;
 								}
 							}
@@ -4906,6 +5002,18 @@ done1:
 								else if(m=='&')
 									goto done1;
 								}
+							else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(i))))) {	// 
+								if(m=='|') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,j);
+									goto done1;
+									}
+								}
+							else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(~i))))) {	// 
+								if(m=='&') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.b",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,j);
+									goto done1;
+									}
+								}
 							PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)));
 							}
 						else if(VQ==VALUE_IS_VARIABILE) {
@@ -4931,6 +5039,18 @@ done1:
 											}
 										else if(m=='&')
 											goto done1;
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(i))))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(~i))))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.b",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
 										}
 									if(MemoryModel & MEMORY_MODEL_RELATIVE)
 										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_ABSPOINTER_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,
@@ -4958,6 +5078,19 @@ done1:
 										else if(m=='&')
 											goto done1;
 										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(i))))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(~i))))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.b",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
+										}
+
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)));
 									break;
 								case CLASSE_REGISTER:
@@ -4979,6 +5112,18 @@ done1:
 											}
 										else if(m=='&')
 											goto done1;
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(i))))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.b",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOBYTE(LOWORD(~i))))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.b",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done1;
+											}
 										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,LOBYTE(LOWORD(i)));
 									break;
@@ -5208,8 +5353,15 @@ myAOX:
 										else 
 											goto done2;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+									else if(Optimize & OPTIMIZE_CONST && LOWORD(j)==0xffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.w",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done2;
+											}
+										else if(m=='&')
+											goto done2;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
 									break;
 								case CLASSE_AUTO:
 									if(Optimize & OPTIMIZE_CONST && !LOWORD(j)) {	// :)
@@ -5218,8 +5370,15 @@ myAOX:
 										else 
 											goto done2;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && LOWORD(j)==0xffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done2;
+											}
+										else if(m=='&')
+											goto done2;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 									break;
 								case CLASSE_REGISTER:
 									if(Optimize & OPTIMIZE_CONST && !LOWORD(j)) {	// :)
@@ -5228,8 +5387,15 @@ myAOX:
 										else 
 											goto done2;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && LOWORD(j)==0xffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
+											goto done2;
+											}
+										else if(m=='&')
+											goto done2;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO16,LOWORD(j),OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label));
 									break;
 								}
 							}
@@ -5263,7 +5429,7 @@ done2:
 									goto done2;
 								goto done2;
 								}
-							else if(Optimize & OPTIMIZE_CONST && LOWORD(i)==0xffff) {	// :)
+							else if(Optimize & OPTIMIZE_CONST && LOWORD(j)==0xffff) {	// :)
 								if(m=='|') {
 									PROCOper(LINE_TYPE_ISTRUZIONE,"SET.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 									goto done2;
@@ -5274,6 +5440,18 @@ done2:
 									}
 								else if(m=='&')
 									goto done2;
+								}
+							else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(j)))) {	// 
+								if(m=='|') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,i);
+									goto done2;
+									}
+								}
+							else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(~j)))) {	// 
+								if(m=='&') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.w",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,i);
+									goto done2;
+									}
 								}
 							PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO16,LOWORD(j));
 							}
@@ -5302,6 +5480,18 @@ done2:
 										else if(m=='&')
 											goto done2;
 										}
+									else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(j)))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.w",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,i);
+											goto done2;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(~j)))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.w",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,i);
+											goto done2;
+											}
+										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,
 										OPDEF_MODE_IMMEDIATO16,LOWORD(j));
 									break;
@@ -5320,10 +5510,22 @@ done2:
 											}
 										else if(m=='^') {
 											PROCOper(LINE_TYPE_ISTRUZIONE,"NOT.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
-											goto done1;
+											goto done2;
 											}
 										else if(m=='&')
 											goto done2;
+										}
+									else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(j)))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done2;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(LOWORD(~j)))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.w",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done2;
+											}
 										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),
 										OPDEF_MODE_IMMEDIATO16,LOWORD(j));
@@ -5347,6 +5549,18 @@ done2:
 											}
 										else if(m=='&')
 											goto done2;
+										}
+									else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(j)))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,i);
+											goto done2;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (i=FNIs1Bit(LOWORD(~j)))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.w",OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,i);
+											goto done2;
+											}
 										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO16,MAKEPTRREG(VVar->label),
 										OPDEF_MODE_IMMEDIATO16,LOWORD(j));
@@ -5569,8 +5783,15 @@ myAOXl:
 								else 
 									goto done4;
 								}
-							else
-								PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+							else if(Optimize & OPTIMIZE_CONST && i==0xffffffff) {	// :)
+								if(m=='^') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"not.l",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+									goto done4;
+									}
+								else if(m=='&')
+									goto done4;
+								}
+							PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 							}
 						else if(VQ==VALUE_IS_VARIABILE) {
 							switch(VVar->classe) {
@@ -5583,8 +5804,15 @@ myAOXl:
 										else 
 											goto done4;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.l",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
+											goto done4;
+											}
+										else if(m=='&')
+											goto done4;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0);
 									break;
 								case CLASSE_AUTO:
 									if(Optimize & OPTIMIZE_CONST && !l) {	// :)
@@ -5593,8 +5821,15 @@ myAOXl:
 										else 
 											goto done4;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.l",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
+											goto done4;
+											}
+										else if(m=='&')
+											goto done4;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label));
 									break;
 								case CLASSE_REGISTER:
 									if(Optimize & OPTIMIZE_CONST && !l) {	// :)
@@ -5603,8 +5838,15 @@ myAOXl:
 										else 
 											goto done4;
 										}
-									else
-										PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label));
+									else if(Optimize & OPTIMIZE_CONST && l==0xffffffff) {	// :)
+										if(m=='^') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"not.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label));
+											goto done4;
+											}
+										else if(m=='&')
+											goto done4;
+										}
+									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_IMMEDIATO32,l,OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label));
 									break;
 								}
 							}
@@ -5649,6 +5891,18 @@ done4:
 								else if(m=='&')
 									goto done4;
 								}
+							else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(l))) {	// 
+								if(m=='|') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.d",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,j);
+									goto done4;
+									}
+								}
+							else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(~l))) {	// 
+								if(m=='&') {
+									PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.d",OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO8,j);
+									goto done4;
+									}
+								}
 							PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_IMMEDIATO32,l);
 							}
 						else if(VQ==VALUE_IS_VARIABILE) {
@@ -5675,6 +5929,18 @@ done4:
 										else if(m=='&')
 											goto done4;
 										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(l))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.d",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(~l))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.d",OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
+										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_VARIABILE_INDIRETTO,(union SUB_OP_DEF *)&VVar->label,0,
 										OPDEF_MODE_IMMEDIATO32,l);
 									break;
@@ -5698,6 +5964,18 @@ done4:
 										else if(m=='&')
 											goto done4;
 										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(l))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(~l))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.d",OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
+										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(VVar->label),
 										OPDEF_MODE_IMMEDIATO32,l);
 									break;
@@ -5720,6 +5998,18 @@ done4:
 											}
 										else if(m=='&')
 											goto done4;
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(l))) {	// 
+										if(m=='|') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBO.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
+										}
+									else if(Optimize & OPTIMIZE_CONST && (j=FNIs1Bit(~l))) {	// 
+										if(m=='&') {
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SBZ.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label),OPDEF_MODE_IMMEDIATO8,j);
+											goto done4;
+											}
 										}
 									PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO32,MAKEPTRREG(VVar->label),
 										OPDEF_MODE_IMMEDIATO32,l);

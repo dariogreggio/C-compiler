@@ -418,31 +418,12 @@ char *CCPreProcessor::FNPreProcess(CSourceFile *FI, char *s,bool UNDEFD[]) {
   return s;
   }
 
-
-/*Anziché memorizzare i riferimenti in un file/struttura dati separata, il preprocessore scrive nel file .i delle righe speciali ogni volta che si verifica una di queste due cose:
-    Si entra in un file #include o si esce da esso.
-    Si saltano righe a causa di direttive condizionali (#ifdef, #endif).
-		Gemini 9/2026 per gestire numeri di riga esatti
-#line 15 "lcd_driver.h"
-opp.
-# 1 "main.c"
-# 1 "lcd_driver.h" 1    ; Flag '1' = Entrata in un file include
-void init_lcd(void);
-# 12 "main.c" 2         ; Flag '2' = Ritorno al file principale
-	*/
-
 int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
   bool Go=FALSE,First=FALSE;
   int8_t IfDefs=0;            // per gestire le nidificazioni, metto in Lst il livello
   CSourceFile *FI;
   char A[256],B[256],oldfile[256];
   struct LINE_DEF *L;
-	unsigned int myLine;
-  char fname[128];
-  char fext[10];
-
-	_splitpath(F,NULL,NULL,fname,fext);
-	_tcscat(fname,fext);
 
 	FI=new CSourceFile(CSourceFile::FNTrasfNome(F));
   if(!FI) {
@@ -457,71 +438,51 @@ int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
       m_Log->print(0,"%u: PreProcess %s\n",timeGetTime(),F);
 
   First=TRUE;
-  myLine=1;
-
-	wsprintf(A,"#line %u \"%s\"\n",myLine,fname);		// SplithPath
-	FO->print(A);
-
+  m_Cc->__line__=1;
   while(!FI->Eof() && !Go) {
     if(debug) {
-      m_Log->print(0,"Linea: %d\n",myLine);
+      m_Log->print(0,"Linea: %d\n",m_Cc->__line__);
 //      while(!kbhit());
       }
     FNGrab(FI,A,UNDEFD);
     if(debug) 
       m_Log->print(0,"Grab: %s...\n",A);
-		// i commenti si possono togliere, dice gemini 2026! ma lasciare i CR se multi riga, per il conteggio
     if(*A=='/') {
-//      if(!UNDEFD[IfDefs])
-//        FO->print(A);
+      if(!UNDEFD[IfDefs])
+        FO->print(A);
       FNGrab(FI,B,UNDEFD);
+      if(!UNDEFD[IfDefs])
+        FO->print(B);
       if(*B == '/') {
 gotoEOL:
         do {
           *A=FI->get();
+  	      if(!UNDEFD[IfDefs])
+	          FO->put(*A);
           } while(*A && *A!='\n'/* && *A!=13*/);
-        FO->putcr();
-			    myLine++;	*A=0;		// per sotto
 				First=TRUE;
         }
       else if(*B == '*') {
         do {
           *A=FI->get();
 rifo:         
-					if(*A=='\n') {
-						FO->putcr();
-						myLine++;
-						}
+          if(!UNDEFD[IfDefs])
+	          FO->put(*A);
           } while(*A && *A!='*');
         if(*A=='*') {
           *A=FI->get();
           if(*A != '/')
             goto rifo;
+          else {
+            if(!UNDEFD[IfDefs])
+	            FO->put(*A);
+	          }  
           }  
-					// mettere= *A=0;		// per sotto
         }
-			else {
-				if(!UNDEFD[IfDefs]) {
-		      FO->print(A);
-		      FO->print(B);
-					}
-        do {
-		      FNGrab(FI,B,UNDEFD);
-		      if(!UNDEFD[IfDefs])
-			      FO->print(B);
-          } while(*B && *B!='\n'/* && *A!=13*/);
-        FO->putcr();
-				First=TRUE;
-				}
       }
     else {
 	    if((*A=='#') && First) {
 				// errore 2012 invalid char se segue roba dopo #else ecc
-
-
-//			    myLine++;
-
-
 	      FNGrab(FI,A,UNDEFD);
 	//      m_Log->print(0,"... e poi Grab: %s\n",A);
 	      if(!_tcscmp(A,"endif")) {
@@ -535,11 +496,7 @@ rifo:
 						bumpIfs(UNDEFD,-1,UNDEFD[IfDefs],&IfDefs);
 		        if(!IfDefs)
 		          UNDEFD[IfDefs]=FALSE;
-						wsprintf(A,"#line %u \"%s\"",myLine +1,fname);		// SplithPath; +1 qua!
-						FO->print(A);
 		        }
-					else {
-						}
 	        }
 	      else if(!_tcscmp(A,"else")) {
 					if(!IfDefs) {
@@ -549,7 +506,7 @@ rifo:
 //          m_Log->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d\n",UNDEFD[IfDefs],IfDefs,LstIfs);
 	        if(!UNDEFD[IfDefs-1])
 //	          UNDEFD[IfDefs-1] = ! UNDEFD[IfDefs-1];
-						bumpIfs(UNDEFD,0,already_done[IfDefs] || !UNDEFD[IfDefs],&IfDefs);
+						bumpIfs(UNDEFD,0,!UNDEFD[IfDefs],&IfDefs);
 		      PP=FALSE;
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 					if(*B) {
@@ -567,10 +524,8 @@ rifo:
 						Go=TRUE;
 						}
 	        if(!UNDEFD[IfDefs-1]) {
-						if(FNDefined(B)) {
+	          if(FNDefined(B))
 							bumpIfs(UNDEFD,0,FALSE,&IfDefs);
-							already_done[IfDefs]=TRUE;
-							}
 	          else 
 							bumpIfs(UNDEFD,0,TRUE,&IfDefs);
 //						goto ifdef;
@@ -583,7 +538,6 @@ rifo:
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 //		      PP=TRUE;
 	        IfDefs++;
-					already_done[IfDefs]=FALSE;
 	        if(!UNDEFD[IfDefs-1]) {
 						char *B1;
 						if(*B=='!') {
@@ -630,7 +584,6 @@ rifo:
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        IfDefs++;
-					already_done[IfDefs]=FALSE;
 	        if(!UNDEFD[IfDefs-1]) {
 	          if(FNDefined(B))
 							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
@@ -680,10 +633,11 @@ rifo:
 								Go=TRUE;
 								}
 	            B[_tcslen(B)-1]=0;
+							{int oldLine=m_Cc->__line__;
 	            if(!FNLeggiFile(B+1,FO,level+1))
 								goto fine;
-							wsprintf(A,"#line %u \"%s\"\n",++myLine,fname);
-							FO->print(A);
+							m_Cc->__line__=oldLine;
+							}
 	            }
 	          else if(!_tcscmp(A,"define")) {
 	            L=FNDefined(B);
@@ -711,16 +665,15 @@ rifo:
 	          // lo gestiamo come comando...
     	        FO->printf("%s %s \n",A,B);
 
-							m_Cc->__line__=myLine;		// mah vabbe', per avere il numero!
 							m_Cc->PROCWarn(4068,A);		// finire :)
 
 	            }
 						else if(!_tcscmp(A,"warning")) {
     					FO->printf("%s %s \n",A,B);
 							}
-//	          else if(!_tcscmp(A,"line")) {
-//	            sscanf(B,"%u",&myLine);		//  e anche nome file attuale! (incluso o main MA QUESTO esiste SOLO come marker nel file preprocessato! qua no! 2026
-//	            }
+	          else if(!_tcscmp(A,"line")) {
+	            sscanf(B,"%u",&m_Cc->__line__);
+	            }
 /*	          else if(!_tcscmp(A,"#")) {	
 // per concatenazione stringhe in macro... NO MA NON PASSA DI QUA!! va gestito dentro #define
     					FO->printf("%s%s ",A,B);		// finire!!
@@ -730,10 +683,6 @@ rifo:
 							Go=TRUE;
 	            }
 	          }		// if !UNDEFD
-					else {
-						wsprintf(A,"#line %u \"%s\"\n",myLine,fname);
-						FO->print(A);
-						}
 
 					if(0)	{	// dovrebbe dare errore se #nonvalida e undefd... COME FARE? ricontrollarle tutte?
 	          m_Cc->PROCError(1021,A);
@@ -744,25 +693,17 @@ rifo:
 						FI->unget(ch);
 					}
 	        }
-//gotoEOL2:
-//        do {
-  //        *A=FI->get();
-    //      } while(*A && *A!='\n'/* && *A!=13*/);
-
-
 	      }
 	    else {
 	//       m_Log->print(0,"Sto per scrivere: A %s, e UNDEFD %d\n",A,UNDEFD[IfDefs]);
-	      if(!UNDEFD[IfDefs] /*|| *A=='\r'*/) {		// butto fuori cmq le righe vuote, per non incasinare il #riga... 
+	      if(!UNDEFD[IfDefs] /*|| *A=='\r'*/) {		// butto fuori cmq le righe vuote, per non incasinare il #riga... BEH CAZZATA cmq!
 	        FO->print(A);
-// togliere dopo #line 2026 direi
-
 	        }
 		    if(*A=='\n') {		// arrivano così CR con modeText... NO non funziona quindi faccio io ;) v. get()
 //					if(First)
-//						FO->putcr();
+//						FO->put('\n');
 		      First=TRUE;
-			    myLine++;
+			    m_Cc->__line__++;
 		      }
 		    else {
 		      if((*A != ' ') && (*A != '\t')) {		// isprint
@@ -790,7 +731,7 @@ void CCPreProcessor::bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *I
 	if(direction>0) {
 //		(*IfDefs)++;
 		if(*IfDefs>=MAX_DEFS)
-			m_Cc->PROCError(1001);
+			m_Cc->PROCError(1017);
 		}
 	else if(direction<0) {
 		if(*IfDefs<0)
@@ -799,13 +740,11 @@ void CCPreProcessor::bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *I
 		}
 	else {
 		if(!*IfDefs)
-			m_Cc->PROCError(1021);
+			m_Cc->PROCError(1020);
 		}
 
-  for(i=*IfDefs; i<MAX_DEFS; i++) {
+  for(i=*IfDefs; i<MAX_DEFS; i++)
 		UNDEFD[i]=state;
-		}
-
 	}
 
 
@@ -814,10 +753,8 @@ CCPreProcessor::CCPreProcessor(Ccc *p,uint8_t d) : m_Cc(p),debug(d) {
 
 	RootDef=LastDef=NULL;
 	IfDefs=0;
-	for(i=0; i<MAX_DEFS; i++) {
+	for(i=0; i<MAX_DEFS; i++)
 		UNDEFD[i]=0;
-		already_done[i]=FALSE;
-		}
 	}
 
 CCPreProcessor::~CCPreProcessor() {

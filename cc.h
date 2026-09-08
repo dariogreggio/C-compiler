@@ -43,17 +43,17 @@
 #if ARCHI
 #define __VER__ MAKEWORD(1,1)
 #elif Z80
-#define __VER__ MAKEWORD(7,2)
+#define __VER__ MAKEWORD(8,2)
 #elif I8086
-#define __VER__ MAKEWORD(3,2)
+#define __VER__ MAKEWORD(4,2)
 #elif I8051
 #define __VER__ MAKEWORD(1,0)
 #elif MICROCHIP
 #define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(12,1)
+#define __VER__ MAKEWORD(13,1)
 #elif GD24032
-#define __VER__ MAKEWORD(50,0)
+#define __VER__ MAKEWORD(60,0)
 #endif
 
 enum {
@@ -62,9 +62,10 @@ enum {
 	};
 
 
-#define MAX_NAME_LEN 31
+#define MAX_NAME_LEN 31+8		// con 63 si schianta tutto!! sistemare 2026
 #define MAX_DIM 4
 #define MAX_TIPI 50
+#define MAX_BLOCCHI 20
 
 struct ERRORE {
   uint16_t t;
@@ -100,6 +101,7 @@ enum OPDEF_MODE {
 	OPDEF_MODE_STACKPOINTER=11,
 	OPDEF_MODE_ABSPOINTER=12,
 	OPDEF_MODE_CONDIZIONALE=16,
+//v vartype	OPDEF_MODE_NOIMMEDIATO=16,		// usato/usabile come flag per builtin/inline! indica che non accetta immediato ma solo var/registro
 	OPDEF_MODE_REGISTRI=20,		// per 68000 movem, e Archi STMIA {} ecc
 #if ARCHI
 	OPDEF_MODE_SHIFT=32,
@@ -150,7 +152,7 @@ struct LINE {
   char opcode[32];		// usato anche in blocchi _asm per tutta la riga... attenzione
   struct OP_DEF s1;
   struct OP_DEF s2;
-#if ARCHI
+#if ARCHI || GD24032
   struct OP_DEF s3;
 #endif
   char rem[128];
@@ -220,7 +222,8 @@ enum VAR_MODIFIERS {		// v. anche class Ccc
 	FUNC_MODIF_PASCAL=2,
 	FUNC_MODIF_C=4,
 	FUNC_MODIF_INLINE=8,
-	FUNC_MODIF_FASTCALL=16
+	FUNC_MODIF_FASTCALL=16,
+	FUNC_MODIF_BUILTIN=32
 	};
 enum VAR_ATTRIBUTES {		// __attribute__ 
 	FUNC_ATTRIB_NORETURN=1,
@@ -242,6 +245,7 @@ enum VAR_TYPES {		// v. anche class Ccc
 
 	VARTYPE_FUNC_POINTER=0x40,
 	VARTYPE_FUNC_BODY=0x80,
+	VARTYPE_INITIALIZED=0x80,		// dovrebbe andare bene usare lo stesso :)
 	VARTYPE_FUNC=0x100,
 	VARTYPE_FUNC_USED=0x200,
 
@@ -253,6 +257,7 @@ enum VAR_TYPES {		// v. anche class Ccc
 	VARTYPE_ENUM=0x10000,
 
 	VARTYPE_VOLATILE=0x8000000L,
+	VARTYPE_NOIMMEDIATE=0x8000000L,		// usato come flag per builtin/inline! indica che non accetta immediato ma solo var/registro
 
 	VARTYPE_FAR=0x10000000L,
 	VARTYPE_SIGNED=0x00000000L,
@@ -274,12 +279,15 @@ struct VARS {
   O_TYPE type;
   O_SIZE size;
   uint8_t block;
+	int blockId;
   struct VARS *func;
   char *parm;
   struct TAGS *tag;         // se <>0, la var. è un membro della struct tag
   struct TAGS *hasTag;      // questo indica il tag di questa struct
   O_DIM dim;							// dim TOTALE dell'array o aggr
   uint8_t attrib;
+	uint8_t inlineCnt;
+	struct LINE *definition;		// dove è definita (usato da funzioni inlined)
   struct VARS *next;
   };
 
@@ -342,6 +350,8 @@ struct BLOCK_PTR {
   char T[32];    // CONTIENE I NOMI DEI FINE-BLOCCHI, # SE DO, & SE SWITCH,% SE if
   char C[32];   // CONTIENE LE LABEL PER continue
   char B[32];   // CONTIENE LE LABEL PER break
+	int id;				// usato per variabili locali in blocchi paralleli
+	int AutoOff;	// per variabili locali dentro blocco
   char *parm;
 	int8_t flag;		// usato per segnalare cose, tipo "default" già uscito in switch(
   };
@@ -621,6 +631,7 @@ protected:
 	char *RootIn;
 	uint8_t Brack;				// usati da FNRev
 	int8_t isRValue,isPtrUsed,inCast;	// tutti questi potrebbero andare in  struct OPERAND
+	int8_t maxRegUsed;
 	uint32_t TempProg;				//
 	struct LINE *GlblOut;	//
 
@@ -633,7 +644,7 @@ protected:
 	char __date__[11];
 	char __time__[11];
 	char TextSegm[64],DataSegm[64]; 
-	int Declaring,FuncCalled,SaveFP,ASM,AutoOff,AbsOff,AbsOff2,AbsOff3;
+	int Declaring,FuncCalled,SaveFP,ASM,AutoOff;
 	uint8_t debug;
 	uint8_t PreProcOnly;          // PREPROCESSA SOLO SU stdout  -E
 	uint8_t CheckStack;            // INSERISCE LO STACK PROBE    -Gs
@@ -679,6 +690,7 @@ public:
 	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *FNCercaVar(struct TAGS *,const char *);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+	struct VARS *PROCAllocGoto(const char *label);
 	struct VARS *FNCercaGoto(const char *);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE*, O_SIZE*, int8_t);
@@ -748,7 +760,7 @@ public:
 		struct OP_DEF *,uint8_t isPtr);
 
 	void subObj(COutputFile *,struct OP_DEF *);
-	int PROCObj(COutputFile *);
+	int PROCObj(COutputFile *,bool doDelete=TRUE);
   int PROCError(int, const char *s=NULL);
   int PROCWarn(int, const char *s=NULL);
   int PROCV(const char *);
@@ -780,7 +792,7 @@ public:
 	void PROCDelLastLine(struct LINE *);
 	void swap(struct LINE * *, struct LINE * *);
   void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
-#if ARCHI
+#if ARCHI || GD24032
   void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF * /*, const char *R=NULL*/);
 #endif
   void PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
@@ -798,8 +810,11 @@ public:
 		enum OPDEF_MODE, union SUB_OP_DEF *);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, 
 		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, 
-		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+//  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, 
+	//	enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+#elif GD24032
+  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int);
+  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
 #endif
   int PROCOutLab(const char *,const char *s1=NULL,const char *s2=NULL);
 
@@ -837,12 +852,13 @@ public:
 
 	static char *OpCond[16];
 	static char *StrOp[20];
-	struct BLOCK_PTR OldTX[20];
+	struct BLOCK_PTR OldTX[MAX_BLOCCHI];
 
   class REGISTRI *Regs;
           
 	int8_t Reg;
 
+	friend class REGISTRI;
 // Implementation
 	};
 
@@ -892,6 +908,7 @@ public:
 	void Save(int8_t);
 	void Get();
 	void Reset();
+	int FNIsReg(const char *);
 
 //	void Store(long , int , struct VARS *);
 //	int Comp(long , int , struct VARS *);
@@ -921,9 +938,10 @@ public:
 
 private:
 	bool UNDEFD[MAX_DEFS];
+	bool already_done[MAX_DEFS];		// per elif/else
 	uint8_t IfDefs;
 	uint8_t debug;
-	struct PROCESSED_FILES filesInfo[20];
+	struct PROCESSED_FILES filesInfo[MAX_DEFS];
 
 public:
 	CCPreProcessor(Ccc *p,uint8_t d);
