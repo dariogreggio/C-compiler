@@ -714,7 +714,7 @@ ukswitch:
 		  if(*ARGS) {
 				if(!FNIsStmt()) 
 				  PROCIsDecl();
-				__line__++;
+//				__line__++;
 				}
 		  else {
 				FNLO(ARGS);
@@ -1324,7 +1324,7 @@ int Ccc::PROCBlock() {
 		  case 0:                    // fine riga o fine FILE
 				FNLO(ARG);
 //    		PROCError(1004);
-				__line__++;
+//				__line__++;
 		    break;
 		  case '{':
 				FNLO(ARG);
@@ -1344,7 +1344,7 @@ int Ccc::PROCBlock() {
 				__line__=ol;
 				if(!FNIsStmt()) 
 				  PROCIsDecl();
-				__line__++;
+//				__line__++;
 				break;
 		  }
 		} while(*ARG != '}' && !FIn->Eof());
@@ -2894,7 +2894,7 @@ int Ccc::PROCIsDecl() {
   if(/*(m==0) && */(v<0) && (t==VARTYPE_NOTYPE) && (InBlock>0)) {
 // SE NON SPECIFICA LA CLASSE, NE IL TIPO E SIAMO IN UN BLOCCO...
 		if(Declaring) {
-		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"----------------------------------------");    // SEPARA LE DICHIARAZIONI DAL RESTO DELLA FUNZIONE
+		  PROCOper(LINE_TYPE_COMMENTO,0,OPDEF_MODE_NULLA,(union SUB_OP_DEF*)NULL,0,"+---------------------------------------");    // SEPARA LE DICHIARAZIONI DAL RESTO DELLA FUNZIONE
 		  Declaring=FALSE;     
 		  }
 		if(OutSource) {
@@ -2908,7 +2908,7 @@ int Ccc::PROCIsDecl() {
 		FNEvalExpr(16,MyBuf);
 // ...ALLORA E' UN'ESPRESSIONE
 		PROCCheck(';');
-		__line__=ol;
+//		__line__=ol;
 		}
   else {
 		if(OutSource) {
@@ -2986,8 +2986,8 @@ primogiro:
 		else {
 		  if(*MyBuf != ';')
 		    PROCCheck(';');
-			else
-				__line__=ol;
+//			else
+//				__line__=ol;
 		  }  
 		}      
   return 0;
@@ -3575,7 +3575,8 @@ L5080:
 				if(InBlock>0)
 				  PROCError(2599,nome);
 				InBlock++;
-			  OldTX[InBlock].id = __line__;		// o rand()? v. altrove
+//				if(InBlock)
+					OldTX[InBlock].id = __line__;		// o rand()? v. altrove
 				Declaring=TRUE;
 				Regs->Reset();
 				CurrFunc=V;
@@ -5185,28 +5186,23 @@ int Ccc::PROCAssignCond(int8_t *VQ, O_TYPE *T, O_SIZE *S, char *Clabel) {
 //  PROCOutLab(MyBuf);
 #elif GD24032
   i=*VQ & (VALUE_IS_CONDITION | 0xf);
-//  FNGetLabel(MyBuf1,2);
-//  PROCOper(LINE_TYPE_JUMPC,jmpCondString,OPDEF_MODE_CONDIZIONALE,
-//		FNGetCondString(i & VALUE_IS_CONDITION ? (i & 0xf) : (CONDIZ_UGUALE ^ (i & 1)),TRUE),
-//		OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)MyBuf1,0);
-  PROCOper(LINE_TYPE_JUMPC /* per formato istruzione..*/,"s",OPDEF_MODE_CONDIZIONALE,
-		FNGetCondString(i & VALUE_IS_CONDITION ? i : CONDIZ_UGUALE | ((i ^ 1) & 1),FALSE),
-		OPDEF_MODE_REGISTRO32,Regs->D);
-//	if((*VQ & VALUE_HAS_CONDITION) && *Clabel) {          // or logico ||
-//    PROCOutLab(Clabel);
-//	  }
-//  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO32,1,OPDEF_MODE_REGISTRO32,Regs->D);
-//  PROCOper(LINE_TYPE_JUMP,"bra.s",OPDEF_MODE_COSTANTE,(union SUB_OP_DEF*)FNGetLabel(MyBuf,1),0);
-//	if(!(*VQ & VALUE_HAS_CONDITION) && *Clabel) {           // and logico &&
-//    PROCOutLab(Clabel);
-//	  }
-//  PROCOutLab(MyBuf1);
-	if(*S>1) {
-		PROCOper(LINE_TYPE_ISTRUZIONE,"ext.w",OPDEF_MODE_REGISTRO16,Regs->D);
-		if(*S>2)
-			PROCOper(LINE_TYPE_ISTRUZIONE,"ext.l",OPDEF_MODE_REGISTRO32,Regs->D);
+	_tcscpy(MyBuf1,OpCond[FNGetCondString(i & VALUE_IS_CONDITION ? i : CONDIZ_UGUALE | ((i ^ 1) & 1),FALSE) & 0xf]);
+	_tcslwr(MyBuf1);		// finezza :)
+	_tcscpy(MyBuf,"SECL");
+	switch(*S) {
+		case 1:
+			_tcscat(MyBuf,".b");
+			break;
+		case 2:
+			_tcscat(MyBuf,".w");
+			break;
+		case 4:
+			_tcscat(MyBuf,".d");
+			break;
 		}
-//  PROCOutLab(MyBuf);
+  PROCOper(LINE_TYPE_ISTRUZIONE,MyBuf,OPDEF_MODE_COSTANTE/*OPDEF_MODE_CONDIZIONALE*/,
+		(union SUB_OP_DEF*)MyBuf1,0,
+		OPDEF_MODE_REGISTRO32,Regs->D);
 #elif MICROCHIP
   i=*VQ & 0x3f;
 //  i &= 0xbf;
@@ -5344,7 +5340,8 @@ int Ccc::PROCLoops(const char *T, const char *T1, const char *T2, struct LINE *S
   _tcscpy(OldTX[I].C,T2);
   if(*FNLA(MyBuf) == '{') {
 		Declaring=TRUE;
-	  OldTX[I].id = __line__;		// o rand()?
+		if(I)
+			OldTX[I].id = __line__;		// o rand()?
 		FNLO(MyBuf);
 		PROCBlock();
 		}
@@ -5403,7 +5400,7 @@ struct VARS *Ccc::FNCercaVar(const char *N, bool M) {
 //        myLog->print(0,"Cercavar\a: %s <> %s, livello %u",N,V->name,Bl);
 		  if(!V->tag) {
 				if(V->func==F) {
-				  if(V->block==Bl && V->blockId==OldTX[Bl].id) {
+				  if(V->block==Bl && (/*!Bl inutile || */ V->blockId==OldTX[Bl].id)) {
 						if(!_tcscmp(N,V->name)) { 
 						  return V;
 						  }
@@ -5468,7 +5465,8 @@ fineMem:
 	V->name[MAX_NAME_LEN]=0;
   V->size=Size;
   V->block=InBlock;
-  V->blockId=OldTX[InBlock].id;
+  if(InBlock)
+		V->blockId=OldTX[InBlock].id;
   V->func=CurrFunc;
   V->classe=Class;
   V->modif=Modif;

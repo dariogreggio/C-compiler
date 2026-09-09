@@ -256,11 +256,15 @@ enum Ccc::ARITM_OP Ccc::FNGetAritElem(int8_t *OP, char *OS, struct OPERAND *O, i
       else {
 				struct VARS *v;
 // PERCHE'?? 2025        _tcscpy(O->cost->s,TS);
+				if(!CurrFunc)
+					PROCError(2099,TS);
         v=FNCercaVar(TS,FALSE);
         if(!v) {
           if(*FNLA(MyBuf)=='(') {
             O->var=PROCAllocVar(TS,VARTYPE_FUNC,CLASSE_EXTERN,VARTYPE_PLAIN_INT,INT_SIZE,0,0);
-            PROCWarn(4013,TS);
+						O->var->block=0;		// forzatura ovvia! faccio qua
+						O->var->blockId=0;
+            PROCWarn(4013,TS);		// per le builtin non dovrebbe darlo... ma ok - mettere prototipi in un ovvio header!
             }
           else {
 						struct ENUMS *e;
@@ -277,10 +281,12 @@ enum Ccc::ARITM_OP Ccc::FNGetAritElem(int8_t *OP, char *OS, struct OPERAND *O, i
 							}
 						}
           }
-				else
-					*O->var=*v;
-        O->size=O->var->size;
-        O->type=O->var->type;
+				else {
+					if(O->var)
+						*O->var=*v;
+					}		// O->var è NULL se siamo al livello esterno...
+        O->size=O->var ? O->var->size : v->size;
+        O->type=O->var ? O->var->type : v->type;
         O->Q=VALUE_IS_VARIABILE;
         return ARITM_IS_VARIABILE;
         }
@@ -327,7 +333,9 @@ int Ccc::subGetType(O_TYPE *t, O_SIZE *s, O_DIM dim, long TT) {
         J++;
         *t= ((*t | VARTYPE_ARRAY) & ~VARTYPE_IS_POINTER) | J;
         if(*FNLA(MyBuf) != ']') {
-					int32_t d=FNGetConst(MyBuf,0);
+					if(CurrFunc)
+						;		// se C99 potremmo accettare variabile qua! solo se entro funzione ovviamente
+					int32_t d=FNGetConst(MyBuf,0);		
 					if(d<0)
 			      PROCError(1001,"dimensione array negativa");		// 
           dim[ndim] = d;

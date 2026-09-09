@@ -133,8 +133,8 @@ Op3:
 			          break;
 							else {
 			          FIn->unget(ch1);  
-/*								if(ch1=='\n')
-									__line__++;*/
+								if(ch1=='\n')
+									__line__--;
 								}
 			        }
 			      } 

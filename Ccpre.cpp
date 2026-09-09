@@ -463,6 +463,9 @@ int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
 	FO->print(A);
 
   while(!FI->Eof() && !Go) {
+
+		m_Cc->__line__=myLine;		// per Errori...
+
     if(debug) {
       m_Log->print(0,"Linea: %d\n",myLine);
 //      while(!kbhit());
@@ -577,51 +580,54 @@ rifo:
 	          }  
 	        }
 	      else if(!_tcscmp(A,"if")) {
-					bool bInvert=FALSE;
 					uint32_t OL=FI->GetPosition();
-//		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B,UNDEFD);
-//		      PP=TRUE;
+
 	        IfDefs++;
 					already_done[IfDefs]=FALSE;
 	        if(!UNDEFD[IfDefs-1]) {
 						char *B1;
-						if(*B=='!') {
-							bInvert=TRUE;
-							B1=B+1;
-							while(*B1 && !iscsym(*B1))
-								B1++;
-				      _tcscpy(B,B1);
-//			      FNGetNextPre(FI,TRUE,B,UNDEFD);		// SERVE SPEZZARE ev. operatori come ! attaccato alla parola che segue
-							}
-						if(!_tcsncmp(B,"defined",7)) {
-							B1=B+7;
-							while(*B1 && !iscsym(*B1))
-								B1++;
-							if(B1[_tcslen(B1)-1]==')')
-								B1[_tcslen(B1)-1]=0;
-							if(atoi(B1) /* patch per MACRO definite che diventano altro! */ || FNDefined(B))
-								bumpIfs(UNDEFD,1,bInvert ? TRUE : FALSE,&IfDefs);
-							else 
-								bumpIfs(UNDEFD,1,bInvert ? FALSE : TRUE,&IfDefs);
-							}
-						else {
+						char myExpr[256];
+						myExpr[0]=0;
 
-//							FI->Seek(OL,CFile::begin);
-//							FNGetLine(FI,B);
-// NON va ancora bene, bisogna gestire i #defined anche là, o dentro EVAL
+						do {
+							do {
+								FNGrab(FI,B,UNDEFD);
+							} while(*B && *B==' ');
+//							FNGetNextPre(FI,TRUE,B,UNDEFD);
+//							if(*myExpr)
+	//							_tcscat(myExpr," ");
+							if(*B && *B!='\n') {
+								if(isdigit(*B))
+									_tcscat(myExpr,B);
+								else if(*B == '|' || *B == '&' || *B == '!')
+									_tcscat(myExpr,B);
+								else if(!_tcscmp(B,"defined")) {
+									char delim=0;
+	//								FNGetNextPre(FI,TRUE,B,UNDEFD);
+									FNGrab(FI,B,UNDEFD);
+									if(*B=='(') {
+										delim='(';
+										FNGrab(FI,B,UNDEFD);//FNGetNextPre(FI,TRUE,B,UNDEFD);
+										}
+									_tcscat(myExpr,isdigit(*B) ? B : (FNDefined(B) ? "1" : "0"));
+									if(delim=='(')
+										FNGrab(FI,B,UNDEFD);//FNGetNextPre(FI,TRUE,B,UNDEFD);
+									if(*B!=')') 
+										m_Cc->PROCError(2059);
+									}
+								else {
+									_tcscat(myExpr,isdigit(*B) ? B : (FNDefined(B) ? "1" : "0"));
+									}
+								}
 
-							if(m_Cc->EVAL(B))
-								bumpIfs(UNDEFD,1,FALSE,&IfDefs);
-	//		          UNDEFD[IfDefs]=FALSE;
-							else
-								bumpIfs(UNDEFD,1,TRUE,&IfDefs);
-							}
-//		          UNDEFD[IfDefs]=TRUE;   
-/*							    if(!UNDEFD[IfDefs])
-										bumpIfs(1,!o1.l.v,IfDefs);
-									else
-										bumpIfs(1,1,IfDefs);*/
+							} while(*B && *B != '\n');
+
+						if(m_Cc->EVAL(myExpr))		// questo accetta cmq la parentesi appesa.. andrebbe tolta
+							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
+//		          UNDEFD[IfDefs]=FALSE;
+						else
+							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
+
 		        }  
 	        }
 	      else if(!_tcscmp(A,"ifdef")) {
@@ -716,7 +722,8 @@ rifo:
 
 	            }
 						else if(!_tcscmp(A,"warning")) {
-    					FO->printf("%s %s \n",A,B);
+    					//FO->printf("%s %s \n",A,B);
+							m_Cc->PROCWarn(4068,B);		// finire :)
 							}
 //	          else if(!_tcscmp(A,"line")) {
 //	            sscanf(B,"%u",&myLine);		//  e anche nome file attuale! (incluso o main MA QUESTO esiste SOLO come marker nel file preprocessato! qua no! 2026

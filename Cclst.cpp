@@ -79,6 +79,7 @@ struct ERRORE Errs[]={
   2093,1,"can't use address of automatic variable as static init",
   2094,1,"label undefined",
   2097,1,"illegal initialization",
+	2099,1,"initializer is not a constant",
   2100,1,"illegal indirection",
   2101,1,"'&' on constant",
   2103,1,"'&' on register variable",
@@ -651,7 +652,7 @@ int Ccc::PROCObj(COutputFile *FO,bool doDelete) {
 			    }  
 #elif GD24032
 		    if(TEXT->s3.mode) {
-					FO->put('\t');
+					FO->put(',');
 			    subObj(FO,&TEXT->s3);
 			    }  
 #endif

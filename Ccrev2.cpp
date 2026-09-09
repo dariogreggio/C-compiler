@@ -6213,7 +6213,7 @@ enum Ccc::OPERANDO_CONDIZIONALE Ccc::subCMP(const char *TS, int cond, int Mode, 
 						v. sotto long */
           PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
 #elif GD24032
-          PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[1],&u[0]);
+          PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[0],&u[1]);
 #endif
           break;
         case MODE_IS_CONSTANT1:
@@ -6853,7 +6853,7 @@ enum Ccc::OPERANDO_CONDIZIONALE Ccc::subCMP(const char *TS, int cond, int Mode, 
 					POTREBBE andare ma la condizione va invertita!*/
 				  PROCOper(LINE_TYPE_ISTRUZIONE,AS,OPDEF_MODE_REGISTRO32,Regs->D,u[0].mode,&u[0].s,u[0].ofs);
 #elif GD24032
-				  PROCOper(LINE_TYPE_ISTRUZIONE,AS,u[0].mode,&u[0].s,u[0].ofs,OPDEF_MODE_REGISTRO32,Regs->D);
+          PROCOper(LINE_TYPE_ISTRUZIONE,AS,&u[0],&u[1]);
 #elif MICROCHIP
 				  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO_HIGH8,3,u[0].mode,&u[0].s,u[0].ofs);
 				  if(CC & 4) {             // gestisco == e !=

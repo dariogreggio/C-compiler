@@ -53,7 +53,7 @@
 #elif MC68000
 #define __VER__ MAKEWORD(13,1)
 #elif GD24032
-#define __VER__ MAKEWORD(60,0)
+#define __VER__ MAKEWORD(0,1)
 #endif
 
 enum {

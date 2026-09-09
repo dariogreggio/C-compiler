@@ -636,8 +636,8 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
 	int8_t OP,oOP,Co=0;
 	bool Exit=FALSE;
   int VQ1;
-  char Rlabel[32];
-  char AS[32],*BS,B1S[32],TS[32],T1S[32],MyBuf[32],MyBuf1[32];
+  char Rlabel[/*32*/ sizeof(STR_LONG)];
+  char AS[64],*BS,B1S[64],TS[/*32*/ sizeof(STR_LONG)],T1S[64],MyBuf[64],MyBuf1[64];
   char *p1;
   struct LINE *ROut,*t;
 	struct VARS RPtr;
@@ -706,8 +706,10 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
         break;
       case ARITM_IS_VARIABILE:
 //      	*V->cost=0;
-        V->tag=V->var->hasTag;
-        memcpy(V->dim,V->var->dim,sizeof(O_DIM));
+				if(V->var) {		// accade se init al livello più esterno con variabile (ERRORE
+					V->tag=V->var->hasTag;
+					memcpy(V->dim,V->var->dim,sizeof(O_DIM));
+					}
 				if(Co && Pty==14)		// non è perfetto, ma deve lasciar passare la virgola come separatore exprb
 //				if(isWhat==1)
 					PROCError(2059,V->var->name);
@@ -2088,7 +2090,7 @@ LBinaryMinus:
 #elif GD24032
 		                  switch(V->size) {
 		                    case 4:
-													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.l",OPDEF_MODE_REGISTRO32,Regs->D);
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.d",OPDEF_MODE_REGISTRO32,Regs->D);
 													break;
 		                    case 2:
 													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.w",OPDEF_MODE_REGISTRO16,Regs->D);
@@ -2330,7 +2332,7 @@ LUnaryMinus:
 #elif MC68000
 											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.l",OPDEF_MODE_REGISTRO32,Regs->D);
 #elif GD24032
-											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.l",OPDEF_MODE_REGISTRO32,Regs->D);
+											PROCOper(LINE_TYPE_ISTRUZIONE,"neg.d",OPDEF_MODE_REGISTRO32,Regs->D);
 #elif MICROCHIP
 											u[0].mode=OPDEF_MODE_REGISTRO_LOW8;
 											u[0].s.n=Regs->D;
@@ -2444,7 +2446,7 @@ LUnaryMinus:
 													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.w",OPDEF_MODE_REGISTRO16,Regs->D);
 													break;
 		                    case 4:
-													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.l",OPDEF_MODE_REGISTRO32,Regs->D);
+													PROCOper(LINE_TYPE_ISTRUZIONE,"NEG.d",OPDEF_MODE_REGISTRO32,Regs->D);
 													break;
 		                    default:
 		                      break;
@@ -2745,6 +2747,7 @@ myUVvar:
 				                  swap(&ROut,&LastOut);
 #if MICROCHIP
 	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE,0);			// FINIRE
+
 #else
 	                      ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #endif
@@ -2928,8 +2931,20 @@ myURcost:
 #elif MC68000
 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif GD24032
-	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
-												// VERIFICARE QUA!
+		                    if(T==0 && (OP != 5)) {
+		                      i=MAKEPTROFS(R.var->label);
+													u[j].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
+				                	_tcscpy(u[1].s.label,R.var->label);
+		                      u[j].ofs=0;
+							            if(R.size>2) {
+			                      u[j+1].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
+					                	_tcscpy(u[1+1].s.label,R.var->label);
+			                      u[j+1].ofs=2;
+								            }
+//	                      	T=-1;
+		                      }
+	                      else 
+	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif MICROCHIP
 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE,0);		// FINIRE
 #endif
@@ -3020,9 +3035,7 @@ myURcost:
 
 	 	                      ReadVar(R.var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif GD24032
-		                    if(/*!(V->type & 0x1d0f) && */ (T==0 && (OP != 5))) {
-		                    // dovrebbe prendere anche i char *...
-													// VERIFICARE QUA!
+		                    if(T==0 && (OP != 5)) {
 		                      i=MAKEPTROFS(R.var->label);
 		                      u[j].mode=OPDEF_MODE_FRAMEPOINTER_INDIRETTO;
 		                      u[j].s.n=0;
@@ -3298,21 +3311,26 @@ myURcost:
 								if(Optimize & OPTIMIZE_CONST) {
 									if(V->Q==VALUE_IS_COSTANTE) {
 										if(V->cost->l) {
-											if(OP==12)
-												T=0;
+											if(OP==12) {
+					              T1=FNRev(OP-1,cond,Rlabel,&R);
+												T=0;		// ottimizzato, 1 fisso
+												V->cost->l=1;		// C89 99
+												}
 											else 
-												T=2;        
+												T=2;    // serve calcolo
 											}
 										else {
-											if(OP==11)
-												T=0;
+											if(OP==11) {
+												T=0;		// ottimizzato, 0 fisso
+												V->cost->l=0;		// C89 99
+												}
 											else 
-												T=2;
+												T=2;		// serve calcolo
 											}
 										}
 									else {
 										if(OP==12)
-											T=0;
+											T=0;		// ?? come se non ci fosse?
 										else 
 											T=2;
 										}
@@ -3322,6 +3340,19 @@ myURcost:
 							if(!(V->type & VARTYPE_FLOAT) && (R.type & VARTYPE_FLOAT)) {
 								struct VARS *v;
 								v=FNCercaVar("_fcvti",0);
+								/* ovvero da gemini 2026
+								; Esempio codegen per: if (f)
+MOV.d   R0, [R24-4]      ; Carica l'immagine a 32-bit del float
+AND.d   R0, 0x7FFFFFFF   ; Maschera via il bit del segno (gestisce +0.0 e -0.0)
+CMP.d   R0, 0
+BEQ     L_FALSE          ; Se 0, il float è 0.0 -> FALSO*/
+								/*; Esempio per double su due registri (R1 = alto, R0 = basso)
+MOV.d   R1, [R24-4]      ; Parte alta (contiene il segno)
+MOV.d   R0, [R24-8]      ; Parte bassa
+AND.d   R1, 0x7FFFFFFF   ; Pulisce il bit di segno dal registro alto
+OR.d    R1, R0           ; Unisce tutti i bit di mantissa ed esponente
+CMP.d   R1, 0            ; Se R1 == 0, l'intero double era 0.0 o -0.0!
+BEQ     L_FALSE*/
   							if(!v)
     							v=PROCAllocVar("_fcvti",VARTYPE_FUNC | VARTYPE_FUNC_USED,CLASSE_EXTERN,4,0,0,0);	
 								if(R.Q==VALUE_IS_VARIABILE)
@@ -3365,6 +3396,9 @@ myURcost:
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,"clr.l",OPDEF_MODE_REGISTRO32,Regs->D);
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
 													OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
+#elif GD24032
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,"CLR.d",OPDEF_MODE_REGISTRO32,Regs->D);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #else
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,0);
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
@@ -3377,11 +3411,14 @@ myURcost:
 										else {		// se ||
 											if(R.cost->l) {		// e costante != 0
 #if MC68000
-			                  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO,1,OPDEF_MODE_REGISTRO32,Regs->D);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,"moveq",OPDEF_MODE_IMMEDIATO,1,OPDEF_MODE_REGISTRO32,Regs->D);// fisso C89 C99 dice
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
 													OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
+#elif GD24032
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO,1);// fisso C89 C99 dice
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #else
-			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,1);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,1);// fisso C89 C99 dice
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #endif
 												R.Q=VALUE_HAS_CONDITION;
@@ -3428,8 +3465,10 @@ skippa_condbranch: ;
 //	              if(RQ & VALUE_IS_CONDITION_VALUE) {
 	                V->Q=R.Q;
 // ovviamente sbagliato, 2025	                V->var=R.var;
-									if(R.var)
+									if(R.Q == VALUE_IS_VARIABILE && R.var && V->Q == VALUE_IS_VARIABILE && V->var)		// V->var è NULL se siamo al livello esterno, in quel caso dobbiam dare errore se ci sono variabili (v. GetAritmElem errore 2099
 										*V->var=*R.var;
+									if(R.Q == VALUE_IS_COSTANTE && R.cost->l)
+										R.cost->l=1;		// fisso C89 C99 dice
 //									V->var->size=R.var->size;
 //									V->var->type=R.var->type;
 //memcpy(V->var,R.var,sizeof(struct VARS)-4);
@@ -3444,7 +3483,7 @@ skippa_condbranch: ;
 	              if(!T1)
 	 	              V->Q=0;
   	            }
-	            if((/*!*cond ||*/ (oOP==12 || OP==12)) && V->Q) {
+	            if((/*!*cond ||*/ (oOP==12 || OP==12)) && (V->Q && V->Q != VALUE_IS_COSTANTE)) {
 	              V->Q |= VALUE_HAS_CONDITION;
   		          }
 //	            else
@@ -3524,8 +3563,7 @@ skippa_condbranch: ;
 #elif GD24032
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
-							PROCOper(LINE_TYPE_JUMP,(MemoryModel & 0xf) >= MEMORY_MODEL_LARGE ? jmpString : jmpShortString,
-								OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
+							PROCOper(LINE_TYPE_JUMP,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)MyBuf,0);
 #elif MICROCHIP
 							_tcscpy(MyBuf,TS);
 							_tcscat(MyBuf,"_");
@@ -4142,8 +4180,9 @@ skippa_condbranch: ;
 	                    case CLASSE_EXTERN:
                       case CLASSE_GLOBAL:
                       case CLASSE_STATIC:
-												u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+												u[1].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 			                	_tcscpy(u[1].s.label,R.var->label);
+	                      u[1].ofs=0;
       									break;
 	                    case CLASSE_REGISTER:
 												u[1].mode=OPDEF_MODE_REGISTRO32;
@@ -4276,8 +4315,9 @@ my_add:
 #ifdef MC68000
 // ??													PROCOper(LINE_TYPE_ISTRUZIONE,"move.l",OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_REGISTRO32,Regs->D+1);		// me ne frego della size!
 #elif GD24032
-			                		u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                		u[0].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 				                	_tcscpy(u[0].s.label,V->var->label);
+		                      u[0].ofs=0;
 #else
 #endif
 
@@ -4434,8 +4474,9 @@ my_add:
 											case CLASSE_EXTERN:
 											case CLASSE_GLOBAL:
 											case CLASSE_STATIC:
-			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	u[1].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 				                _tcscpy(u[1].s.label,R.var->label);
+	                      u[1].ofs=0;
 												break;
 											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
                     }
@@ -4470,8 +4511,9 @@ my_add:
 												case CLASSE_EXTERN:
 												case CLASSE_GLOBAL:
 												case CLASSE_STATIC:
-			                		u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                		u[0].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 				                	_tcscpy(u[0].s.label,V->var->label);
+		                      u[0].ofs=0;
 													break;
 												}
 
@@ -4581,8 +4623,9 @@ my_add:
 											case CLASSE_EXTERN:
 											case CLASSE_GLOBAL:
 											case CLASSE_STATIC:
-			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	u[1].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 				                _tcscpy(u[1].s.label,R.var->label);
+	                      u[1].ofs=0;
 												break;
 											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
 #else
@@ -4699,8 +4742,9 @@ my_add:
 			                    ReadVar(V->var,VARTYPE_PLAIN_INT,0,0,FALSE);
 #elif GD24032
 
-			                	u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	u[0].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 			                	_tcscpy(u[0].s.label,V->var->label);
+	                      u[0].ofs=0;
 #elif I8086
 												// tutte dirette qua!!
 			                	u[0].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
@@ -4858,8 +4902,9 @@ my_add:
 											case CLASSE_EXTERN:
 											case CLASSE_GLOBAL:
 											case CLASSE_STATIC:
-			                	u[1].mode=OPDEF_MODE_VARIABILE_INDIRETTO;
+			                	u[1].mode=MemoryModel & MEMORY_MODEL_RELATIVE ? OPDEF_MODE_ABSPOINTER_INDIRETTO : OPDEF_MODE_VARIABILE_INDIRETTO;
 				                _tcscpy(u[1].s.label,R.var->label);
+	                      u[1].ofs=0;
 												break;
 											}//		                j=FNGetMemSize(V->type,V->size,1)>2 ? 2 : 1;
 #else
@@ -5004,7 +5049,7 @@ my_aox:
     Co++;
     } while(!Exit);
 
-__line__=ol;
+//__line__=ol;
 
   if(!AR)
     return AR-1;
@@ -5029,6 +5074,13 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 	  ch=*s;
 		if(iscsym(ch) && !firstchar)
 			firstchar=ch;
+/*		if(!firstchar) {
+			if(ch==')) {		// se inizia con operando...
+				PROCError(2059,s);
+				Go=TRUE;
+				}
+			}*/
+
 //	  myLog->print(0,"sono sul %c(%x), T %d, pty %d\n",ch,ch,Times,Pty);
 	  switch(ch) {
 	    case '(':
@@ -5113,10 +5165,10 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 	      break;
 	    case '!':
 	    case '~':
-				if(isWhat==1) {
+				if(isWhat<=1) {
 					if(Pty > 2) {
 						s++;
-						isWhat=2;
+						isWhat=1;
 						s=ConRecEval(s,2,l1);
 						switch(ch) {
 							case '!':
@@ -5212,8 +5264,69 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 					Go=1;
 					}
 	      break;
-	    case '&':                        // and,or
-	    case '|':
+//                        // and,or - Gemini 9/9/26 MORTE AGLI UMANI CANCRO AI BAMBINI
+			// --- LOGICAL AND (&&) ---
+			case '&':
+				if(isWhat == 1) {
+					char s2 = *++s;
+					if(s2 == '&') { // Operatore &&
+						if(Pty > 10) {
+							s++;
+							isWhat = 2;
+							s = ConRecEval(s, 10, &l2); // Chiama il livello superiore
+							*l1 = (*l1 != 0) && (l2 != 0);
+							isWhat = 1;
+							} 
+						else 
+							Go = 1;
+						} 
+					else { // Operatore & (bitwise)
+						if(Pty > 7) {
+							isWhat = 2;
+							s = ConRecEval(s, 7, &l2);
+							*l1 = *l1 & l2;
+							isWhat = 1;
+							} 
+						else 
+							Go = 1;
+						}
+					}
+				else {
+					PROCError(2059,s);
+					Go=1;
+					}
+				break;
+			// --- LOGICAL OR (||) ---
+			case '|':
+				if(isWhat == 1) {
+					char s2 = *++s;
+					if(s2 == '|') { // Operatore ||
+						if(Pty > 11) {
+							s++;
+							isWhat = 2;
+							s = ConRecEval(s, 11, &l2); // Chiama il livello superiore
+							*l1 = (*l1 != 0) || (l2 != 0);
+							isWhat = 1;
+							} 
+						else 
+							Go = 1;
+						} 
+					else { // Operatore | (bitwise)
+						if(Pty > 9) {
+							isWhat = 2;
+							s = ConRecEval(s, 9, &l2);
+							*l1 = *l1 | l2;
+							isWhat = 1;
+							} 
+						else 
+							Go = 1;
+						}
+					}
+				else {
+					PROCError(2059,s);
+					Go=1;
+					}
+				break;
 	    case '^':
 				if(isWhat==1) {
 					if(Pty > 6) {
@@ -5222,23 +5335,7 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 						isWhat=2;
 						s=ConRecEval(s,6,&l2);
 	//	    myLog->print(0,"qui i valori sono %ld e %ld\n",*l1,l2);
-						switch(ch) {
-							case '&':
-								if(s2=='&')
-									*l1=*l1 && l2;
-								else
-									*l1=*l1 & l2;
-								break;
-							case '|':
-								if(s2=='|')
-									*l1=*l1 || l2;
-								else
-									*l1=*l1 | l2;
-								break;
-							case '^':
-								*l1=*l1 ^ l2;
-								break;
-							}  
+						*l1=*l1 ^ l2;
 						}
 					else
 						Go=1;
@@ -5247,6 +5344,33 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 					PROCError(2059,s);
 					Go=1;
 					}
+	      break;
+			case '?':
+				if(isWhat==1) {
+					if(Pty > 13) {
+						char s2=*++s;
+						s++;
+						isWhat=2;
+						s=ConRecEval(s,13,&l2);
+						if(l2) {
+							s=ConRecEval(s,13,l1);
+							Go=TRUE;		// short-circuit!
+							}
+						else {
+							while(*s && *s!=':')
+								s++;
+							s=ConRecEval(s,13,l1);
+							}
+						}
+					else
+						Go=1;
+					}
+				else {
+					PROCError(2059,s);
+					Go=1;
+					}
+	      break;
+			case ':':		// per ? : assorbito sopra cmq
 	      break;
 	    case ' ':
 	      s++;
@@ -5257,7 +5381,7 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 	      Go=TRUE;
 	      break;
 			case 'd':
-				// gestire FNDefined(
+				// gestire FNDefined( , v. preprocessor
 //				break;
 	    default:
 	      *l1=0;
