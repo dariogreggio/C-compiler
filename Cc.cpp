@@ -3294,41 +3294,41 @@ int Ccc::PROCDclVar(enum VAR_CLASSES Class, uint8_t Modif, O_TYPE Type, O_SIZE S
 #elif GD24032
 						_tcscat(S,"B 0");
 #elif MICROCHIP
-					if(Type & VARTYPE_ROM) {
-						if(CPUPIC<2) {
-							_tcscat(S,"T ");						// table per PCL
+						if(Type & VARTYPE_ROM) {
+							if(CPUPIC<2) {
+								_tcscat(S,"T ");						// table per PCL
+								}
+							else {
+								_tcscat(S,"A ");						// char per lettura diretta
+								}
+	//						_tcscat(S,"B 0");
 							}
 						else {
-							_tcscat(S,"A ");						// char per lettura diretta
+							_tcscat(S,"1");
 							}
-//						_tcscat(S,"B 0");
-						}
-					else {
-						_tcscat(S,"1");
-						}
 #endif
-					break;
-				  case 2:
+						break;
+						case 2:
 #if ARCHI
-						_tcscat(S,"W 0");
-#elif Z80
-						_tcscat(S,"w 0");
-#elif I8086
-						_tcscat(S,"W 0");
-#elif MC68000
-						if(!(TipoOut & TIPO_SPECIALE))
 							_tcscat(S,"W 0");
-						else
-							_tcscat(S,"c.w 0");
+#elif Z80
+							_tcscat(S,"w 0");
+#elif I8086
+							_tcscat(S,"W 0");
+#elif MC68000
+							if(!(TipoOut & TIPO_SPECIALE))
+								_tcscat(S,"W 0");
+							else
+								_tcscat(S,"c.w 0");
 #elif GD24032
-						_tcscat(S,"W 0");
+							_tcscat(S,"W 0");
 #elif MICROCHIP
-					if(Type & VARTYPE_ROM) {
-						_tcscat(S,"W 0");
-						}
-					else {
-						_tcscat(S,"2");
-						}
+						if(Type & VARTYPE_ROM) {
+							_tcscat(S,"W 0");
+							}
+						else {
+							_tcscat(S,"2");
+							}
 #endif
 						break;
 		  		case 4:

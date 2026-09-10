@@ -711,6 +711,7 @@ public:
 	uint16_t FNEvalExpr(uint8_t, char *);
  	int FNEvalECast(char *, O_TYPE *type, O_SIZE *size);
 	int FNEvalCond(char *, const char *, uint16_t cond);
+	void skipExpr(uint8_t Pty,char delim);
 
 #if Z80 || MICROCHIP
 	void OpA(char *, struct OP_DEF *, int);

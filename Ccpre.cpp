@@ -561,29 +561,21 @@ rifo:
 						}
 		      PP=TRUE;
 	        }
-	      else if(!_tcscmp(A,"elif")) {		// GESTIRE espressioni anche qua! defined ecc
-		      PP=FALSE;
-		      FNGetNextPre(FI,TRUE,B,UNDEFD);
-		      PP=TRUE;
-					if(!IfDefs) {
-	          m_Cc->PROCError(1018);
-						Go=TRUE;
-						}
-	        if(!UNDEFD[IfDefs-1]) {
-						if(FNDefined(B)) {
-							bumpIfs(UNDEFD,0,FALSE,&IfDefs);
-							already_done[IfDefs]=TRUE;
-							}
-	          else 
-							bumpIfs(UNDEFD,0,TRUE,&IfDefs);
-//						goto ifdef;
-	          }  
-	        }
-	      else if(!_tcscmp(A,"if")) {
+
+	      else if(!_tcscmp(A,"if") || !_tcscmp(A,"elif")) {
 					uint32_t OL=FI->GetPosition();
 
-	        IfDefs++;
-					already_done[IfDefs]=FALSE;
+					if(!_tcscmp(A,"elif")) {
+						if(!IfDefs) {
+							m_Cc->PROCError(1018);
+							Go=TRUE;
+							}
+						}
+					else {
+		        IfDefs++;
+						already_done[IfDefs]=FALSE;
+						}
+
 	        if(!UNDEFD[IfDefs-1]) {
 						char *B1;
 						char myExpr[256];
@@ -592,14 +584,16 @@ rifo:
 						do {
 							do {
 								FNGrab(FI,B,UNDEFD);
-							} while(*B && *B==' ');
 //							FNGetNextPre(FI,TRUE,B,UNDEFD);
+								} while(*B && *B==' ');
 //							if(*myExpr)
 	//							_tcscat(myExpr," ");
 							if(*B && *B!='\n') {
 								if(isdigit(*B))
 									_tcscat(myExpr,B);
-								else if(*B == '|' || *B == '&' || *B == '!')
+								else if(*B == '|' || *B == '&' || *B == '!' || *B == '+' || *B == '-' || *B == '<'
+									 || *B == '>' || *B == '*' || *B == '/' || *B == '%' || *B == '?' || *B == ':'
+									 || *B == '(' || *B == ')')
 									_tcscat(myExpr,B);
 								else if(!_tcscmp(B,"defined")) {
 									char delim=0;
@@ -616,12 +610,17 @@ rifo:
 										m_Cc->PROCError(2059);
 									}
 								else {
-									_tcscat(myExpr,isdigit(*B) ? B : (FNDefined(B) ? "1" : "0"));
+									if(!isspace(*B))
+										_tcscat(myExpr,isdigit(*B) ? B : (FNDefined(B) ? "1" : "0"));
 									}
 								}
 
 							} while(*B && *B != '\n');
 
+						if(B1=strstr(myExpr,"//"))		// perché qua non posso usare FNGetNextPre per i token sciolti; gestire sopra con oldchar...
+							*B1=0;
+						if(B1=strstr(myExpr,"/*"))		// idem
+							*B1=0;
 						if(m_Cc->EVAL(myExpr))		// questo accetta cmq la parentesi appesa.. andrebbe tolta
 							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
 //		          UNDEFD[IfDefs]=FALSE;

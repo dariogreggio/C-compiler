@@ -200,6 +200,40 @@ int Ccc::FNEvalCond(char *C, const char *TS, uint16_t cond) {
 	  return 0;
   }
 
+void Ccc::skipExpr(uint8_t Pty,char delim) {		// usata per ignorare del tutto un'espressione, tipo per condizionali falsi
+	uint8_t inBrack=0,inTernary=0;
+	char AS[256];
+	unsigned long ol,OT;
+
+	do {
+	  OT=FIn->GetPosition();
+		FIn->SavePosition();
+		ol=__line__;
+		FNLO(AS);
+		switch(*AS) {
+			case 0:
+				return;
+				break;
+			case '(':
+			case '[':
+			case '{':
+				inBrack++;
+				break;
+			case ')':
+			case ']':
+			case '}':
+				if(inBrack > 0) 
+					inBrack--;			// safety
+				break;
+			case '?':
+        // Trovato un ternario interno: incrementa il livello
+        inTernary++;
+        break;
+			}
+		} while(*AS != delim || inBrack || inTernary);
+	FIn->RestorePosition(OT);
+	__line__=ol;
+	}
 
 #if Z80
 void Ccc::OpA(char *s, struct OP_DEF *r, int i) {
@@ -645,7 +679,7 @@ int8_t Ccc::FNRev(int8_t Pty,int16_t *cond,char *Clabel,struct OPERAND *V) {
   union STR_LONG RCost;
   struct VARS *VPtr;
   long OT,l,l1;
-	long ol;
+	unsigned long ol;
 //	int8_t isWhat=0;		// 0 inizio, 1=value, 2=operand; (v. anche EVAL   alla fine forse non serve!
   struct OP_DEF u[4];
 //  int BrackOP[10],BrackPty[10];
@@ -2644,6 +2678,7 @@ LUnaryMinus:
 							    case '|':
 							    case '&':
 							    case '^':
+							    case '?':
 							      BS=TS;
 							      *(BS+1)=0;
 							      break;
@@ -3312,7 +3347,8 @@ myURcost:
 									if(V->Q==VALUE_IS_COSTANTE) {
 										if(V->cost->l) {
 											if(OP==12) {
-					              T1=FNRev(OP-1,cond,Rlabel,&R);
+												skipExpr(12,')');
+//					              T1=FNRev(OP-1,cond,Rlabel,&R);
 												T=0;		// ottimizzato, 1 fisso
 												V->cost->l=1;		// C89 99
 												}
@@ -3330,7 +3366,7 @@ myURcost:
 										}
 									else {
 										if(OP==12)
-											T=0;		// ?? come se non ci fosse?
+											;//T=0;		// ?? come se non ci fosse?
 										else 
 											T=2;
 										}
@@ -3355,18 +3391,20 @@ CMP.d   R1, 0            ; Se R1 == 0, l'intero double era 0.0 o -0.0!
 BEQ     L_FALSE*/
   							if(!v)
     							v=PROCAllocVar("_fcvti",VARTYPE_FUNC | VARTYPE_FUNC_USED,CLASSE_EXTERN,4,0,0,0);	
-								if(R.Q==VALUE_IS_VARIABILE)
+								if(R.Q==VALUE_IS_VARIABILE) {
 #if MICROCHIP
 	                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE,0);		// FINIRE
 #else
 	                ReadVar(V->var,VARTYPE_PLAIN_INT,0,*cond & VALUE_CONDITION_MASK,FALSE);
 #endif
-								else if(R.Q==VALUE_IS_COSTANTE)
+									}
+								else if(R.Q==VALUE_IS_COSTANTE) {
 #if MICROCHIP
 							    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
 							    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
 #endif
+									}
 								else if(R.Q==VALUE_IS_D0)
                   PROCReadD0(R.var,0,0,0,0,FALSE);
       					PROCOper(LINE_TYPE_CALL,callString,OPDEF_MODE_VARIABILE,(union SUB_OP_DEF *)&v,0);
@@ -3416,7 +3454,7 @@ BEQ     L_FALSE*/
 													OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #elif GD24032
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,Regs->D,OPDEF_MODE_IMMEDIATO,1);// fisso C89 C99 dice
-			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
+			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpShortString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
 #else
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_IMMEDIATO,1);// fisso C89 C99 dice
 			                  PROCOper(LINE_TYPE_ISTRUZIONE,jmpString,OPDEF_MODE_COSTANTE,(union SUB_OP_DEF *)Clabel,0);
@@ -3512,11 +3550,40 @@ skippa_condbranch: ;
 								}
 //		          if(*V->Q<0) {
 		          else if(V->Q & VALUE_IS_COSTANTE) {      // boh autoottimizza cost..
+								if(V->Q == VALUE_IS_COSTANTE) {      // 
+									if(!V->cost->l) {
+										skipExpr(13,':');
+					          PROCCheck(':');
+					          subEvEx(13,cond,Clabel,&R);
+										}
+									else {
+/*										int16_t cond2=0;
+										char Clabel2[sizeof(STR_LONG)]={0};
+										struct OPERAND R2;
+									  union STR_LONG RCost2;
+										ZeroMemory(&R2,sizeof(struct OPERAND));
+										R2.cost=&RCost2;*/
+//					          subEvEx(13,&cond2,Clabel2,&R2);		// butto via!
+					          subEvEx(13,cond,Clabel,&R);
+					          PROCCheck(':');
+										skipExpr(13,';');
+										}
+									if(R.Q==VALUE_IS_COSTANTE) {
+										V->type=R.type;          // andrebbero usate entrambe le expr
+										V->size=R.size;
+										V->var=NULL;
+										V->cost=R.cost;
+										V->Q=VALUE_IS_COSTANTE;
+										break;
+										}
+									}
+								else {
 #if MICROCHIP
-						    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
+									PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE,0);		// FINIRE
 #else
-						    PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
+									PROCUseCost(V->Q,V->type,V->size,V->cost,FALSE);
 #endif
+									}
 						    PROCWarn(4127);
 /*
 		            if((*V->Q==VALUE_IS_COSTANTE) && (!&V->cost.l)) {
@@ -5371,6 +5438,7 @@ char *Ccc::ConRecEval(char *s, uint8_t Pty, long *l1) {
 					}
 	      break;
 			case ':':		// per ? : assorbito sopra cmq
+				s++;
 	      break;
 	    case ' ':
 	      s++;
