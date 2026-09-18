@@ -43,17 +43,17 @@
 #if ARCHI
 #define __VER__ MAKEWORD(1,1)
 #elif Z80
-#define __VER__ MAKEWORD(8,2)
+#define __VER__ MAKEWORD(9,2)
 #elif I8086
-#define __VER__ MAKEWORD(4,2)
+#define __VER__ MAKEWORD(5,2)
 #elif I8051
 #define __VER__ MAKEWORD(1,0)
 #elif MICROCHIP
 #define __VER__ MAKEWORD(2,1)
 #elif MC68000
-#define __VER__ MAKEWORD(13,1)
+#define __VER__ MAKEWORD(14,1)
 #elif GD24032
-#define __VER__ MAKEWORD(0,1)
+#define __VER__ MAKEWORD(1,1)
 #endif
 
 enum {
@@ -125,6 +125,7 @@ struct OP_DEF {
                         // bit 7=indiretto
   union SUB_OP_DEF s;
   int16_t ofs;			// anche 32?
+	bool hexNumbers;		// finezza per stampare numeri hex in alcuni casi!
   };
   
 enum LINE_TYPE {
@@ -241,6 +242,7 @@ enum VAR_TYPES {		// v. anche class Ccc
 	VARTYPE_POINTER=1,			//0..15
 	VARTYPE_2POINTER=2,			//**
 	VARTYPE_IS_POINTER=0xf,			//0..15
+	VARTYPE_IS_2POINTER=0xe,			//
 	VARTYPE_NOT_A_POINTER=(uint32_t)(~(VARTYPE_IS_POINTER)),			// mask
 
 	VARTYPE_FUNC_POINTER=0x40,
@@ -327,7 +329,7 @@ struct OPERAND {
 	struct VARS *var;
 	union STR_LONG *cost;
 	struct TAGS *tag; 
-	uint8_t tipo_D0;			// flag usato per le operazioni indirette su puntatori
+//	uint8_t tipo_D0;			// flag usato per le operazioni indirette su puntatori		BOH 2026 :)
 	O_DIM dim;
 	uint8_t flag;					// usato ad es. per calcolare pos. array
 	};
@@ -546,9 +548,10 @@ public:
 #endif
 		};*/
 	enum VALUES {
-		VALUE_IS_0=0,					// forse se espressione a dx di =
-		VALUE_IS_EXPR=1,			// boh... non ho ancora capito bene! forse proprio "altro" ossia espressione! tipo op. ? :
-		VALUE_IS_EXPR_FUNC=2,
+		//VALUE_IS_0=0,					// forse se espressione a dx di =
+		VALUE_IS_EXPR=0,			// boh... non ho ancora capito bene! forse proprio "altro" ossia espressione! tipo op. ? :
+		VALUE_IS_EXPR_FUNC=1,
+		VALUE_IS_PTR=2,			// vale SOLO per puntatori, ossia 32bit su GD24032 e v. 68000, 16 su altri 
 		VALUE_IS_D0=3,
 		VALUE_IS_VARIABILE=4,
 		VALUE_IS_COSTANTE=8,
@@ -647,6 +650,7 @@ protected:
 	int Declaring,FuncCalled,SaveFP,ASM,AutoOff;
 	uint8_t debug;
 	uint8_t PreProcOnly;          // PREPROCESSA SOLO SU stdout  -E
+	uint8_t PreProcCommenti;			// inserisce commenti nel .i e quindi in output
 	uint8_t CheckStack;            // INSERISCE LO STACK PROBE    -Gs
 	uint8_t CheckPointers;        // INSERISCE check dei puntatori nulli
 	uint8_t OutSource;             // INSERISCE LE RIGHE C NELL'OUTPUT  -Fc
@@ -667,6 +671,7 @@ protected:
 	static struct TIPI Types[MAX_TIPI];
 	static struct OPERANDO Op[];
 	uint16_t numErrors,numWarnings;
+	bool hexNumbers;
 
 // Operations
 public:
@@ -676,7 +681,7 @@ public:
 	char *AddExt(char *, char *);
 	int PROCBlock();
 	int PROCIsDecl();
-	int PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint32_t attrib, bool isparm);
+	struct VARS *PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint32_t attrib, bool isparm);
 	int subAsm(char *);
 	int FNIsStmt();
 	char *FNGetLabel(char *,uint8_t);
@@ -690,16 +695,17 @@ public:
 	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *FNCercaVar(struct TAGS *,const char *);
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+	struct VARS *PROCAllocFunzProto(const char *name, O_TYPE type, O_SIZE size);
 	struct VARS *PROCAllocGoto(const char *label);
 	struct VARS *FNCercaGoto(const char *);
   struct ENUMS *FNCercaEnum(const char *,const char *,bool);
 	int PROCCast(O_TYPE, O_SIZE, O_TYPE*, O_SIZE*, int8_t);
 #if MICROCHIP
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr, uint8_t lh=0);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, int16_t cond, int ofs, bool asPtr, uint8_t lh=0);
 #else
-	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, uint16_t cond, int ofs, bool asPtr);
+	int PROCReadD0(struct VARS *, O_TYPE type, O_SIZE size, int16_t cond, int ofs, bool asPtr);
 #endif
-	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, bool isPtr);
+	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, uint16_t ofs);
 	int PROCGetAdd(int8_t VQ, struct VARS *, int ofs, bool asPtr);
 	int PROCUsaFun(struct VARS *,bool tosave1,bool tosave2);
 	struct CONS *FNAllocCost(const char *, uint8_t, O_TYPE type=0);
@@ -725,39 +731,38 @@ public:
 #endif  
 
 #if ARCHI
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #elif Z80
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #elif I8086  
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #elif MC68000
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #elif GD24032
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #elif MICROCHIP
-	void subSpezReg(uint8_t, struct OP_DEF *);
+	void subAssignReg(uint8_t, struct OP_DEF *,bool asPtr);
 #endif
 
   int8_t FNRev(int8_t Pty,int16_t *cond,char *,struct OPERAND *);
   char *ConRecEval(char *, uint8_t pty, long *);
   long EVAL(char *);
 
-	int subShift(uint8_t, int mode, int8_t VQ, struct VARS *, O_TYPE type, O_SIZE size, O_TYPE, union STR_LONG *, 
-		union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
-	int subAdd(bool, int mode, int8_t VQ, struct VARS *, O_TYPE * type1, O_SIZE * size1, int8_t RQ, O_TYPE type2, O_SIZE size2,
-		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
-	int subMul(char, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, O_TYPE type2, O_SIZE size2, 
-		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
+	int subShift(uint8_t, int16_t cond, int mode, int8_t VQ, struct VARS *, O_TYPE type, O_SIZE size, O_TYPE, union STR_LONG *, 
+		union STR_LONG *, struct OP_DEF *, bool bAutoAssign);
+	int subAdd(bool, int16_t cond, int mode, int8_t VQ, struct VARS *, O_TYPE * type1, O_SIZE * size1, int8_t RQ, O_TYPE type2, O_SIZE size2,
+		union STR_LONG *, union STR_LONG *, struct OP_DEF *,bool bAutoAssign);
+	int subMul(char, int16_t cond, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, O_TYPE type2, O_SIZE size2, 
+		union STR_LONG *, union STR_LONG *, struct OP_DEF *, bool bAutoAssign);
 	uint8_t FNIs1Bit(uint32_t);
 	uint8_t FNIsPower2(uint32_t);
 	O_SIZE getPtrSize(O_TYPE t);
-	int subAOX(char, int16_t *cond, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, 
-		O_TYPE type2, O_SIZE size2, union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *,
-		struct OP_DEF *, struct OP_DEF *,bool bAutoAssign);
-	enum OPERANDO_CONDIZIONALE subCMP(const char *, int code, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, 
+	int subAOX(char, int16_t cond, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, int8_t RQ, 
+		O_TYPE type2, O_SIZE size2, union STR_LONG *, union STR_LONG *, struct OP_DEF *, bool bAutoAssign);
+	enum OPERANDO_CONDIZIONALE subCMP(const char *, int16_t code, int mode, int8_t VQ, struct VARS *, O_TYPE type1, O_SIZE size1, 
 		int RQ, O_TYPE type2, O_SIZE size2, 
-		union STR_LONG *, union STR_LONG *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
-	int subInc(bool, int16_t *cond, uint8_t T, int8_t VQ, struct VARS *, uint8_t qty, O_TYPE type, O_SIZE size, struct OP_DEF *, 
+		union STR_LONG *, union STR_LONG *, struct OP_DEF *);
+	int subInc(bool, int16_t cond, uint8_t T, int8_t VQ, struct VARS *, uint8_t qty, O_TYPE type, O_SIZE size, struct OP_DEF *, 
 		struct OP_DEF *,uint8_t isPtr);
 
 	void subObj(COutputFile *,struct OP_DEF *);
@@ -813,6 +818,10 @@ public:
 		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
 //  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, 
 	//	enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+	void PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1,
+									 enum OPDEF_MODE m2, union SUB_OP_DEF *s2, 
+									 enum OPDEF_MODE m3, union SUB_OP_DEF *s3);
+  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
 #elif GD24032
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int);
   void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
@@ -827,7 +836,7 @@ public:
 	uint32_t FNGetAggr2(struct VARS *, struct VARS *, int *, int *ofs=NULL);
 	struct TAGS *subAllocTag(const char *);
 	struct TAGS *FNAllocAggr();
-	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, bool isPtr);
+	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, uint16_t ofs);
 	#if MICROCHIP
 	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr,uint8_t lh);
 	#else
@@ -847,9 +856,12 @@ public:
 	int FNIsOp(const char *, int);
 	int FNIsClass(const char *);
 	O_SIZE FNGetSize(uint32_t);
+	O_SIZE FNGetSize(uint64_t);
 	O_SIZE FNGetMemSize(O_TYPE type, O_SIZE size, O_DIM dim, uint8_t m);
 	O_SIZE FNGetMemSize(struct VARS *, uint8_t);
+	O_TYPE FNGetPureType(struct VARS *);
 	O_SIZE FNGetArraySize(struct VARS *);
+	uint8_t FNGetArrayDims(struct VARS *);
 
 	static char *OpCond[16];
 	static char *StrOp[20];
@@ -940,12 +952,13 @@ public:
 private:
 	bool UNDEFD[MAX_DEFS];
 	bool already_done[MAX_DEFS];		// per elif/else
+	bool already_done2[MAX_DEFS];		// per else multipli
 	uint8_t IfDefs;
-	uint8_t debug;
+	uint8_t debug,lasciaCommenti;
 	struct PROCESSED_FILES filesInfo[MAX_DEFS];
 
 public:
-	CCPreProcessor(Ccc *p,uint8_t d);
+	CCPreProcessor(Ccc *p,uint8_t commenti,CLogFile *logfile,uint8_t d);
 	~CCPreProcessor();
   struct LINE_DEF *PROCInserLista(struct LINE_DEF *, struct LINE_DEF *, struct LINE_DEF *);
   struct LINE_DEF *PROCDelLista(struct LINE_DEF *, struct LINE_DEF *, struct LINE_DEF *);
@@ -962,6 +975,7 @@ public:
 	void bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *IfDefs);
 	int FNLeggiFile(char *, COutputFile *, uint8_t);
 	void setDebugLevel(uint8_t d) { debug=d; }
+	void setLasciaCommenti(uint8_t t) { lasciaCommenti=t; }
 	};
 
 

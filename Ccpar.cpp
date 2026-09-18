@@ -195,7 +195,7 @@ do_unget:
 			}
     }
       
-  if(debug) {
+  if(debug>1) {
     myLog->print(0,"FNLO [2]: %s",s);
 		}
     

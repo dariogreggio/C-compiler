@@ -105,7 +105,7 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 			}
 		else if(!_tcscmp(V->name+9,"mas") || !_tcscmp(V->name+9,"mss")) {		// e poi VMA ecc
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			V->classe = CLASSE_STATIC;		//ok
+//			V->classe = CLASSE_BUILTIN;		//fare...
 			*(int*)V->parm=3;// creo lista parametri
 			*((int*)V->parm+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
 			*((int*)V->parm+2)=4;
@@ -117,7 +117,7 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 			}
 		else if(!_tcscmp(V->name+9,"vma")) {		// e poi VMA ecc
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			V->classe = CLASSE_STATIC;		//ok
+//			V->classe = CLASSE_BUILTIN;		//fare...
 			*(int*)V->parm=4;// creo lista parametri
 			*((int*)V->parm+1)=VARTYPE_ARRAY | VARTYPE_POINTER | VARTYPE_NOIMMEDIATE;
 			*((int*)V->parm+2)=4;
@@ -245,18 +245,22 @@ forced_size2:
 			_tcscpy(pushString2,pushString);
 			_tcscpy(movString2,movString);		// in pratica qua son la stessa cosa :)
 			switch(i) {
-				case 1:		// il 68000 mantiene cmq SP pari anche se pusho un byte (il secondo esce 0, credo
-					if(!parmProto) 	// se non c'è un prototipo char, estendo (specie per printf
-						goto forced_size2;
+				case 1:		// 
+					if(!parmProto) { 	// se non c'è un prototipo char, estendo (specie per printf - sotto andrebbe fatto cast
+						goto forced_size4;
+						}
 					_tcscat(pushString2,parmType & VARTYPE_POINTER ? ".d" : ".b");
 					_tcscat(movString2,parmType & VARTYPE_POINTER ? ".d" : ".b");
 					break;
 				case 2:
-forced_size2:
+					if(!parmProto) { 	// se non c'è un prototipo char, estendo (specie per printf - sotto andrebbe fatto cast
+						goto forced_size4;
+						}
 					_tcscat(pushString2,parmType & VARTYPE_POINTER ? ".d" : ".w");
 					_tcscat(movString2,parmType & VARTYPE_POINTER ? ".d" : ".w");
 					break;
 				case 4:
+forced_size4:
 					_tcscat(pushString2,".d");
 					_tcscat(movString2,".d");
 					break;
@@ -1085,6 +1089,46 @@ forced_size2:
 				}
 				}
 			}		// value_is_variable
+		else if(R.Q & VALUE_IS_CONDITION) {
+			if(!(V->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE))) {
+#if ARCHI || Z80
+
+#elif I8086
+
+#elif MC68000
+				PROCAssignCond(&R.Q,&R.type,&R.size,NULL);
+				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,
+					OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+#elif GD24032
+				PROCAssignCond(&R.Q,&R.type,&R.size,NULL);
+				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D);
+#elif MICROCHIP
+
+#endif
+				}		// fastcall
+			else {
+
+				if(!(V->modif & FUNC_MODIF_BUILTIN)) {
+#if ARCHI
+
+#elif Z80 
+
+#elif I8086
+
+#elif MC68000
+				PROCAssignCond(&R.Q,&R.type,&R.size,NULL);
+				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,
+					OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
+				PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D);
+#elif GD24032
+					PROCAssignCond(&R.Q,&R.type,&R.size,NULL);
+					PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D);
+#elif MICROCHIP
+
+#endif
+					}
+				}
+			}		// if VALUE_IS_CONDITION
 		else if(R.Q & VALUE_IS_COSTANTE) {
 			if(!(V->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE))) {
 #if ARCHI || Z80
@@ -1281,6 +1325,9 @@ forced_size2:
 			else if(R.Q == VALUE_IS_D0) {
 	 			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 				}
+			else if(R.Q == VALUE_IS_PTR) {
+	 			PROCOper(LINE_TYPE_ISTRUZIONE,pushString,OPDEF_MODE_REGISTRO,Regs->P);	// memorymodel??
+				}
 #elif MC68000
 //  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 		  if(R.Q == VALUE_IS_COSTANTE) {
@@ -1338,6 +1385,9 @@ forced_size2:
 			else if(R.Q == VALUE_IS_D0) {
   			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 				}
+			else if(R.Q == VALUE_IS_PTR) {
+  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->P,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);		// memorymodel??
+				}
 #elif GD24032
 //  	  PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO,Regs->D,OPDEF_MODE_STACKPOINTER_INDIRETTO,-1);
 		  if(R.Q == VALUE_IS_COSTANTE) {
@@ -1383,6 +1433,9 @@ forced_size2:
 				}
 			else if(R.Q == VALUE_IS_D0) {
   			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
+				}
+			else if(R.Q == VALUE_IS_PTR) {
+  			PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->P);
 				}
 #elif MICROCHIP
 //		  if(i==4) {
@@ -1432,7 +1485,7 @@ forced_size2:
 					_tcscpy(op[prParm].s.label,R.cost->s);
 					}
 				}
-			else if(R.Q == VALUE_IS_D0) {
+			else if(R.Q == VALUE_IS_D0 || R.Q == VALUE_IS_PTR) {
 				if(!(V->modif & FUNC_MODIF_BUILTIN)) {
 	  			PROCOper(LINE_TYPE_ISTRUZIONE,movString2,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P,OPDEF_MODE_REGISTRO32,prParm);
 					}
@@ -1503,7 +1556,7 @@ forced_size2:
 					_tcscpy(op[prParm].s.label,R.cost->s);
 					}
 				}
-			else if(R.Q == VALUE_IS_D0) {
+			else if(R.Q == VALUE_IS_D0 || R.Q == VALUE_IS_PTR) {
 				if(!(V->modif & FUNC_MODIF_BUILTIN)) {
 	  			PROCOper(LINE_TYPE_ISTRUZIONE,movString,OPDEF_MODE_REGISTRO32,prParm,OPDEF_MODE_REGISTRO_INDIRETTO,Regs->P);
 					}
@@ -1605,6 +1658,7 @@ L19440:
 		else
 		  PROCOper(LINE_TYPE_CALL,V->attrib & FUNC_ATTRIB_NORETURN ? jmpString : callString,
 				OPDEF_MODE_VARIABILE,(union SUB_OP_DEF*)&V->label,0);
+		}
 #elif Z80 
 	if(!_tcsncmp(V->name,"_builtin_",9)) {		// in effetti andrebbe beccato prima, e non inserita nelle VAR...
 // v sopra

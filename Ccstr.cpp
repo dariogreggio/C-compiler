@@ -102,7 +102,7 @@ void Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_D
     
   *myBuf=0;
 	if(debug)
-    myLog->print(0,"--------> %s\n",myBuf);  
+    myLog->print(0,"--------> %s",myBuf);  
     
   }
  
@@ -145,7 +145,7 @@ void Ccc::PROCOut(enum LINE_TYPE n, const char *A, struct OP_DEF *B, struct OP_D
     
   *myBuf=0;
 	if(debug)
-    myLog->print(0,"--------> %s\n",myBuf);  
+    myLog->print(0,"--------> %s",myBuf);  
     
   }
 #endif
@@ -188,6 +188,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 		  b.ofs=o2;
 		  }
 	  }
+	b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,R);
   }
       
@@ -202,6 +203,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 			;
 	  a.ofs=o1;
 	  }
+	a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,NULL,R);
   }
       
@@ -222,6 +224,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 		  b.ofs=o2;
 		  }
 	  }
+	b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b);
   }
       
@@ -242,6 +245,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 		  b.ofs=0;
 		  }
 	  }
+	b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b);
   }
       
@@ -258,6 +262,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 		  b.ofs=0;
 		  }
 	  }
+	b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,R);
   }
       
@@ -269,11 +274,13 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1) 
 	  a.s.n=s1;
 	  a.ofs=0;
 	  }
+	a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,NULL);
   }
       
 void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2) {
 
+	od1->hexNumbers=od2->hexNumbers=hexNumbers;
   PROCOut(n,A,od1,od2);
   }
       
@@ -297,6 +304,7 @@ int Ccc::PROCOutLab(const char *A,const char *A1,const char *A2) {
   if(A2 && *A2) {
     _tcscat(a.s.label,A2);
     }
+	a.hexNumbers=hexNumbers;
   PROCOper(LINE_TYPE_LABEL,0,a.mode,&a.s,a.ofs);
   
   return 0;
@@ -333,6 +341,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SU
 				}
 		  }
 	  }
+	c.hexNumbers=b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,&c);
   }
       
@@ -355,6 +364,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 				}
 		  }
 	  }
+	c.hexNumbers=b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,&c);
 	// FINIRE!! con 3 numeri
   }
@@ -378,6 +388,7 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 				}
 		  }
 	  }
+	c.hexNumbers=b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,&c);
 	// FINIRE!! con 3 numeri
   }
@@ -401,10 +412,16 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 				}
 		  }
 	  }
+	c.hexNumbers=b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,&c);
 	// FINIRE!! con 3 numeri
   }
       
+void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2, struct OP_DEF *od3) {
+
+	od1->hexNumbers=od2->hexNumbers=od3->hexNumbers=hexNumbers;
+  PROCOut(n,A,od1,od2,od3);
+  }
 
 #endif
 
@@ -428,11 +445,13 @@ void Ccc::PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, int s1, 
 				}
 		  }
 	  }
+	c.hexNumbers=b.hexNumbers=a.hexNumbers=hexNumbers;
   PROCOut(n,A,&a,&b,&c);
 	// FINIRE!! con 3 numeri
   }
 void Ccc::PROCOper(enum LINE_TYPE n, const char *A, struct OP_DEF *od1, struct OP_DEF *od2, struct OP_DEF *od3) {
 
+	od1->hexNumbers=od2->hexNumbers=od3->hexNumbers=hexNumbers;
   PROCOut(n,A,od1,od2,od3);
   }
       

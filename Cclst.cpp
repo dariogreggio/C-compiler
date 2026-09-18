@@ -41,6 +41,7 @@ struct ERRORE Errs[]={
   2012,1,"bad char following include",
   2015,1,"too many chars in costant",
   2017,1,"illegal escape sequence",
+  2018,1,"unknown character",
   2025,1,"enum/struct/union type redefinition:",
   2026,1,"type redefinition:",
   2027,1,"use of undefined type",
@@ -61,6 +62,7 @@ struct ERRORE Errs[]={
   2052,1,"case expression not integral",
   2053,1,"case expression too large for switch variable",
   2054,1," expected",
+	2055,1, "expected formal parameter name list",
   2057,1,"expected constant expression",
   2058,1,"divide by zero",
   2059,1,"syntax error",
@@ -90,9 +92,17 @@ struct ERRORE Errs[]={
 //   2110,1,"variable used as a pointer",
   2110,1,"pointer + pointer",
   2111,1,"pointer + non-integral value",
+  2112,1,"illegal use of pointer",
   2115,1,"incompatible types",
   2116,1,"function parameter list differed",
-  2127,1,"stack allocation exceeds size (128)" /*anche 1126*/,
+#if MC68000 || ARCHI
+  2127,1,"stack allocation exceeds size (32768)", /*anche 1126*/
+#elif GD24032
+  2127,1,"stack allocation exceeds size (32768)",
+#else
+  2127,1,"stack allocation exceeds size (128)",
+#endif
+	2129,1,"static function '' declared but not defined",
   2137,1,"empty character constant",
   2141,3,"value out of range for enum"/*anche 4341*/,
   2143,1,"syntax error : missing ';' before 'type'",
@@ -112,7 +122,8 @@ struct ERRORE Errs[]={
 // anche ,gemini	2301,1,"local variable '%s' in naked function '%s' allocated without stack frame"
   2371,1,"redefinition (different basic types):",/*anche altri*/		// questa per funzioni
   2440,1,"cannot convert from 'void' to ",		// e mettere il tipo :)
-  2599,1,"local functions are not supported",
+  2599,1,"local records are not supported",
+  2601,1,"local functions are not supported",
    3001,1,"interrupt function returning a value",
    3002,1,"interrupt function with parms",
   4002,1,"ignoring unknown flag",/*Microsoft D4002*/
@@ -283,23 +294,41 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
       break;
     case OPDEF_MODE_IMMEDIATO8:				// quantità 8bit
 #if MC68000 || ARCHI
-      FO->printf("#%d",(int8_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("#%02X",(int8_t)s->s.n);
+			else
+				FO->printf("#%d",(int8_t)s->s.n);
 #else
-      FO->printf("%d",(int8_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("%02X",(int8_t)s->s.n);
+			else
+	      FO->printf("%d",(int8_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO16:				// quantità 16bit
 #if MC68000 || ARCHI
-      FO->printf("#%d",(int16_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("#%04X",(int16_t)s->s.n);
+			else
+	      FO->printf("#%d",(int16_t)s->s.n);
 #else
-      FO->printf("%d",(int16_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("%04X",(int16_t)s->s.n);
+			else
+	      FO->printf("%d",(int16_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_IMMEDIATO32:				// quantità 32bit
 #if MC68000 || ARCHI
-      FO->printf("#%ld",(int32_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("#%08X",(int32_t)s->s.n);
+			else
+	      FO->printf("#%ld",(int32_t)s->s.n);
 #else
-      FO->printf("%ld",(int32_t)s->s.n);
+			if(s->hexNumbers)
+				FO->printf("%08X",(int32_t)s->s.n);
+			else
+	      FO->printf("%ld",(int32_t)s->s.n);
 #endif
       break;
     case OPDEF_MODE_FRAMEPOINTER:
@@ -715,7 +744,8 @@ int Ccc::PROCError(int Er, const char *a) {
 		_tcscat(errBuf,myBuf);
 		if(FErr) {
 			FErr->println(errBuf);
-			FNGetLine(FIn->GetPosition(),myBuf);			// SISTEMARE posizione...
+			if(FIn)	// se errore DOPO la compilazione
+				FNGetLine(FIn->GetPosition(),myBuf);			// SISTEMARE posizione...
 			FErr->println(myBuf);
 			}
 	  if(debug) {
@@ -850,6 +880,7 @@ int Ccc::PROCD() {
 int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
   /*static ??*/ int T=0;
   int I,i;
+	int bs1,bs2;
   char *p;
   char myBuf[256];
   struct VARS *V;
@@ -905,14 +936,18 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				}
 			// VA TUTTO RIVISTO, i tipi possono miscelarsi...
 
-			else if(V->type & VARTYPE_ARRAY) 
-				p="array";
+			else if(V->type & VARTYPE_ARRAY) {
+				p=myBuf;
+				int j=0;
+				while(V->dim[j] && j<MAX_DIM)
+					j++;
+				sprintf(myBuf,"array[%u]",j);
+				}
 			else if(V->type & VARTYPE_IS_POINTER) 
 				p="pointer";
 			else {
-
-				if(V->type & (VARTYPE_UNION | VARTYPE_STRUCT | VARTYPE_ARRAY))
-					p="struct/array";
+				if(V->type & (VARTYPE_UNION | VARTYPE_STRUCT))
+					p="struct/union";
 				else if(V->type & VARTYPE_FLOAT)
 					p="float";
 				else if(V->type & VARTYPE_BITFIELD)
@@ -963,6 +998,11 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				else {
 					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION))
 						sprintf(myBuf,"%u",V->size);
+					else if(V->type & VARTYPE_BITFIELD) {
+						int j;
+						j=FNGetAggr2(NULL,V,&bs1,&bs2);
+						sprintf(myBuf,"%u",bs2);
+						}
 					else {
 						if(V->type & VARTYPE_IS_POINTER)
 							sprintf(myBuf,"%u",getPtrSize(V->type));
@@ -973,14 +1013,19 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				}
 			FO->printf("%9s",p);
 
-			if(V->classe==CLASSE_AUTO) {
-				p=myBuf;
-				I=MAKEPTROFS(V->label);
-				sprintf(myBuf,"%d",I);
+			if(V->type & VARTYPE_BITFIELD) {
+				sprintf(myBuf,"%u",bs1);
 				}
 			else {
-				p="***";
-  			}
+				if(V->classe==CLASSE_AUTO) {
+					p=myBuf;
+					I=MAKEPTROFS(V->label);
+					sprintf(myBuf,"%d",I);
+					}
+				else {
+					p="***";
+  				}
+				}
 			FO->printf("%7s",p);
 
 			if(V->classe==CLASSE_REGISTER) {

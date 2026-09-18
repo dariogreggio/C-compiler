@@ -245,7 +245,7 @@ int CCPreProcessor::PROCDefine(const char *A, const char *B) {
 		l2=_tcslen(B);
 		}
 
-//  m_Log->print(0,"define %s!%s\n",A,B);
+//  m_Log->print(0,"define %s!%s",A,B);
   New=(struct LINE_DEF*)GlobalAlloc(GPTR,sizeof(struct LINE_DEF));
   if(!New) {
     m_Cc->PROCError(1001,"Fine memoria DEFINE");
@@ -362,7 +362,7 @@ char *CCPreProcessor::FNPreProcess(CSourceFile *FI, char *s,bool UNDEFD[]) {
 
   p=FNDefined(s);
   if(p) {
-//     m_Log->print(0,"FORM da trovare %s\n",s);
+//     m_Log->print(0,"FORM da trovare %s",s);
     _tcscpy(s,p->name);
 //    p=p->next;
     _tcscpy(JS,p->text);
@@ -374,7 +374,7 @@ char *CCPreProcessor::FNPreProcess(CSourceFile *FI, char *s,bool UNDEFD[]) {
 	        J=0;                            
 	        FNParse(s,&i,TS);
 	        if(debug>1)
-						m_Log->print(0,"FORM %s\n",TS);
+						m_Log->print(0,"FORM %s",TS);
 	        ch=*(s+i);
 	        FNGetParm(FI,T1S,UNDEFD);
 					if(!*TS)  {		// se non ci sono parametri nella definizione macro...
@@ -386,7 +386,7 @@ char *CCPreProcessor::FNPreProcess(CSourceFile *FI, char *s,bool UNDEFD[]) {
 							m_Cc->PROCError(2010);
 						}
 	        if(debug>1)
-	          m_Log->print(0,"ATT %s\n",T1S);
+	          m_Log->print(0,"ATT %s",T1S);
 	        if(!ch)
 	          m_Cc->PROCError(2010);
 	        do {
@@ -454,7 +454,7 @@ int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
 	_tcscpy(filesInfo[level].nomeFile,F);
 
     if(debug)
-      m_Log->print(0,"%u: PreProcess %s\n",timeGetTime(),F);
+      m_Log->print(0,"%u: PreProcess %s",timeGetTime(),F);
 
   First=TRUE;
   myLine=1;
@@ -467,39 +467,67 @@ int CCPreProcessor::FNLeggiFile(char *F, COutputFile *FO, uint8_t level) {
 		m_Cc->__line__=myLine;		// per Errori...
 
     if(debug) {
-      m_Log->print(0,"Linea: %d\n",myLine);
+      m_Log->print(0,"Linea: %d",myLine);
 //      while(!kbhit());
       }
     FNGrab(FI,A,UNDEFD);
     if(debug) 
-      m_Log->print(0,"Grab: %s...\n",A);
+      m_Log->print(0,"Grab: [%s]",A);
 		// i commenti si possono togliere, dice gemini 2026! ma lasciare i CR se multi riga, per il conteggio
     if(*A=='/') {
-//      if(!UNDEFD[IfDefs])
-//        FO->print(A);
+			if(lasciaCommenti) {
+				if(!UNDEFD[IfDefs])
+					FO->print(A);
+				}
       FNGrab(FI,B,UNDEFD);
+			if(lasciaCommenti) {
+				if(!UNDEFD[IfDefs])
+					FO->print(B);
+				}
       if(*B == '/') {
 gotoEOL:
         do {
           *A=FI->get();
-          } while(*A && *A!='\n'/* && *A!=13*/);
-        FO->putcr();
-			    myLine++;	*A=0;		// per sotto
+					if(lasciaCommenti) {
+	  	      if(!UNDEFD[IfDefs])
+		          FO->put(*A);
+						}
+          } while(*A && *A!='\n');
+				if(!lasciaCommenti) {
+					FO->putcr();
+					}
+				myLine++;
+				*A=0;		// per sotto
 				First=TRUE;
         }
       else if(*B == '*') {
         do {
           *A=FI->get();
 rifo:         
-					if(*A=='\n') {
-						FO->putcr();
-						myLine++;
+					if(lasciaCommenti) {
+	  	      if(!UNDEFD[IfDefs])
+		          FO->put(*A);
+						if(*A=='\n') {
+							myLine++;
+							}
+						}
+					else {
+						if(*A=='\n') {
+							FO->putcr();
+							myLine++;
+							}
 						}
           } while(*A && *A!='*');
         if(*A=='*') {
           *A=FI->get();
           if(*A != '/')
             goto rifo;
+          else {
+						if(lasciaCommenti) {
+		          if(!UNDEFD[IfDefs])
+			          FO->put(*A);
+							}
+	          }  
           }  
 					// mettere= *A=0;		// per sotto
         }
@@ -514,6 +542,7 @@ rifo:
 			      FO->print(B);
           } while(*B && *B!='\n'/* && *A!=13*/);
         FO->putcr();
+				myLine++;
 				First=TRUE;
 				}
       }
@@ -526,9 +555,9 @@ rifo:
 
 
 	      FNGrab(FI,A,UNDEFD);
-	//      m_Log->print(0,"... e poi Grab: %s\n",A);
+	//      m_Log->print(0,"... e poi Grab: %s",A);
 	      if(!_tcscmp(A,"endif")) {
-	//              m_Log->print(0,"ENDIF: IFS %d\n",IfDefs);
+	//              m_Log->print(0,"ENDIF: IFS %d",IfDefs);
 					if(!IfDefs) {
 	          m_Cc->PROCError(1020);
 						Go=TRUE;
@@ -545,14 +574,16 @@ rifo:
 						}
 	        }
 	      else if(!_tcscmp(A,"else")) {
-					if(!IfDefs) {
+					if(!IfDefs || already_done2[IfDefs]) {
 	          m_Cc->PROCError(1019);
 						Go=TRUE;
 						}
-//          m_Log->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d\n",UNDEFD[IfDefs],IfDefs,LstIfs);
-	        if(!UNDEFD[IfDefs-1])
+//          m_Log->print(0,"Qui ELSE: UNDEF %d e IFS %d e LST %d",UNDEFD[IfDefs],IfDefs,LstIfs);
+					if(!UNDEFD[IfDefs-1]) {
 //	          UNDEFD[IfDefs-1] = ! UNDEFD[IfDefs-1];
 						bumpIfs(UNDEFD,0,already_done[IfDefs] || !UNDEFD[IfDefs],&IfDefs);
+						}
+					already_done2[IfDefs]=TRUE;
 		      PP=FALSE;
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 					if(*B) {
@@ -560,10 +591,11 @@ rifo:
 						Go=TRUE;
 						}
 		      PP=TRUE;
+//	        FO->putcr();
+//			    myLine++;
 	        }
 
 	      else if(!_tcscmp(A,"if") || !_tcscmp(A,"elif")) {
-					uint32_t OL=FI->GetPosition();
 
 					if(!_tcscmp(A,"elif")) {
 						if(!IfDefs) {
@@ -573,7 +605,7 @@ rifo:
 						}
 					else {
 		        IfDefs++;
-						already_done[IfDefs]=FALSE;
+						already_done[IfDefs]=already_done2[IfDefs]=FALSE;
 						}
 
 	        if(!UNDEFD[IfDefs-1]) {
@@ -606,7 +638,7 @@ rifo:
 									_tcscat(myExpr,isdigit(*B) ? B : (FNDefined(B) ? "1" : "0"));
 									if(delim=='(')
 										FNGrab(FI,B,UNDEFD);//FNGetNextPre(FI,TRUE,B,UNDEFD);
-									if(*B!=')') 
+									if(*B != ')') 
 										m_Cc->PROCError(2059);
 									}
 								else {
@@ -617,16 +649,31 @@ rifo:
 
 							} while(*B && *B != '\n');
 
-						if(B1=strstr(myExpr,"//"))		// perché qua non posso usare FNGetNextPre per i token sciolti; gestire sopra con oldchar...
+						if(B1=strstr(myExpr,"//")) {		// perché qua non posso usare FNGetNextPre per i token sciolti; gestire sopra con oldchar... o PP=FALSE?
+							if(lasciaCommenti) {		// finire - le parole son state già trasformate! fare il parsing sopra
+								FO->printf(B1);
+								FO->putcr();
+								}
 							*B1=0;
-						if(B1=strstr(myExpr,"/*"))		// idem
+							}
+						if(B1=strstr(myExpr,"/*")) {		// idem
+							if(lasciaCommenti) {		// idem
+								FO->printf(B1);
+								FO->putcr();
+								}
 							*B1=0;
-						if(m_Cc->EVAL(myExpr))		// questo accetta cmq la parentesi appesa.. andrebbe tolta
+							}
+						if(!already_done[IfDefs] && m_Cc->EVAL(myExpr)) {		// questo accetta cmq la parentesi appesa.. andrebbe tolta
 							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
-//		          UNDEFD[IfDefs]=FALSE;
+							already_done[IfDefs]=TRUE;
+							}
 						else
 							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
 
+						if(*B == '\n')
+							FI->unget(*B);
+//		        FO->putcr();
+//				    myLine++;
 		        }  
 	        }
 	      else if(!_tcscmp(A,"ifdef")) {
@@ -635,34 +682,35 @@ rifo:
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        IfDefs++;
-					already_done[IfDefs]=FALSE;
+					already_done[IfDefs]=already_done2[IfDefs]=FALSE;
 	        if(!UNDEFD[IfDefs-1]) {
-	          if(FNDefined(B))
+						if(FNDefined(B)) {
 							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
+							already_done[IfDefs]=TRUE;
+							}
 	          else
 							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
-/*							    if(!UNDEFD[IfDefs])
-										bumpIfs(1,!o1.l.v,IfDefs);
-									else
-										bumpIfs(1,1,IfDefs);*/
 	          }  
+//	        FO->putcr();
+//			    myLine++;
 	        }
 	      else if(!_tcscmp(A,"ifndef")) {
 		      PP=FALSE;
 		      FNGetNextPre(FI,TRUE,B,UNDEFD);
 		      PP=TRUE;
 	        IfDefs++;
+					already_done[IfDefs]=already_done2[IfDefs]=FALSE;
 	        if(!UNDEFD[IfDefs-1]) {
 	          if(FNDefined(B))
 							bumpIfs(UNDEFD,1,TRUE,&IfDefs);
-	          else 
+						else {
 							bumpIfs(UNDEFD,1,FALSE,&IfDefs);
-/*							    if(!UNDEFD[IfDefs])
-										bumpIfs(1,!o1.l.v,IfDefs);
-									else
-										bumpIfs(1,1,IfDefs);*/
+							already_done[IfDefs]=TRUE;
+							}
 	          }  
-	//          m_Log->print(0,"Qui A è %s, B è %s e UNDEF %d e IFS %d\n",A,B,UNDEFD[IfDefs],IfDefs);
+	//          m_Log->print(0,"Qui A è %s, B è %s e UNDEF %d e IFS %d",A,B,UNDEFD[IfDefs],IfDefs);
+//	        FO->putcr();
+//			    myLine++;
 	        }
 	      else {
 	        if(!UNDEFD[IfDefs]) {
@@ -700,6 +748,8 @@ rifo:
 	              }
 	            FNGetNextPre(FI,FALSE/*TRUE NO! gli spazi ci possono essere, ok*/,A,UNDEFD);
 	            PROCDefine(B,A);
+//			        FO->putcr();
+//							myLine++;
 	            }
 	          else if(!_tcscmp(A,"undef")) {
 	            L=FNDefined(B);
@@ -745,9 +795,9 @@ rifo:
 	          m_Cc->PROCError(1021,A);
 						Go=TRUE;
 						}
-					{char ch=FI->get();
+					{/*char ch=FI->get();
 	        if(ch != '\n')
-						FI->unget(ch);
+						FI->unget(ch);*/
 					}
 	        }
 //gotoEOL2:
@@ -758,7 +808,7 @@ rifo:
 
 	      }
 	    else {
-	//       m_Log->print(0,"Sto per scrivere: A %s, e UNDEFD %d\n",A,UNDEFD[IfDefs]);
+	//       m_Log->print(0,"Sto per scrivere: A %s, e UNDEFD %d",A,UNDEFD[IfDefs]);
 	      if(!UNDEFD[IfDefs] /*|| *A=='\r'*/) {		// butto fuori cmq le righe vuote, per non incasinare il #riga... 
 	        FO->print(A);
 // togliere dopo #line 2026 direi
@@ -768,6 +818,7 @@ rifo:
 //					if(First)
 //						FO->putcr();
 		      First=TRUE;
+					//FO->putcr();
 			    myLine++;
 		      }
 		    else {
@@ -815,14 +866,16 @@ void CCPreProcessor::bumpIfs(bool UNDEFD[],int8_t direction,bool state,int8_t *I
 	}
 
 
-CCPreProcessor::CCPreProcessor(Ccc *p,uint8_t d) : m_Cc(p),debug(d) {
+CCPreProcessor::CCPreProcessor(Ccc *p,uint8_t commenti,CLogFile *logfile,uint8_t d) : m_Cc(p),debug(d),
+	lasciaCommenti(commenti),m_Log(logfile) {
 	int i;
 
 	RootDef=LastDef=NULL;
 	IfDefs=0;
+	PP=TRUE;
 	for(i=0; i<MAX_DEFS; i++) {
 		UNDEFD[i]=0;
-		already_done[i]=FALSE;
+		already_done[i]=already_done2[i]=FALSE;
 		}
 	}
 
