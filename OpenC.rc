@@ -75,15 +75,16 @@ IDR_CTYPE2              ICON    DISCARDABLE     "res\\icon1.ico"
 //
 
 IDR_MAINFRAME           BITMAP  MOVEABLE PURE   "res\\Toolbar.bmp"
+IDB_PROJECTREE          BITMAP  DISCARDABLE     "res\\bitmap1.bmp"
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Toolbar
 //
 
-IDR_MAINFRAME TOOLBAR DISCARDABLE  17, 17
+IDR_MAINFRAME TOOLBAR DISCARDABLE  20, 20
 BEGIN
-    BUTTON      ID_FILE_NUOVO
+    BUTTON      ID_FILE_NEW
     BUTTON      ID_FILE_OPEN
     BUTTON      ID_FILE_SAVE
     BUTTON      ID_FILE_SALVATUTTO
@@ -97,6 +98,8 @@ BEGIN
     BUTTON      ID_COMPILA_TUTTO
     SEPARATOR
     BUTTON      ID_BUTTON32781
+    SEPARATOR
+    BUTTON      ID_STRUMENTI_OPZIONI
     SEPARATOR
     BUTTON      ID_APP_ABOUT
     BUTTON      ID_CONTEXT_HELP
@@ -112,21 +115,44 @@ IDR_MAINFRAME MENU PRELOAD DISCARDABLE
 BEGIN
     POPUP "&File"
     BEGIN
-        MENUITEM "&Nuovo\tCtrl+N",              ID_FILE_NUOVO
+        MENUITEM "&Nuovo\tCtrl+N",              ID_FILE_NEW
         MENUITEM "&Apri...\tCtrl+A",            ID_FILE_OPEN
+        MENUITEM "Nuovo progetto",              ID_FILE_NUOVOPROGETTO
         MENUITEM "Ap&ri progetto...",           ID_FILE_APRIPROGETTO
+        MENUITEM "&Salva progetto",             ID_FILE_SALVAPROGETTO
+        MENUITEM "Salva progetto con nome...",  ID_FILE_SALVAPROGETTOCONNOME
         MENUITEM "C&hiudi progetto",            ID_FILE_CHIUDIPROGETTO
         MENUITEM SEPARATOR
         MENUITEM "Imposta s&tampante...",       ID_FILE_PRINT_SETUP
         MENUITEM SEPARATOR
-        MENUITEM "Ultimo file usato",           ID_FILE_MRU_FILE1, GRAYED
+        POPUP "File recenti"
+        BEGIN
+            MENUITEM "Ultimo file usato",           ID_FILE_MRU_FILE1
+            , GRAYED
+        END
+        POPUP "Progetti recenti"
+        BEGIN
+            MENUITEM "Ultimo progetto usato",       ID_PROJECT_MRU_FIRST
+        END
         MENUITEM SEPARATOR
         MENUITEM "&Esci",                       ID_APP_EXIT
+    END
+    POPUP "&Progetto"
+    BEGIN
+        MENUITEM "&Progetto\tCtrl+F7",          ID_COMPILA_TUTTO
+        MENUITEM "Compila tutto\tCtrl+F10",     ID_COMPILA_COMPILATUTTO
+        MENUITEM SEPARATOR
+        MENUITEM "&Opzioni...\tAlt+F7",         ID_STRUMENTI_OPZIONI
+        MENUITEM "&Impostazioni...",            ID_COMPILA_IMPOSTAZIONI
     END
     POPUP "&Visualizza"
     BEGIN
         MENUITEM "Barra degli st&rumenti",      ID_VIEW_TOOLBAR
         MENUITEM "Barra di st&ato",             ID_VIEW_STATUS_BAR
+        MENUITEM "Finestra progetto",           ID_VISUALIZZA_FINESTRAPROGETTO
+
+        MENUITEM "Finestra di output",          ID_VISUALIZZA_FINESTRADIOUTPUT
+
     END
     POPUP "&?"
     BEGIN
@@ -140,21 +166,31 @@ IDR_CTYPE MENU PRELOAD DISCARDABLE
 BEGIN
     POPUP "&File"
     BEGIN
-        MENUITEM "&Nuovo\tCtrl+N",              ID_FILE_NUOVO
+        MENUITEM "&Nuovo\tCtrl+N",              ID_FILE_NEW
         MENUITEM "&Apri...\tCtrl+A",            ID_FILE_OPEN
         MENUITEM "&Chiudi",                     ID_FILE_CLOSE
         MENUITEM "&Salva\tCtrl+S",              ID_FILE_SAVE
         MENUITEM "Sa&lva con nome...",          ID_FILE_SAVE_AS
         MENUITEM "Salva &tutto",                ID_FILE_SALVATUTTO
         MENUITEM SEPARATOR
+        MENUITEM "Nuovo progetto",              ID_FILE_NUOVOPROGETTO
         MENUITEM "Ap&ri progetto...",           ID_FILE_APRIPROGETTO
+        MENUITEM "Salva progetto",              ID_FILE_SALVAPROGETTO
+        MENUITEM "Salva progetto con nome...",  ID_FILE_SALVAPROGETTOCONNOME
         MENUITEM "C&hiudi progetto",            ID_FILE_CHIUDIPROGETTO
         MENUITEM SEPARATOR
         MENUITEM "Stam&pa...\tCtrl+P",          ID_FILE_PRINT
         MENUITEM "Antepri&ma di stampa",        ID_FILE_PRINT_PREVIEW
         MENUITEM "Imposta s&tampante...",       ID_FILE_PRINT_SETUP
         MENUITEM SEPARATOR
-        MENUITEM "Ultimo file usato",           ID_FILE_MRU_FILE1, GRAYED
+        POPUP "File recenti"
+        BEGIN
+            MENUITEM "Ultimo file usato",           ID_FILE_MRU_FILE1
+        END
+        POPUP "Progetti recenti"
+        BEGIN
+            MENUITEM "Ultimo progetto usato",       ID_PROJECT_MRU_1, GRAYED
+        END
         MENUITEM SEPARATOR
         MENUITEM "&Esci",                       ID_APP_EXIT
     END
@@ -174,15 +210,36 @@ BEGIN
         MENUITEM "&Sostituisci...",             ID_EDIT_REPLACE
         MENUITEM SEPARATOR
         MENUITEM "Seleziona &tutto",            ID_EDIT_SELECT_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "Inserisci segnalibro\tCtrl+F2", 
+                                                ID_MODIFICA_INSERISCISEGNALIBRO
+
+        MENUITEM "Vai al prossimo segnalibro\tF2", 
+                                                ID_MODIFICA_VAIALPROSSIMOSEGNALIBRO
+
+        MENUITEM "Vai al segnalibro precedente\tShift+F2", 
+                                                ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE
+
     END
     POPUP "&Compila"
     BEGIN
         MENUITEM "&File corrente\tF7",          ID_COMPILA_FILE
-        MENUITEM "&Tutto\tCtrl+F7",             ID_COMPILA_TUTTO
+        MENUITEM "&Progetto\tCtrl+F7",          ID_COMPILA_TUTTO
+        MENUITEM "Compila tutto\tCtrl+F10",     ID_COMPILA_COMPILATUTTO
         MENUITEM SEPARATOR
         MENUITEM "&Esegui...",                  ID_COMPILA_ESEGUI
         MENUITEM SEPARATOR
         MENUITEM "&Impostazioni...",            ID_COMPILA_IMPOSTAZIONI
+    END
+    POPUP "&Debug"
+    BEGIN
+        MENUITEM "Vai",                         ID_DEBUG_VAI
+        MENUITEM "Vai dentro funzione",         ID_DEBUG_VAIDENTROFUNZIONE
+        MENUITEM "Esci da funzione",            ID_DEBUG_ESCIDAFUNZIONE
+        MENUITEM "Interrompi",                  ID_DEBUG_INTERROMPI
+        MENUITEM "Termina esecuzione",          ID_DEBUG_TERMINAESECUZIONE
+        MENUITEM SEPARATOR
+        MENUITEM "Toggle breakpoint",           ID_DEBUG_TOGGLEBREAKPOINT
     END
     POPUP "&Strumenti"
     BEGIN
@@ -195,13 +252,17 @@ BEGIN
     BEGIN
         MENUITEM "Barra degli st&rumenti",      ID_VIEW_TOOLBAR
         MENUITEM "Barra di st&ato",             ID_VIEW_STATUS_BAR
+        MENUITEM "Finestra progetto",           ID_VISUALIZZA_FINESTRAPROGETTO
+
+        MENUITEM "Finestra di output",          ID_VISUALIZZA_FINESTRADIOUTPUT
+
     END
     POPUP "Fi&nestra"
     BEGIN
-        MENUITEM "&Nuova finestra",             ID_WINDOW_NEW
         MENUITEM "&Sovrapponi",                 ID_WINDOW_CASCADE
         MENUITEM "&Affianca",                   ID_WINDOW_TILE_HORZ
         MENUITEM "Di&vidi",                     ID_WINDOW_SPLIT
+        MENUITEM "&Chiudi tutte",               ID_FINESTRA_CHIUDITUTTE
     END
     POPUP "&?"
     BEGIN
@@ -232,13 +293,24 @@ BEGIN
     VK_DELETE,      ID_EDIT_CUT,            VIRTKEY, SHIFT, NOINVERT
     VK_F1,          ID_HELP,                VIRTKEY, NOINVERT
     VK_F1,          ID_CONTEXT_HELP,        VIRTKEY, SHIFT, NOINVERT
+    VK_F10,         ID_COMPILA_COMPILATUTTO, VIRTKEY, CONTROL, NOINVERT
+    VK_F2,          ID_MODIFICA_VAIALPROSSIMOSEGNALIBRO, VIRTKEY, NOINVERT
+    VK_F2,          ID_MODIFICA_INSERISCISEGNALIBRO, VIRTKEY, CONTROL, 
+                                                    NOINVERT
+    VK_F2,          ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE, VIRTKEY, SHIFT, 
+                                                    NOINVERT
     VK_F3,          ID_EDIT_REPEAT,         VIRTKEY, NOINVERT
     VK_F3,          ID_EDIT_TROVASELEZIONE, VIRTKEY, CONTROL, NOINVERT
+    VK_F4,          ID_NEXT_ERROR,          VIRTKEY, NOINVERT
+    VK_F4,          ID_PREV_ERROR,          VIRTKEY, SHIFT, NOINVERT
+    VK_F5,          ID_DEBUG_VAI,           VIRTKEY, NOINVERT
+    VK_F5,          ID_DEBUG_INTERROMPI,    VIRTKEY, SHIFT, NOINVERT
     VK_F6,          ID_NEXT_PANE,           VIRTKEY, NOINVERT
     VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT, NOINVERT
-    VK_F7,          ID_COMPILA_FILE,        VIRTKEY, NOINVERT
-    VK_F7,          ID_COMPILA_TUTTO,       VIRTKEY, CONTROL, NOINVERT
+    VK_F7,          ID_COMPILA_TUTTO,       VIRTKEY, NOINVERT
+    VK_F7,          ID_COMPILA_FILE,        VIRTKEY, CONTROL, NOINVERT
     VK_F7,          ID_STRUMENTI_OPZIONI,   VIRTKEY, ALT, NOINVERT
+    VK_F9,          ID_DEBUG_TOGGLEBREAKPOINT, VIRTKEY, NOINVERT
     VK_INSERT,      ID_EDIT_COPY,           VIRTKEY, CONTROL, NOINVERT
     VK_INSERT,      ID_EDIT_PASTE,          VIRTKEY, SHIFT, NOINVERT
     "X",            ID_EDIT_CUT,            VIRTKEY, CONTROL, NOINVERT
@@ -256,16 +328,16 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Infor&mazioni su OpenC..."
 FONT 8, "MS Sans Serif"
 BEGIN
-    ICON            IDR_MAINFRAME,IDC_STATIC,11,17,21,20
-    LTEXT           "OpenC Versione 2.0",IDC_STATIC,40,10,119,8,SS_NOPREFIX
+    ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
+    LTEXT           "OpenC Versione 2.1",IDC_STATIC,40,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright © 2010 Cyberdyne",IDC_STATIC,39,49,129,8
     DEFPUSHBUTTON   "OK",IDOK,126,116,43,14,WS_GROUP
     LTEXT           "Compilatore C multi-processore",IDC_STATIC,39,24,119,8,
                     SS_NOPREFIX
     LTEXT           "Copyright © 1989-2001 ADPM Synthesis sas 1990-1996",
                     IDC_STATIC,39,60,129,8
-    LTEXT           "Copyright © 2025 Dario's automation",IDC_STATIC,39,38,
-                    129,8
+    LTEXT           "Copyright © 2025-2026 Dario's automation",IDC_STATIC,39,
+                    38,129,8
 END
 
 IDD_OPZIONI_COMPIL_PAGE1 DIALOG DISCARDABLE  0, 0, 293, 153
@@ -273,10 +345,20 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Generali"
 FONT 8, "MS Sans Serif"
 BEGIN
+    LTEXT           "Piattaforma:",IDC_STATIC,7,9,38,8
     COMBOBOX        IDC_COMBO1,52,7,234,68,CBS_DROPDOWNLIST | CBS_SORT | 
                     WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Piattaforma:",IDC_STATIC,7,9,38,8
     LTEXT           "Sub-tipo:",IDC_STATIC,7,26,29,8
+    LTEXT           "Cartella include:",IDC_STATIC,7,47,51,8
+    COMBOBOX        IDC_COMBO4,63,44,203,68,CBS_DROPDOWNLIST | CBS_SORT | 
+                    WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Cartella librerie:",IDC_STATIC,7,64,48,8
+    COMBOBOX        IDC_COMBO5,63,61,204,68,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
+    CONTROL         "Ricarica ultimo progetto alla partenza",IDC_CHECK2,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,86,132,10
+    PUSHBUTTON      "...",IDC_BUTTON1,273,44,13,12
+    PUSHBUTTON      "...",IDC_BUTTON2,273,60,13,12
 END
 
 IDD_SPLASH DIALOG DISCARDABLE  0, 0, 268, 187
@@ -342,14 +424,33 @@ BEGIN
     COMBOBOX        IDC_COMBO3,225,15,31,50,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
     CONTROL         "Warning come errori",IDC_CHECK18,"Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP,185,30,79,10
+                    BS_AUTOCHECKBOX | WS_TABSTOP,185,28,79,10
+    CONTROL         "Mantieni commenti",IDC_CHECK19,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,149,39,75,10
 END
 
 IDD_OPZIONI_COMPIL_PAGE3 DIALOG DISCARDABLE  0, 0, 292, 168
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Altro"
+CAPTION "Editor"
 FONT 8, "MS Sans Serif"
 BEGIN
+    LTEXT           "Dimensione Tab:",IDC_STATIC,7,9,54,8
+    EDITTEXT        IDC_EDIT1,65,7,23,13,ES_AUTOHSCROLL
+    CONTROL         "Testo colorato",IDC_CHECK1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,7,26,61,10
+    CONTROL         "Salva file prima di compilare",IDC_CHECK2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,7,46,103,10
+    CONTROL         "Chiedi prima di salvare",IDC_CHECK3,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,135,46,86,10
+    CONTROL         "Ricarica automaticamente i file modificati esternamente",
+                    IDC_CHECK4,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,60,
+                    188,10
+    CONTROL         "Papillon",IDC_RADIO1,"Button",BS_AUTORADIOBUTTON,72,151,
+                    41,10
+    CONTROL         "Formaldehyde",IDC_RADIO2,"Button",BS_AUTORADIOBUTTON,
+                    122,151,60,10
+    CONTROL         ":)",IDC_RADIO3,"Button",BS_AUTORADIOBUTTON,192,151,20,
+                    10
 END
 
 
@@ -360,8 +461,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,5
- PRODUCTVERSION 2,0,0,5
+ FILEVERSION 2,0,1,1
+ PRODUCTVERSION 2,0,1,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -379,14 +480,14 @@ BEGIN
             VALUE "Comments", "MORTE agli umani di merda 4ever!\0"
             VALUE "CompanyName", "Dario's Automation (Cyberdyne (ex ADPM Synthesis sas))\0"
             VALUE "FileDescription", "OpenC - compilatore C\0"
-            VALUE "FileVersion", "2, 0, 0, 5\0"
+            VALUE "FileVersion", "2, 0, 1, 1\0"
             VALUE "InternalName", "OPENC\0"
             VALUE "LegalCopyright", "Copyright © Dario's Automation 2025-2026; Cyberdyne 2010; ADPM Synthesis 1989-2001\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "OPENC.EXE\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "OPENC Applicazione\0"
-            VALUE "ProductVersion", "2, 0, 0, 5\0"
+            VALUE "ProductVersion", "2, 0, 1, 1\0"
             VALUE "SpecialBuild", "\0"
         END
     END
@@ -487,8 +588,8 @@ END
 STRINGTABLE PRELOAD DISCARDABLE 
 BEGIN
     IDR_MAINFRAME           "OpenC"
-    IDR_CTYPE               "\nSenzaTitolo\nFile C\nFile sorgenti C (*.c)\n.c\nOpenC\nDocumento sorgente C"
-    IDR_CTYPE2              "\nOutput\n\nTesto output\n\n\nTesto output"
+    IDR_CTYPE               "\nSenzaTitolo\nFile C\nFile sorgenti C (*.c, *.h, *.inc)\n.c;.h;.inc\nOpenC\nDocumento sorgente C"
+    IDR_CTYPE2              "\nSenzaTitolo\nFile H\nFile include C (*.h, *.inc)\n.h;.inc\nOpenC\nDocumento include C"
 END
 
 STRINGTABLE PRELOAD DISCARDABLE 
@@ -628,6 +729,18 @@ END
 STRINGTABLE DISCARDABLE 
 BEGIN
     ID_INDICATOR_POS        "xy"
+    IDS_AUTORICARICAPROGETTO "AutoRicaricaProgettoPartenza"
+    IDS_TESTOCOLORATO       "TestoColorato"
+    IDS_CARTELLAINCLUDE     "CartellaInclude"
+    IDS_CARTELLALIBRERIE    "CartellaLibrerie"
+END
+
+STRINGTABLE DISCARDABLE 
+BEGIN
+    ID_PROJECT_MRU_1        "Apre questo progetto"
+    ID_PROJECT_MRU_2        "Apre questo progetto"
+    ID_PROJECT_MRU_3        "Apre questo progetto"
+    ID_PROJECT_MRU_4        "Apre questo progetto"
 END
 
 #endif    // Italian (Italy) resources
@@ -645,6 +758,37 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Menu
+//
+
+IDR_PROJECTTREE MENU DISCARDABLE 
+BEGIN
+    POPUP "tree"
+    BEGIN
+        MENUITEM "Compila",                     ID_COMPILA_FILE
+        MENUITEM "Apri",                        ID_TREE_OPEN
+        MENUITEM SEPARATOR
+        MENUITEM "Impostazioni",                ID_TREE_IMPOSTAZIONI
+        MENUITEM "Escludi",                     ID_TREE_ESCLUDI
+        MENUITEM "Elimina",                     ID_TREE_ELIMINA
+        MENUITEM SEPARATOR
+        MENUITEM "Proprietà",                   ID_TREE_PROPRIET
+    END
+END
+
+IDR_PROJECTTREE1 MENU DISCARDABLE 
+BEGIN
+    POPUP "tree1"
+    BEGIN
+        MENUITEM "Aggiungi file...",            ID_TREE_ADD
+        MENUITEM SEPARATOR
+        MENUITEM "Proprietà",                   ID_TREE_PROPRIET
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // Dialog
 //
 
@@ -652,8 +796,19 @@ IDD_OUTPUT_BAR DIALOG DISCARDABLE  0, 0, 422, 93
 STYLE WS_CHILD
 FONT 8, "MS Sans Serif"
 BEGIN
-    EDITTEXT        IDC_TXT_OUTPUT,7,7,408,79,ES_MULTILINE | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_TXT_OUTPUT,7,7,408,71,ES_MULTILINE | ES_AUTOHSCROLL | 
                     ES_READONLY | ES_WANTRETURN | WS_VSCROLL
+    CONTROL         "Tab1",IDC_OUTPUT_TAB,"SysTabControl32",TCS_BOTTOM,33,70,
+                    102,16
+END
+
+IDD_TREE_PROJECT DIALOG DISCARDABLE  0, 0, 123, 215
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "Tree1",IDC_TREE_PROJECT,"SysTreeView32",TVS_HASBUTTONS | 
+                    TVS_HASLINES | TVS_LINESATROOT | TVS_INFOTIP | WS_BORDER | 
+                    WS_TABSTOP,5,3,110,177
 END
 
 
@@ -672,9 +827,22 @@ BEGIN
         TOPMARGIN, 7
         BOTTOMMARGIN, 86
     END
+
+    IDD_TREE_PROJECT, DIALOG
+    BEGIN
+        RIGHTMARGIN, 115
+        BOTTOMMARGIN, 127
+    END
 END
 #endif    // APSTUDIO_INVOKED
 
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Cursor
+//
+
+IDC_RIGHT_CURSOR        CURSOR  DISCARDABLE     "res\\cursor1.cur"
 #endif    // English (U.K.) resources
 /////////////////////////////////////////////////////////////////////////////
 

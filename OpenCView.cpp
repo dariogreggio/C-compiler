@@ -33,20 +33,29 @@ BEGIN_MESSAGE_MAP(COpenCView, CRichEditView)
 	ON_COMMAND(ID_EDIT_TROVASELEZIONE, OnEditTrovaselezione)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_TROVASELEZIONE, OnUpdateEditTrovaselezione)
 	ON_WM_MOUSEWHEEL()
+	ON_WM_KEYDOWN()
 	ON_COMMAND(ID_EDIT_FIND, OnEditFind)
 	ON_COMMAND(ID_EDIT_REPEAT, OnEditRepeat)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_REPEAT, OnUpdateEditRepeat)
-	ON_WM_KEYDOWN()
+	ON_WM_SIZE()
+	ON_WM_VSCROLL()
+	ON_WM_PAINT()
+	ON_WM_TIMER()
 	//}}AFX_MSG_MAP
 	// Standard printing commands
 	ON_COMMAND(ID_FILE_PRINT, CRichEditView::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_DIRECT, CRichEditView::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_PREVIEW, CRichEditView::OnFilePrintPreview)
   ON_UPDATE_COMMAND_UI(ID_INDICATOR_POS, OnUpdatePosIndicator)
+	ON_WM_CONTEXTMENU()
 // 2. Mappa il messaggio speciale verso la funzione di gestione MFC
 //	ON_COMMAND(ID_EDIT_FIND, OnEditFindCustom)               // Sovrascrive il comando Trova di MFC
   ON_COMMAND(ID_EDIT_REPEAT, OnEditTrovaselezione)        // Il tuo Ctrl+F3
   ON_REGISTERED_MESSAGE(WM_FINDREPLACE, OnFindReplaceCmd)  // Messaggi dalla Dialog
+	ON_COMMAND(ID_OPEN_INCLUDE_FILE, OnOpenIncludeFile)
+	ON_MESSAGE(WM_MY_FILE_CHANGED, OnFileChangedExternally)
+	//ON_EN_CHANGE(AFX_IDW_PANE_FIRST, OnEnChange)
+	ON_CONTROL_REFLECT(EN_CHANGE, OnEnChange)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -62,6 +71,9 @@ COpenCView::COpenCView() {
 	m_pFindDlg = NULL;
   m_bMatchCase = FALSE;
   m_bWholeWord = FALSE;
+
+	m_uTimerID=0;
+	m_bInitialUpdateDone=FALSE;
 	}
 
 COpenCView::~COpenCView() {
@@ -80,14 +92,44 @@ BOOL COpenCView::PreCreateWindow(CREATESTRUCT& cs) {
 /////////////////////////////////////////////////////////////////////////////
 // COpenCEditView drawing
 
-void COpenCView::OnDraw(CDC* pDC) {
-	COpenCDoc* pDoc = GetDocument();
-	ASSERT_VALID(pDoc);
+void COpenCView::OnPaint() {
+	COpenCView *w;
 
-//	SetPrinterFont(&(((CMainFrame *)GetParent())->myFont));
-	// TODO: add draw code for native data here
-	CRichEditView::OnDraw(pDC);
+	CRichEditView::OnPaint();
+	//Default();
+
+  CPaintDC dc(this);
+//	GetRichEditCtrl().SendMessage(WM_PRINT, (WPARAM)dc.GetSafeHdc(), PRF_CLIENT | PRF_CHILDREN | PRF_ERASEBKGND);
+
+	CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();
+
+	//GetRichEditCtrl().Invalidate();
+
+/*	w=(COpenCView*)((CMainFrame*)GetParent()->GetParent())->GetActiveView();
+  if(!w) 
+		return;*/
+
+	CWnd* pPaneWnd = pSplitter->GetPane(0, 0);
+	if(pPaneWnd) {
+    // Handle della finestra (HWND)
+//    HWND hWndSubWindow = pPaneWnd->GetSafeHwnd();
+
+    // Se vuoi il cast alla tua CView specifica:
+    CGutterWnd* pOtherView = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+    if(pOtherView)    {
+      pOtherView->Invalidate();
+			}
+		}
+
+	pPaneWnd = pSplitter->GetPane(1, 0);
+	if(pPaneWnd) {
+    CGutterWnd* pOtherView = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+    if(pOtherView)    {
+      pOtherView->Invalidate();
+			}
+		}
 	}
+
 
 /////////////////////////////////////////////////////////////////////////////
 // COpenCView printing
@@ -104,6 +146,73 @@ void COpenCView::OnBeginPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/) {
 
 void COpenCView::OnEndPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/) {
 	// TODO: add cleanup after printing
+	}
+
+
+
+void COpenCView::OnEnChange() { // Mappato su EN_CHANGE
+  CRichEditCtrl& edit = GetRichEditCtrl();
+
+	// Rinviamo la gestione base al CRichEditView
+//    CRichEditView::OnChange();
+
+  COpenCDoc* pDoc = (COpenCDoc*)GetDocument();
+  if (pDoc)    {
+      // Se il documento non risultava ancora modificato, forza il flag!
+//       if (!pDoc->IsModified())        
+          pDoc->SetModifiedFlag(TRUE); // Questo farà scattare UpdateFrameTitle()!
+      
+    }
+
+  int nNewLineCount = edit.GetLineCount();
+  
+  // m_nPrevLineCount lo avevi salvato precedentemente (es. all'apertura o al cambio precedente)
+  int nDelta = nNewLineCount - pDoc->m_nDocLines;
+
+  if(nDelta != 0)    {
+    // Ricaviamo la riga corrente del cursore
+    long nStartChar, nEndChar;
+    edit.GetSel(nStartChar, nEndChar);
+    int nCurrentLine = edit.LineFromChar(nStartChar);
+
+    // Aggiorniamo la lista dei breakpoint ecc
+    pDoc->UpdateMarkers(nCurrentLine, nDelta);
+
+    // Aggiorniamo il conteggio precedente per il prossimo EN_CHANGE
+    pDoc->m_nDocLines = nNewLineCount;
+    
+    // Forza il ridisegno del margine sinistro (dove ci sono i pallini dei breakpoint)
+		CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();		// v. OnPaint
+		CWnd* pPaneWnd = pSplitter->GetPane(0, 0);
+		if(pPaneWnd) {
+			CGutterWnd* pOtherView = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+			if(pOtherView)    {
+				pOtherView->Invalidate();
+				}
+			}
+		pPaneWnd = pSplitter->GetPane(1, 0);
+		if(pPaneWnd) {
+			CGutterWnd* pOtherView = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+			if(pOtherView)    {
+				pOtherView->Invalidate();
+				}
+			}
+    }
+
+// Riavviamo il timer ad ogni tasto premuto (100 ms di ritardo)  PER COLORAZIONE
+  SetTimer(1, 100, NULL);
+	TRACE("en_change\n");
+	}
+
+void COpenCView::OnTimer(UINT_PTR nIDEvent) {
+
+	if(nIDEvent == 1)    {
+		KillTimer(1); // Spegniamo il timer
+		HighlightVisibleRange();        // Ricoloriamo la porzione visibile!
+		}
+	else    {
+		CRichEditView::OnTimer(nIDEvent);
+    }
 	}
 
 /////////////////////////////////////////////////////////////////////////////
@@ -171,6 +280,7 @@ int COpenCView::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
 	::RevokeDragDrop(m_hWnd);		// non va...  https://stackoverflow.com/questions/2476589/how-to-disable-dragging-from-a-rich-edit-control
 	// per evitare drop di file nel testo
+	// v.sotto! messaggio a richedit
 
 	return 0;
 	}
@@ -186,6 +296,8 @@ void COpenCView::OnDestroy() {
   // when a splitter view is being used.
   COleClientItem* pActiveItem = GetDocument()->
                GetInPlaceActiveItem(this); //If OnDestroy() were still up there, the app would CRASH here!
+
+	theApp.UnregisterMonitoredFile(m_hWnd);
 
   if(pActiveItem != NULL && pActiveItem->GetActiveView() == this) {
     pActiveItem->Deactivate();
@@ -215,26 +327,151 @@ void COpenCView::OnInitialUpdate() {
 
   CRichEditView::OnInitialUpdate(); // Oppure la tua classe base
 
+	if(m_bInitialUpdateDone)		// serve secondo gemini da sempre :D mah...
+    return;
+
+  m_bInitialUpdateDone = TRUE;
+
+	CRect rect;
+  GetRichEditCtrl().GetClientRect(&rect);
+//  rect.left += 80; // Riserva 20px sulla sinistra per il margine segnalibri  UN CAZZO faccio con splitter
+//  GetRichEditCtrl().SetRect(&rect);
+
+	// Imposta un margine sinistro di 30 pixel (in DP/Pixel)
+    // EC_LEFTMARGIN indica di modificare solo il margine sinistro
+//    GetRichEditCtrl().SendMessage(EM_SETMARGINS, EC_LEFTMARGIN, MAKELONG(300, 0));
+		
+// 1. Diciamo a CRichEditView di formattare rispetto alla finestra
+//    m_nWordWrap = WrapToWindow; // oppure NoWrap, a seconda delle tue esigenze
+    
+    // 2. Impostiamo il margine sinistro in Twip (1 pixel = ~15 twip a 96 DPI)
+    // 30 pixel * 15 = 450 twip
+  //  m_rectMargin.left = 450;
+
+    // 3. Applichiamo la modifica al layout
+    //WrapChanged();
+
+		/*PARAFORMAT2 pf;
+    ZeroMemory(&pf, sizeof(pf));
+    pf.cbSize = sizeof(PARAFORMAT2);
+    pf.dwMask = PFM_STARTINDENT;
+    pf.dxStartIndent = 300; // Rientro in Twip (~30 pixel)
+
+    // Imposta la selezione su tutto il testo ed applica il rientro predefinito
+    GetRichEditCtrl().SetSel(0, -1);
+    GetRichEditCtrl().SendMessage(EM_SETPARAFORMAT, 0, (LPARAM)&pf);
+    
+    // Ripristina la selezione a inizio documento
+    GetRichEditCtrl().SetSel(0, 0);
+*/
+
+		// Disabilita il Word Wrap (nessun dispositivo di target, larghezza linea = 0)
+//  GetRichEditCtrl().SendMessage(EM_SETTARGETDEVICE, (WPARAM)NULL, 10000000);	fa impazzire scrollbar 
+// Imposta il wrap su "nessun wrap"
+	// non c'è pd SetWrapMode(CRichEditView::WrapNone);
+
+
+	// Disabilita la gestione nativa di Drag & Drop OLE sul RichEdit
+    //::RevokeDragDrop(GetRichEditCtrl().GetSafeHwnd()); non fa nulla
+	GetRichEditCtrl().ModifyStyleEx(WS_EX_ACCEPTFILES, 0);
+
+// Ottiene la maschera eventi attuale e aggiunge ENM_CHANGE (compreso il tasto destro NM_RCLICK
+  long lMask = GetRichEditCtrl().GetEventMask();
+  GetRichEditCtrl().SetEventMask(lMask | ENM_CHANGE | ENM_MOUSEEVENTS);
+
+	// 1. Aggiungi gli stili obbligatori per lo scorrimento orizzontale illimitato  C'è GIA
+//    rich.ModifyStyle(0, WS_HSCROLL | ES_AUTOHSCROLL);
+
+    // 2. Disabilita il wrapping avanzato e imposta l'ampiezza riga a un valore enorme (o 0)
+    // Passando 1 come cxLineWidth disattiva il wrap sulla larghezza del window DC
+  GetRichEditCtrl().SendMessage(EM_SETTARGETDEVICE, (WPARAM)NULL, 1);
+
+// Disabilita il Word Wrap nativo di RichEdit 4.1 / 5.0
+		//rich.SendMessage(EM_SETWORDWRAPMODE, (WPARAM)WOF_NOREPEAT, 0);		non c'è, frocio google
+
+    // 3. (Fondamentale per RichEdit 4.1 / 5.0): Notifica il ricalcolo del layout  CAZZATA gemini cmq ok
+    // Forza la dimensione del testo a non essere vincolata dal rect della finestra
+  GetRichEditCtrl().SendMessage(EM_SETRECTNP, 0, 0);
+
+// non c'è	GetRichEditCtrl().SetTextMode(TM_RICHTEXT | TM_SINGLELEVELUNDO);		per impedire Paste di immagini
+	// non va cmq GetRichEditCtrl().SendMessage(EM_SETTEXTMODE, TM_PLAINTEXT | TM_MULTILEVELUNDO, 0);
+	GetRichEditCtrl().SendMessage(EM_SETOLECALLBACK, 0, (LPARAM)NULL);
+
+    // 4. Aggiorna l'interfaccia
+  //  rich.Invalidate();
 
   COpenCDoc* pDoc = GetDocument();
-  if (pDoc && GetRichEditCtrl().GetSafeHwnd())    {
-      // Se la vista è appena stata creata ed è vuota
-      if (GetRichEditCtrl().GetTextLength() == 0)        {
-          POSITION pos = pDoc->GetFirstViewPosition();
-          while (pos != NULL)            {
-              CView* pView = pDoc->GetNextView(pos);
-              if (pView != this && pView->IsKindOf(RUNTIME_CLASS(COpenCView)))                {
-                  CString strText;
-                  ((COpenCView*)pView)->GetRichEditCtrl().GetWindowText(strText);
-                  GetRichEditCtrl().SetWindowText(strText);
-                  break;
-              }
+  if(pDoc && GetRichEditCtrl().GetSafeHwnd()) {
+    // Se la vista è appena stata creata ed è vuota
+    if(GetRichEditCtrl().GetTextLength() == 0) {
+      POSITION pos = pDoc->GetFirstViewPosition();
+      while(pos) {
+        CView* pView = pDoc->GetNextView(pos);
+        if (pView != this && pView->IsKindOf(RUNTIME_CLASS(COpenCView))) {
+          CString strText;		// a che serviva sta roba??
+          //((COpenCView*)pView)->GetRichEditCtrl().GetWindowText(strText);
+          //GetRichEditCtrl().SetWindowText(strText);
+ //         GetRichEditCtrl().SetFocus();
+          break;
           }
         }
+      }
     }
+
+	if(!theApp.nomeProgetto.IsEmpty())
+		theApp.LoadProject(theApp.nomeProgetto,pDoc);
+
+	WIN32_FILE_ATTRIBUTE_DATA wfd;
+  if (GetFileAttributesEx(pDoc->GetPathName(), GetFileExInfoStandard, &wfd)) {
+    // Registra la finestra corrente presso il monitor globale
+    theApp.RegisterMonitoredFile(pDoc->GetPathName(), m_hWnd, wfd.ftLastWriteTime);
+    }
+				
+	//SetFocus();
+	GetParentFrame()->SetTitle(pDoc->GetTitle());
+	((CMainFrame*)theApp.m_pMainWnd)->MDIActivate(GetParentFrame());
+	GetParentFrame()->SetActiveView(this);
+
+	//SetTimer(1, 100, NULL);		// colorazione
+	PostMessage(WM_TIMER, 1, 0); // O chiama direttamente HighlightVisibleRange();
+
 	}
 
+void COpenCView::OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView) {
+  CRichEditView::OnActivateView(bActivate, pActivateView, pDeactiveView);
 
+  // Eseguiamo solo se la vista viene effettivamente ATTIVATA 
+  // e se la vista disattivata è DIVERSA da se stessa
+  if(bActivate && (pActivateView != pDeactiveView))    {
+
+        // Evita riesecuzioni ridondanti, cazzata cmq, initialupdate arriva sempre 2 volte SEMBRAVA!
+	  }
+	}
+
+BOOL COpenCView::PreTranslateMessage(MSG* pMsg) {
+
+  if(pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_F12)    {
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+
+    // Ricaviamo la posizione del cursore di testo corrente
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
+
+    // Convertiamo l'indice in coordinate client per riusare GetWordAtPoint
+		CPoint ptCaret ; //= ctrl.PosFromChar(cr.cpMin);
+    CString strInclude = GetWordAtPoint(ptCaret);
+
+    if(!strInclude.IsEmpty())        {
+      COpenCDoc* pDoc = GetDocument();
+      if(pDoc) {
+        pDoc->OpenIncludeFile(strInclude);
+        return TRUE; // Messaggio gestito
+        }
+      }
+    }
+
+    return CRichEditView::PreTranslateMessage(pMsg);
+	}
 
 void COpenCView::OnChar(UINT nChar, UINT nRepCnt, UINT nFlags) {
 
@@ -290,69 +527,63 @@ void COpenCView::OnEditTrovaselezione() {
 
 // gemini 2026
 
-    CRichEditCtrl& ctrl = GetRichEditCtrl();
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
 
-    CHARRANGE cr;
-    ctrl.GetSel(cr);
+  CHARRANGE cr;
+  ctrl.GetSel(cr);
 
+	// 1. Se il cursore è fermo, trova i confini della parola rispettando i margini di riga
+  if (cr.cpMin == cr.cpMax)    {
+    long nPos = cr.cpMin;
 
-		// 1. Se il cursore è fermo, trova i confini della parola rispettando i margini di riga
-    if (cr.cpMin == cr.cpMax)    {
-        long nPos = cr.cpMin;
-
-        // Ricaviamo l'indice del primo carattere della riga corrente
-        long nLineIndex = (long)ctrl.SendMessage(EM_LINEINDEX, -1, 0);
-        long nStart = 0;
-        long nEnd = 0;
+    // Ricaviamo l'indice del primo carattere della riga corrente
+    long nLineIndex = (long)ctrl.SendMessage(EM_LINEINDEX, -1, 0);
+    long nStart = 0;
+    long nEnd = 0;
 
 // Gestione speciale per INIZIO FILE (Posizione 0)
-        if (nPos == 0)        {
-            nStart = 0;
-            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, 0);
+    if (nPos == 0)        {
+      nStart = 0;
+      nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, 0);
 
-            // Se la prima parola non è stata trovata correttamente con WB_RIGHT,
-            // usiamo WB_RIGHTSTART per saltare ad esempio eventuali spazi/caratteri iniziali
-            if (nEnd <= 0)            {
-                nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, 0);
-                nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
-            }
-
+      // Se la prima parola non è stata trovata correttamente con WB_RIGHT,
+      // usiamo WB_RIGHTSTART per saltare ad esempio eventuali spazi/caratteri iniziali
+      if (nEnd <= 0) {
+        nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, 0);
+        nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
         }
+     }
 
-        else if (nPos == nLineIndex)        {
-            // Inizio riga generico
-            nStart = nPos;
-            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
-        }
+    else if (nPos == nLineIndex)        {
+      // Inizio riga generico
+      nStart = nPos;
+      nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+      }
 
-       else        {
-            // Resto del codice preesistente per l'interno della riga...
-            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_LEFT, nPos);
+     else        {
+        // Resto del codice preesistente per l'interno della riga...
+        nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_LEFT, nPos);
 
-            if (nStart < nLineIndex)            {
-                nStart = nLineIndex;
-            }
+        if (nStart < nLineIndex) 
+          nStart = nLineIndex;
 
-            nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+        nEnd = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
         }
 
        
-
-        // Se l'intervallo non è valido (es. cursore su spazi a fine riga), proviamo ad avanzare
-
-        if (nEnd <= nPos)        {
-            nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, nPos);
-            nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
-        }
+      // Se l'intervallo non è valido (es. cursore su spazi a fine riga), proviamo ad avanzare
+      if (nEnd <= nPos)        {
+        nStart = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHTSTART, nPos);
+        nEnd   = (long)ctrl.SendMessage(EM_FINDWORDBREAK, WB_RIGHT, nStart);
+	      }
 
 
-        // Selezioniamo la parola trovata
+      // Selezioniamo la parola trovata
 
-        if (nEnd > nStart)        {
-            ctrl.SetSel(nStart, nEnd);
-        }
+      if (nEnd > nStart)
+        ctrl.SetSel(nStart, nEnd);
 
-        } 
+      } 
 
 #if 0		// fa cagare cmq, provare SelectWordAtCaret ecc sotto
 
@@ -506,38 +737,42 @@ BOOL COpenCView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt) {
 	}
 
 BOOL COpenCView::GetWindowPos(RECT *rc) {		// restituisce coordinate relative al parent/FrameWnd
-	RECT rc2;
+	RECT rc2,rc3;
 
-	GetParent()->GetParent()->GetWindowRect(rc);
-	theApp.m_pMainWnd->GetWindowRect(&rc2);
-	rc2.top+=GetSystemMetrics(SM_CYMENU)+GetSystemMetrics(SM_CYSIZE)+GetSystemMetrics(SM_CYCAPTION)+
-		5*GetSystemMetrics(SM_CYBORDER)+2*GetSystemMetrics(SM_CYFRAME);
-	rc2.left+=2*GetSystemMetrics(SM_CXBORDER)+GetSystemMetrics(SM_CXFRAME);
-	rc->top-=rc2.top;
-	rc->bottom-=rc2.top;
-	rc->left-=rc2.left;
-	rc->right-=rc2.left;
+	if(GetParent() && GetParent()->GetParent()) {
+		GetParent()->GetParent()->GetWindowRect(rc);
+		theApp.m_pMainWnd->GetWindowRect(&rc2);
+		rc2.top+=GetSystemMetrics(SM_CYMENU)+GetSystemMetrics(SM_CYSIZE)+GetSystemMetrics(SM_CYCAPTION)+
+			GetSystemMetrics(SM_CYBORDER)+GetSystemMetrics(SM_CYFRAME) +15 /*toolbar*/;
+	// non più valida in cihiuseura porcamadonna 	((CMainFrame*)GetParent())->getToolbarRect(&rc3);
+		rc2.left+=2*GetSystemMetrics(SM_CXBORDER)+GetSystemMetrics(SM_CXFRAME);
+		rc->top-=rc2.top;
+		rc->bottom-=rc2.top;
+		rc->left-=rc2.left;		// (tree project
+		rc->right-=rc2.left;
+		return TRUE;
+		}
 
-	return TRUE;
+	return FALSE;
 	}
 
 
 void COpenCView::OnUpdatePosIndicator(CCmdUI* pCmdUI) {
-    CRichEditCtrl& ctrl = GetRichEditCtrl();
-    
-    CHARRANGE cr;
-    ctrl.GetSel(cr);
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
+  
+  CHARRANGE cr;
+  ctrl.GetSel(cr);
 
-    long nLine = ctrl.LineFromChar(cr.cpMin);
-    long nLineStart = ctrl.LineIndex(nLine);
-    long nCol = cr.cpMin - nLineStart;
+  long nLine = ctrl.LineFromChar(cr.cpMin);
+  long nLineStart = ctrl.LineIndex(nLine);
+  long nCol = cr.cpMin - nLineStart;
 
-    CString strPos;
-    strPos.Format(_T("Ln %d, Col %d"), nLine + 1, nCol + 1);
+  CString strPos;
+  strPos.Format(_T("Ln %d, Col %d"), nLine + 1, nCol + 1);
 
-    pCmdUI->Enable(TRUE);
-    pCmdUI->SetText(strPos);
-}
+  pCmdUI->Enable(TRUE);
+  pCmdUI->SetText(strPos);
+	}
 
 
 
@@ -561,1268 +796,450 @@ static DWORD CALLBACK StreamInCallback(DWORD dwCookie, LPBYTE pbBuff,
   return 0;
 	}
 
-/////////////////////////////////////////////////////////////////////////////
-// Construction/Destruction
-/////////////////////////////////////////////////////////////////////////////
-
-// Default constructor
-CRichEditCtrlEx::CRichEditCtrlEx() {
-	// Common values
-	UINT	uiSize			= sizeof(CHARFORMAT);
-	DWORD	dwMask			= CFM_COLOR | CFM_FACE | CFM_SIZE; /* | CFM_CHARSET;*/
-	LONG	lHeight			= 160;	// 8 point => 160 * (1/20)
-
-	// Initialise the Tags CHARFORMAT
-	m_cfTags.cbSize			= uiSize;
-	m_cfTags.dwMask			= dwMask;
-	m_cfTags.dwEffects		= 0;
-	m_cfTags.yHeight		= lHeight;
-	m_cfTags.crTextColor	= RGB(128, 0, 0);
-	m_cfTags.bCharSet		= ANSI_CHARSET;
-	_tcscpy(m_cfTags.szFaceName,	_T("Courier New"));
-
-	// Initialise the Text CHARFORMAT
-	m_cfText.cbSize			= uiSize;
-	m_cfText.dwMask			= dwMask;
-	m_cfText.dwEffects		= 0;
-	m_cfText.yHeight		= lHeight;
-	m_cfText.crTextColor	= RGB(0, 0, 0);
-	m_cfText.bCharSet		= ANSI_CHARSET;
-	_tcscpy(m_cfText.szFaceName,	_T("Courier New"));
-
-	// Initialise the Quoted Text CHARFORMAT
-	m_cfQuoted.cbSize		= uiSize;
-	m_cfQuoted.dwMask		= dwMask;
-	m_cfQuoted.dwEffects	= 0;
-	m_cfQuoted.yHeight		= lHeight;
-	m_cfQuoted.crTextColor	= RGB(0, 128, 128);
-	m_cfQuoted.bCharSet		= ANSI_CHARSET;
-	_tcscpy(m_cfQuoted.szFaceName, _T("Courier New"));
-
-	// Initialise the Comment CHARFORMAT
-	m_cfComment.cbSize		= uiSize;
-	m_cfComment.dwMask		= dwMask;
-	m_cfComment.dwEffects	= 0;
-	m_cfComment.yHeight		= lHeight;
-	m_cfComment.crTextColor	= RGB(0, 128, 0);
-	m_cfComment.bCharSet		= ANSI_CHARSET;
-	_tcscpy(m_cfComment.szFaceName, _T("Courier New"));
-
-	// For tracking the color state at the end of every line: 
-	m_nLineCount = 0;
-	m_pLinesEndState = NULL;
-
-	m_bOnEnVscrollDisabled = false;	// Disable OnEnVscroll coloring during ColorVisibleLines and OnKeyDown
-	m_nOnChangeCharPosition = -1;	// OnKeyDown defers coloring to OnChange when overriding selected text
-
-	// Background coloring timer:
-	m_uiBckgdTimerInterval = 100;
-	m_nBckgdTimerNumOfLines = 10;
-	m_bBckgdTimerActivated = false;
-	}
-
-// Default destructor
-CRichEditCtrlEx::~CRichEditCtrlEx() {
-
-	// Free the allocated vector:
-	if(m_pLinesEndState)	{
-		free(m_pLinesEndState);	
-		m_pLinesEndState = NULL;
-		}
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// Character format functions
-/////////////////////////////////////////////////////////////////////////////
-
-// Sets the character format to be used for Tags
-void CRichEditCtrlEx::SetTagCharFormat(int nFontHeight, COLORREF clrFontColour, 
-											CString strFontFace, bool bParse) {
-
-	m_cfTags.yHeight		= 20 * nFontHeight;
-	m_cfTags.crTextColor	= clrFontColour;
-	_tcscpy(m_cfTags.szFaceName, strFontFace);
-
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets  the character format to be used for Tags
-void CRichEditCtrlEx::SetTagCharFormat(CHARFORMAT& cfTags, bool bParse) {
-
-	m_cfTags = cfTags;
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets the character format to be used for Quoted text
-void CRichEditCtrlEx::SetQuoteCharFormat(int nFontHeight,COLORREF clrFontColour, 
-											  CString strFontFace, bool bParse) {
-
-	m_cfQuoted.yHeight		= 20 * nFontHeight;
-	m_cfQuoted.crTextColor	= clrFontColour;
-	
-	_tcscpy(m_cfQuoted.szFaceName, strFontFace);
-
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets  the character format to be used for Quoted text
-void CRichEditCtrlEx::SetQuoteCharFormat(CHARFORMAT& cfQuoted, bool bParse) {
-
-	m_cfQuoted = cfQuoted;
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets the character format to be used for Comments
-void CRichEditCtrlEx::SetCommentCharFormat(int nFontHeight,COLORREF clrFontColour, 
-												CString strFontFace, bool bParse) {
-
-	m_cfComment.yHeight		= 20 * nFontHeight;
-	m_cfComment.crTextColor	= clrFontColour;
-
-	_tcscpy(m_cfComment.szFaceName, strFontFace);
-
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets  the character format to be used for Comments
-void CRichEditCtrlEx::SetCommentCharFormat(CHARFORMAT& cfComments, bool bParse) {
-	m_cfComment = cfComments;
-
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets the character format to be used for Normal Text
-void CRichEditCtrlEx::SetTextCharFormat(int nFontHeight, COLORREF clrFontColour, 
-											 CString strFontFace, bool bParse) {
-
-	m_cfText.yHeight		= 20 * nFontHeight;
-	m_cfText.crTextColor	= clrFontColour;
-
-	_tcscpy(m_cfText.szFaceName, strFontFace);
-
-	if(bParse)	
-		ParseAllLines();
-	}
-
-// Sets  the character format to be used for Normal Text
-void CRichEditCtrlEx::SetTextCharFormat(CHARFORMAT& cfText, bool bParse) {
-
-	m_cfText = cfText;
-	if(bParse)	
-		ParseAllLines();
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// Parsing functions
-/////////////////////////////////////////////////////////////////////////////
-
-// Parses all lines in the control, coloring each line accordingly.
-void CRichEditCtrlEx::ParseAllLines() {
-	// Get control's text (send WM_GETTEXT  message):
-	CString strCtrlText;
-	GetWindowText(strCtrlText);
-	
-	// Allocate the vector for holding the color states of all lines: 
-	m_nLineCount = GetLineCount();
-	free(m_pLinesEndState);
-	m_pLinesEndState = (BYTE*)malloc(m_nLineCount * sizeof(BYTE));	ASSERT(m_pLinesEndState != NULL);
-	ZeroMemory(m_pLinesEndState, m_nLineCount * sizeof(BYTE));
-	
-	// Go over HTML line by line and calculate the color state (Comment/Quoted/Tag/Normal)
-	// of the last char.
-	// NOTE: This calulation is quite fast as we do it in one pass over HTML without any coloring.
-	const TCHAR* pCtrlText = (LPCTSTR)strCtrlText;
-	ParseLines(pCtrlText, -1 , false, 0);
-	
-	// Disable redraw to prevent flickering
-	SetRedraw(FALSE);
-
-	// Store the current selection and the first visible line
-	CHARRANGE crCurrent;
-	GetSel(crCurrent);
-
-	// Color the all the text as Text initially
-	SetSel(0, -1);
-	SetWordCharFormat(m_cfText);
-
-	// Get the control's visible range
-	int nFirstLine = GetFirstVisibleLine();	// Send the control EM_GETFIRSTVISIBLELINE message
-	int nLastLine = GetLastVisibleLine();	// No such message as EM_GETLASTVISIBLELINE - use our own algorithm
-	for(int i = nFirstLine; i <= nLastLine; i++) {
-		CString strLine;
-		int nLineLength = GetLineHelper(i, strLine);
-
-		if(nLineLength > 0)	{
-			ParseLines((LPCTSTR)strLine, -1, true, i);	// Color the line (only one line)
-			m_pLinesEndState[i] |= LINE_COLORED;
-			}
-		}
-
-	// Restore the original selection
-	SetSel(crCurrent);
-
-	// Restore the original view position
-	LineScroll(-nFirstLine, 0);
-
-	SetRedraw(TRUE);
-	Invalidate(FALSE);
-
-	// Activate the background coloring timer
-	StartColoringTimer();
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// Miscellaneous functions
-/////////////////////////////////////////////////////////////////////////////
-
-// Loads the contents of the specified file into the control.
-// Replaces the existing contents. To parse lines ParseAllLines must be called
-void CRichEditCtrlEx::LoadFile(CString& strPath) {
-
-	if(strPath.GetLength() > 0)	{
-		CFile file(strPath, CFile::modeRead);
-		EDITSTREAM es;
-
-		es.dwCookie = (DWORD)&file;
-		es.pfnCallback = StreamInCallback;
-		StreamIn(SF_TEXT, es);
-		}
-	}
-
-void CRichEditCtrlEx::SetBckgdColorTimer(UINT uiInterval /*= 1000*/, int nNumOfLines /*= 10*/) {
-
-	if(uiInterval == 0 || nNumOfLines <= 0 && m_bBckgdTimerActivated) {
-		// Disable current background coloring timer:
-		BOOL bRes = KillTimer(TIMER_BACKGROUNDCOLORING);	
-		ASSERT(bRes);
-		m_bBckgdTimerActivated = false;
-		}
-	
-	m_uiBckgdTimerInterval = uiInterval;
-	m_nBckgdTimerNumOfLines = nNumOfLines;
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// Overrides
-/////////////////////////////////////////////////////////////////////////////
-
-// PreSubclassWindow override. Ensures that the control is registered to 
-// receive ENM_CHANGE notifications.
-// Also register to receive ENM_SCROLL notifications when a keyboard event causes a change 
-// in the view area of the edit control, for example, pressing HOME, END, PAGE UP, PAGE DOWN, UP ARROW, or DOWN ARROW.
-void CRichEditCtrlEx::PreSubclassWindow() {
-	CRichEditCtrl::PreSubclassWindow();
-
-	// Set the event mask to include ENM_CHANGE
-	long lMask = GetEventMask();
-	lMask |= ENM_CHANGE | ENM_SCROLL;
-	SetEventMask(lMask);
-
-	// Set the default character format to be m_cfText
-	SetDefaultCharFormat(m_cfText);
-
-	// The CRichEditCtrl always starts with LineCount == 1, so you can start typing text immediately
-	// NOTE: When CRichEditCtrl used from resource, OnCreate isn't called and GetLineCount returns 1.
-	// When used as a member and Create() is explicitly called, GetLineCount here return 0 and in OnCreate returns 1.
-	m_nLineCount = 1;
-	m_pLinesEndState = (BYTE*)malloc(sizeof(BYTE));	ASSERT(m_pLinesEndState != NULL);
-	m_pLinesEndState[0] = epsInNormalText;	// Until changed by <, " and so, we're in state "text"
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// CRichEditCtrlEx message handlers
-/////////////////////////////////////////////////////////////////////////////
-
-BEGIN_MESSAGE_MAP(CRichEditCtrlEx, CRichEditCtrl)
-	//{{AFX_MSG_MAP(CRichEditCtrlEx)
-	ON_WM_CHAR()
-	ON_WM_GETDLGCODE()
-	ON_CONTROL_REFLECT(EN_CHANGE, OnChange)
-	ON_WM_CREATE()
-	ON_WM_TIMER()
-	//}}AFX_MSG_MAP
-	ON_WM_KEYDOWN()
-	ON_WM_SIZE()
-	ON_WM_VSCROLL()
-	ON_CONTROL_REFLECT(EN_VSCROLL, OnEnVscroll)
-	ON_WM_HSCROLL()
-	ON_WM_SETFOCUS()
-	ON_WM_KILLFOCUS()
-END_MESSAGE_MAP()
-
-/**
- * WM_CHAR handler traps "interesting chars" (chars that change the color state, for example ‘<’ or ‘”)
- * and updates the colors accordingly.
- * Sometimes we invalidate up to 3 preceding chars to take care of 
- * comments, as pressing the ‘-‘ char might complete a comment start combination. 
- * NOTE that OnChar is too late for handling VK_BACK and VK_DELETE,
- * as chars have already been deleted at this stage
- */
-void CRichEditCtrlEx::OnChar(UINT nChar, UINT nRepCnt, UINT nFlags) {
-	TRACE(_T("OnChar\n"));
-
-	// Get current caret position. Not sure if GetSel the best choice???
-	// NOTE: We call GetSel before base class to get the correct caret position
-	long lStart = 0, lEnd	= 0;
-	GetSel(lStart, lEnd);
-	int nCharPosition = lStart;
-
-	CRichEditCtrl::OnChar(nChar, nRepCnt, nFlags);
-
-	// After CRichEditCtrl has added the char, we can get the following:
-	long lCharStart	= LineIndex();	// Retrieves the character index of the current line (the line that contains the caret)
-	long lCharFromLineStart = nCharPosition - lCharStart;
-	int nLineIndex = LineFromChar(lCharStart);
-	
-	// DEBUG:
-	int nLineIndex1 = LineFromChar(-1);
-	CString strLine;
-	int nLineLength = GetLineHelper(nLineIndex, strLine);
-
-	// Is it a special char? If not, basically the RichEditCtrl maintains himself the current WordCharFormat.
-	// However this may change when pressing a key breaks a comment combination or after the insertion point
-	// was moved just passed an ending tag or ending double quotes. This will be handled
-	// by the 'default' clause
-	switch(nChar)	{
-	case KEY_TAG_START:
-		{// Invalide the colors of this and next lines as we might move to epsInTag
-			InvalidateColorStates(nCharPosition);
-			break;
-		}
-	case KEY_TAG_END:
-		{// Invalide the colors of this and next lines as we might move to InNormalText (or stay in DblQuotes\Comment)
-		// Recalculate the color state of this line because after '>' we might move to InNormalText or stay in DblQuotes\Comment.
-		 // However the color of this '>' stays the same as the previous char (Tag\DblQuotes\Comment\NormalText)	
-			InvalidateColorStates(nCharPosition);
-			break;
-		}
-	case KEY_DBL_QUOTE:
-		{// Recalculate the color state of this line because after '"' we might move to DblQuotes\Tag or stay in Comment\NormalText.
-		 // The color of this '" changes if me move to DblQuotes and affects the following lines as well, so invalide the colors of this and next lines
-			InvalidateColorStates(nCharPosition);
-			if((m_pLinesEndState[nLineIndex] &~ LINE_COLORED) == epsInTag)	// These were ending double quotes so now we're in Tag
-				{
-				BOOL bRes = SetWordCharFormat(m_cfTags);	ASSERT(bRes);
-				}
-			break;
-		}
-	case '-':
-		{// Trap the Comment start ("<!--") and Comment end combinations, so we can color correctly in these case:
-			// Check if we move to epsInComment:
-			int nCommentStart = FindCommentStartHelper(nCharPosition);
-			if(nCommentStart != -1)
-				InvalidateColorStates(nCommentStart);
-			else {
-				// Check if we move to epsInNormalText
-				CString strTmp;
-				int nChars = GetTextRange(nCharPosition - 1, nCharPosition + 2, strTmp);	// Search for "-->" and this char is the middle '-'
-				if(strTmp != _T("*/"))	{
-					nChars = GetTextRange(nCharPosition, nCharPosition + 3, strTmp);
-					}	// Search for "-->" and this char is the leftmost '-'
-				if(strTmp == _T("*/"))	// Search for "-->" and this char is the leftmost '-'
-					{
-					InvalidateColorStates(nCharPosition);
-					}
-			}
-			break;
-		}
-	case '!':	// Trap the Comment start ("<!--"), so we can color correctly when state moves to epsInComment:
-		{
-			int nCommentStart = FindCommentStartHelper(nCharPosition);
-			if(nCommentStart != -1)	
-				InvalidateColorStates(nCommentStart);
-			break;
-		}
-	case VK_RETURN:
-		{
-			UpdateLinesArraySize();	// Since a new line has just been added
-
-			// After VK_RETURN we must explicitly set the correct color:
-			SetFirstLineCharColor(nLineIndex);
-			break;
-		}
-	default:
-		{
-			if(nChar != VK_BACK)	// VK_BACK was already handled by OnKeyDown
-			{// Pressing a key might break comment combination.
-			 // Pressing a key after the insertion point might result in a wrong color when we're
-	         // just passed an ending tag or ending double quotes.
-				int nCommentStart = FindCommentStartHelper(nCharPosition);
-				if(nCommentStart != -1)	// Just broke comment start combination
-					InvalidateColorStates(nCommentStart);
-				else {
-					CString test;
-					GetWindowText(test);
-					
-					int nCommentEnd = FindCommentEndHelper(nCharPosition);	// +1 to pass the currently added char 
-					if(nCommentEnd != -1)	// Just broke comment end combination
-						InvalidateColorStates(nCommentStart);
-					else {
-						CString prevChar;
-						int nChars = GetTextRange(nCharPosition - 1 , nCharPosition, prevChar);
-						if(prevChar == _T('>') || prevChar == _T('\"'))	// We just past ending tag/ending quotes)
-							InvalidateColorStates(nCharPosition - 1);
-						}
-					}
-				}
-			}
-		}
-	
-	return;
-	}
-
-// WM_GETDLGCODE message handler. Ensures that the edit control
-// handles the TAB key.
-UINT CRichEditCtrlEx::OnGetDlgCode() {
-	return DLGC_WANTALLKEYS;
-	}
-
-/**
- * OnChange is used to handle the cases of overriding selected text.
- * In these cases OnChange is called after OnKeyDown, thus OnKeyDown can't
- * see the updated text and defers the coloring to OnChange.
- */
-void CRichEditCtrlEx::OnChange() {
-	TRACE(_T("OnChange\n"));
-
-	if(m_nOnChangeCharPosition != -1) {
-		// OnKeyDown defers the call to OnChange when overriding selected text
-		UpdateLinesArraySize();
-		InvalidateColorStates(m_nOnChangeCharPosition);
-		m_nOnChangeCharPosition = -1;
-		}
-	}
-
-// WM_CREATE message handler. Ensures that the control is registered to
-// receive ENM_CHANGE messages.
-// NOTE that no need for initialization here since alrady done in PreSubclassWindow
-int CRichEditCtrlEx::OnCreate(LPCREATESTRUCT lpCreateStruct) {
-
-	if(CRichEditCtrl::OnCreate(lpCreateStruct) == -1)
-		return -1;
-	
-	// Set the default character format to be m_cfText
-	SetDefaultCharFormat(m_cfText);
-
-	return 0;
-	}
-
-/**
- * This helper was found somewhere on the net
- */
-BOOL CRichEditCtrlEx::IsWindowCompletelyObscured() {
-	RECT clip, winrect; 
-
-	// Get Clipping box for window area (client not enough since I want to include the scrolls) 
-	HDC hdc = ::GetWindowDC(m_hWnd);
-	int cliptype = GetClipBox(hdc, &clip);	// In logical units
-	::ReleaseDC(m_hWnd, hdc);
-
-	// Check clipbox type
-	if(cliptype == NULLREGION)
-		return TRUE;	// Completely covered
-	else if(cliptype == COMPLEXREGION)
-		return FALSE;	// Partially covered
-	else if(cliptype == SIMPLEREGION)	{
-		GetWindowRect(&winrect);
-		// Normalize coordinates:
-		winrect.bottom -= winrect.top;
-		winrect.top = 0;
-		winrect.right -= winrect.left;
-		winrect.left = 0;
-    if(EqualRect(&clip,&winrect))
-			return FALSE;	//completely exposed 
-		else
-			return TRUE;	//completely covered
-		}
-	return FALSE;
-	}
-
-/**
- * WM_TIMER message handler.
- * This is the background coloring timer. It runs as long as there are uncolored lines
- * After investigating, found that in order to prevent flickers:
- * 1. RichEditCtrl must have the focus to prevent vertical scrollbar flickers (Otherwise the vertical scrollbar thumb jumps and flickers)
- * 2. Caret must be positioned at the beginning of line with no selection. Otherwise the horizontal scrollbar shakes! (works only for class RichEdit20W, not RICHEDIT)
- * NOTE that when control is completely obscured - there're no restrictions!
- */
-void CRichEditCtrlEx::OnTimer(UINT nIDEvent) {
-	CRichEditCtrl::OnTimer(nIDEvent);
-
-	if(nIDEvent == TIMER_BACKGROUNDCOLORING) {
-		// Color next m_nBckgdTimerNumOfLines uncolored lines:
-		TRACE(_T("OnTimer\n"));
-		bool bColorEnabled = false;
-
-		// To prevent flickering:
-		CHARRANGE crCurrent;
-		GetSel(crCurrent);
-		int nCharPosition = crCurrent.cpMin;
-		if((GetFocus() == this) && (crCurrent.cpMin == crCurrent.cpMax) &&
-			(nCharPosition == LineIndex(LineFromChar(nCharPosition))) )	{
-			// 1. Control is in focus, caret is at beginning of line and no selection is made
-			bColorEnabled = true;
-			}
-		else if(IsWindowCompletelyObscured())	{
-			// 2. Control is not in focus and its window completely obscured
-			bColorEnabled = true;
-			}
-		if(!bColorEnabled)	
-			return;	// To prevent flickering give up background coloring at this stage
-		
-		int nFirstVisibleLine = GetFirstVisibleLine();
-		
-		// Prepare for paint (disable redraw to prevent flickering):
-		SetRedraw(FALSE);
-
-		CString strLine;
-		int nColored = 0;
-
-		m_bOnEnVscrollDisabled = true;	// Clicking the last visible line would cause OnEnVscroll when line only partially visible	
-		for (int i = 0; i < m_nLineCount && nColored < m_nBckgdTimerNumOfLines; i++) {
-			if(!(m_pLinesEndState[i] & LINE_COLORED)) {
-				// Colour the all the text as Text initially, use nCharPosition for optimization:
-				int nLineLength = GetLineHelper(i, strLine);
-				long lCharStart	= LineIndex(i);
-
-				SetSel(lCharStart, lCharStart + nLineLength);
-				SetSelectionCharFormat(m_cfText);
-
-				ParseLines((LPCTSTR)strLine, -1 , true, i);
-				m_pLinesEndState[i] |= LINE_COLORED;
-
-				nColored++;
-				}
-			}
-		if(nColored < m_nBckgdTimerNumOfLines) {
-			// All lines are colored? The background coloring timer can be turned off:
-			BOOL bRes = KillTimer(TIMER_BACKGROUNDCOLORING);	ASSERT(bRes);
-			m_bBckgdTimerActivated = false;
-			}
-
-		// Restore after painting:
-		SetSel(crCurrent);
-		int nCurrentFirstVisibleLine = GetFirstVisibleLine();	
-		if(nCurrentFirstVisibleLine != nFirstVisibleLine) {
-			// Coloring might scroll the control, so restore original visible line.
-		 // OnEnVscroll is disabled at this stage because otherwise we get into endless recurssion
-			LineScroll(nFirstVisibleLine - nCurrentFirstVisibleLine, 0);
-			}
-		m_bOnEnVscrollDisabled = false;
-
-		SetRedraw(TRUE);
-		Invalidate(FALSE);
-		}
-	}
-
-/////////////////////////////////////////////////////////////////////////////
-// Helper functions
-/////////////////////////////////////////////////////////////////////////////
-int CRichEditCtrlEx::GetLastVisibleLine() {
-	// The EM_GETRECT message retrieves the formatting rectangle of an edit control:
-	RECT rfFormattingRect = {0};
-
-	GetRect(&rfFormattingRect);
-	rfFormattingRect.left++;
-	rfFormattingRect.bottom -= 2;
-
-	// The EM_CHARFROMPOS message retrieves information about the character
-    // closest to a specified point in the client area of an edit control
-	int nCharIndex =  CharFromPos(CPoint(rfFormattingRect.left, rfFormattingRect.bottom));
-
-	//The EM_EXLINEFROMCHAR message determines which
-    //line contains the specified character in a rich edit control
-	 return LineFromChar(nCharIndex);
-	}
-
-/**
- * Changing/Adding text to a line invalidates the color state of this line and
- * the ones who follow. For example if a comment start ("<!--") is added, following
- * lines should be colored as Comment until comment end ("<--") is reached.
- * Note that previous lines are unaffected
- */
-void CRichEditCtrlEx::InvalidateColorStates(int nCharPosition) {
-	// Invalidate all lines starting from nLineIndex:
-	int nLineIndex = LineFromChar(nCharPosition);
-	long lCharStart	= LineIndex(nLineIndex);
-	
-	CString strCtrlText;
-	int nChars = GetTextRange(lCharStart, GetTextLength(), strCtrlText);
-	ParseLines((LPCTSTR)strCtrlText, -1, false, nLineIndex);
-	
-	// Color visible lines between [nLineIndex..m_nLineCount) that are not colored already, one line at a time:	
-	ColorVisibleLines(nCharPosition);
-
-	// Activate the background coloring timer
-	StartColoringTimer();
-	}
-
-/**
- * Color chars within the visible line range, that are not colored already.
- * Coloring starts from char nCharPosition, assuming previous chars are already colored.
- * If nCharPosition is omitted - all lines within visible range are colored if not already.
- */
-void CRichEditCtrlEx::ColorVisibleLines(int nCharPosition /*= -1*/) {
-	// Color visible lines between [nLineIndex..m_nLineCount) that are not colored already, one line at a time:	
-	CString strLine;
-	int nFirstLine = GetFirstVisibleLine();	// Send the control EM_GETFIRSTVISIBLELINE message
-	int nLastLine = GetLastVisibleLine();	// No such message as EM_GETLASTVISIBLELINE - use our own algorithm
-	int nOrigFirstVisibleLine = nFirstLine;
-	long nCharPositionLine = -1;
-
-	if(nCharPosition != -1) {
-		// Adjust nFirstLine to the line containing nCharPosition
-		nCharPositionLine	= LineFromChar(nCharPosition);
-		if(nFirstLine < nCharPositionLine)	nFirstLine = nCharPositionLine;
-		}
-
-	// Prepare for paint (disable redraw to prevent flickering):
-	CHARRANGE crCurrent;
-	SetRedraw(FALSE);
-	GetSel(crCurrent);
-	
-	m_bOnEnVscrollDisabled = true;	// Clicking the last visible line would cause OnEnVscroll when line only partially visible
-	for (int i = nFirstLine; i <= nLastLine; i++)	{
-		if(!(m_pLinesEndState[i] & LINE_COLORED)) {
-			int nFirstLineDEBUG2 = GetFirstVisibleLine();
-
-			// Colour the all the text as Text initially, use nCharPosition for optimization:
-			int nLineLength = GetLineHelper(i, strLine);
-			long lCharStart	= LineIndex(i);
-			if(i == nCharPositionLine)	{
-				nLineLength -= (nCharPosition - lCharStart);
-				lCharStart = nCharPosition;
-			}
-			SetSel(lCharStart, lCharStart + nLineLength);
-			SetWordCharFormat(m_cfText);
-
-			ParseLines((LPCTSTR)strLine, (i == nCharPositionLine) ? nCharPosition : -1 , true, i);
-			m_pLinesEndState[i] |= LINE_COLORED;
-			}
-		}
-
-	// Restore after painting:
-	SetSel(crCurrent);
-	int nCurrentFirstVisibleLine = GetFirstVisibleLine();	
-	if(nCurrentFirstVisibleLine != nOrigFirstVisibleLine) {
-		// Coloring might scroll the control, so restore original visible line.
-	 // OnEnVscroll is disabled at this stage because otherwise we get into endless recurssion
-		LineScroll(nOrigFirstVisibleLine - nCurrentFirstVisibleLine, 0);
-		}
-	m_bOnEnVscrollDisabled = false;
-	SetRedraw(TRUE);
-	Invalidate(FALSE);
-	}
-
-/**
- * ParseLines has two modes, depending on bColor parameter:
- * 1. Calculate color state of ending char for all lines without coloring.
- * 2. Calculate and color.
- * The ending chars color states are used for handling multiline tags/quotes/text/comments correctly.
- * nCharPosition states the chars from which coloring is required
- *	(can be in the middle of a line, but still the calculation starts from the beginning)
- * NOTE:
- *		New lines are automatically recognized.
- *		Function goes over xml in one pass, i.e. quite fast when no coloring involved.
- * The no-coloring mode is used for new xml inputs and several lines of xml simultaneously,
- * The coloring mode is uses one line at a time, for coloring visible lines only
- */
-FastHtmlColorState CRichEditCtrlEx::ParseLines(LPCTSTR pLines, int nCharPosition, bool bColor, int nCurrentLine /*= -1 */) {
-
-	if(nCurrentLine == -1)	
-		nCurrentLine = LineFromChar(nCharPosition);
-
-	// Get color state of beginning char (same as previous line's ending char).
-	// For first line we use InNormalText, as chars preceding  '<' are considered as normal text.
-	FastHtmlColorState currentState = (nCurrentLine == 0) ? epsInNormalText : (FastHtmlColorState)(m_pLinesEndState[nCurrentLine - 1] & (~LINE_COLORED));
-	
-	// Take care of empty ("") strings
-	// When caret is at the end position and user presses the enter, we get a new empty line (OnChar).
-	// OnTimer also calls ParseLines with an empty string in the background
-	if(*pLines == NULL) {
-		m_pLinesEndState[nCurrentLine] = currentState;
-		if(bColor)	{// Apply color state of previous line's ending char:
-			if(currentState == epsInTag)
-				{BOOL bRes = SetWordCharFormat(m_cfTags);	ASSERT(bRes);}
-			else if(currentState == epsInDblQuotes)
-				{BOOL bRes = SetWordCharFormat(m_cfQuoted);	ASSERT(bRes);}
-			else if(currentState == epsInComment)
-				{BOOL bRes = SetWordCharFormat(m_cfComment);	ASSERT(bRes);}
-			else
-				{BOOL bRes = SetWordCharFormat(m_cfText);	ASSERT(bRes);}
-			m_pLinesEndState[nCurrentLine] |= LINE_COLORED;
-			}
-		return currentState;
-		}
-
-	TCHAR* pCurChar = (TCHAR*)pLines;
-	long lCharStart	= LineIndex(nCurrentLine);
-	
-	int nColorStart = -1;
-
-	// loop while not whole line has been coloured:
-	while (*pCurChar)	{
-		if(*pCurChar == _T('\r') || *pCurChar == _T('\n')) {// EOL is reached? Set the ending-char color state:
-			if(*pCurChar == _T('\r') && *(pCurChar+1) == _T('\n'))	pCurChar++;	// Take care of \r\n pattern
-			if((m_pLinesEndState[nCurrentLine] &~ LINE_COLORED) == currentState)
-				break;	// If ending-char color state of this line hasn't changed - no point of recalculating next lines 
-			m_pLinesEndState[nCurrentLine++] = currentState;
-			}
-		else if(currentState == epsInComment) {// Inside Comment all chars are acceptable. The state is only changed by the "-->" combination:
-			if((*pCurChar == KEY_TAG_END) && (*(pCurChar - 1) == _T('-')) && (*(pCurChar - 2) == _T('-'))) {
-				if(bColor)	// Colourise the Comment (If no Comment in this line - we found a Comment end of a previous line):
-					nColorStart = ColorRangeHelper((nColorStart == -1) ? lCharStart : nColorStart, lCharStart + pCurChar - pLines + 1, m_cfComment, nCharPosition);
-				currentState = epsInNormalText;	// After leaving InComment state, all chars till '<' are considered normal text chars
-				}	
-			}
-		else if(*pCurChar == KEY_TAG_START) {// '<' can start a Tag or a Comment block:
-			if(currentState == epsInTag || currentState == epsInDblQuotes)
-			{// IE doesn't allow '<' to be inside quotes, thus "d<d" is illegal. However I'll handle it as moving to epsInNormalText state:
-				currentState = epsInNormalText;
-				}
-			else if(*(pCurChar + 1) == _T('!') && *(pCurChar + 2) == _T('-') && *(pCurChar + 3) == _T('-')) {
-				// If we reach "<!--" we're staring a Comment
-				currentState = epsInComment;
-				}
-			else
-				{currentState = epsInTag;}
-			nColorStart = pCurChar - pLines + lCharStart;
-			}
-		else if(*pCurChar == _T(KEY_DBL_QUOTE)) {
-			// Double quotes ('"') can be starting or ending quotes.
-		 // However quotes are applicable in Tag only (in InNormalText we'll treat them as regular chars)
-			if(currentState == epsInDblQuotes) {
-				// These are ending quotes
-				if(bColor)	// Colourise the string (If no staring quotes found in this line, we're ending a Quoted Text of a previous line):
-					nColorStart = ColorRangeHelper((nColorStart == -1) ? lCharStart : nColorStart, lCharStart + pCurChar - pLines + 1, m_cfQuoted, nCharPosition);
-				currentState = epsInTag;	// Assumption: Before we entered the InDblQuotes state we were in a Tag:
-				}
-			else if(currentState == epsInTag)	// Starting quotes
-			{// These are beginning quotes:
-				if(bColor)	// Colourise the Tag before the starting quotes (If no staring Tag found in this line, we're ending a Tag of a previous line)
-					nColorStart = ColorRangeHelper((nColorStart == -1) ? lCharStart : nColorStart, lCharStart + pCurChar - pLines, m_cfTags, nCharPosition);
-				currentState = epsInDblQuotes;
-				}
-			}
-		else if(*pCurChar == _T(KEY_TAG_END)) {// Ending tag ('>'):
-			if(currentState != epsInNormalText)	// '>' in normal text has no meaning, for example >"va>lue" as text is valid
-			{
-				if(currentState == epsInTag)	{
-					if(bColor)	// Colourise the Tag:
-						nColorStart = ColorRangeHelper((nColorStart == -1) ? lCharStart : nColorStart, lCharStart + pCurChar - pLines + 1, m_cfTags, nCharPosition);
-					currentState = epsInNormalText;	// After leaving Tag state, all chars till '<' are considered normal text chars
-					}
-				else	// If '>' is part of a string, for example ("d>d"), leave the InDblQuotes state
-					ASSERT(currentState == epsInDblQuotes);	//It can also be part of a string, for example ("d>d")
-				}
-			}
-		pCurChar++;
-		}
-	
-	if(bColor && (pCurChar - 1 - pLines) >= (nColorStart - lCharStart))	// The = is because nColorStart position should be colored as well
-	{// Then there are uncolored chars left till end of line. These are part of a multiline Tag/DblQuotes/Comment/NormalText
-		if(nColorStart == -1)	nColorStart = lCharStart;	// Haven't found any interesting keys - color whole line according to previous state
-		SetSel(nColorStart, lCharStart + pCurChar - pLines);
-		if(currentState == epsInTag)		SetWordCharFormat(m_cfTags);
-		if(currentState == epsInDblQuotes)	SetWordCharFormat(m_cfQuoted);
-		if(currentState == epsInComment)	SetWordCharFormat(m_cfComment);
-	}
-
-	if(nCurrentLine < m_nLineCount) {// Set color state of last line:	 
-		m_pLinesEndState[nCurrentLine] = currentState;
-	}
-	else {// NOTE: When called by UpdateLinesArraySize or InvalidateColorStates, ParseLines
-	 // is called with a range of lines, starting with current line till the end.
-	 // UpdateLinesArraySize or InvalidateColorStates do not remove trailing \n because
-	 // this \n might belong to previous line if whole line was just \n.
-	 // Thefore if we have a trailing \n, it is alrady handled by the if(*pCurChar == _T('\n')
-	 // and nCurrentLine now equals m_nLineCount
-		ASSERT(nCurrentLine == m_nLineCount);
-		}
-	return currentState;
-	}
-
-/**
- * This helper is used by ParseLines when called with bColor = "true".
- * When recoloring is required as a reaction to user-editing, nColorFromChar states the position
- * from which recoloring is required (caret position)
- * Return value is the updated nColorStart value (which is nColorEnd)
- */
-int CRichEditCtrlEx::ColorRangeHelper(int nColorStart, int nColorEnd, CHARFORMAT charFormat, int nColorFromChar/* = -1 */) {
-
-	if(nColorStart < nColorFromChar)	
-		nColorStart = nColorFromChar;
-	if(nColorStart < nColorEnd) {
-		SetSel(nColorStart, nColorEnd);
-		SetWordCharFormat(charFormat);
-		}
-	return nColorEnd;
-	}
-
-// Upon OnChar or OnChange the control's line count might have been changed
-// (pressing enter, pasting text, deleting text)
-void CRichEditCtrlEx::UpdateLinesArraySize() {
-	int nLineCount = GetLineCount();
-
-	// If new lines have been added to the control - expand the color state array:
-	if(m_nLineCount < nLineCount) {// Reallocate the m_pLinesEndState buffer:
-		int nPrevLineCount = m_nLineCount;
-		m_pLinesEndState = (BYTE*)realloc(m_pLinesEndState, nLineCount * sizeof(BYTE));	ASSERT(m_pLinesEndState != NULL);
-		ZeroMemory(m_pLinesEndState + m_nLineCount * sizeof(BYTE), (nLineCount - m_nLineCount) * sizeof(BYTE));	// Clear color state of new lines
-		m_nLineCount = nLineCount;	// Update line counter to reflect new array size
-
-		long lCharStart	= LineIndex(nPrevLineCount);	// Get first char of new line (using previous m_nLineCount)
-		
-		// Get range of all new lines, starting with current line:
-		CString strCtrlText;
-		int nChars = GetTextRange(lCharStart, GetTextLength(), strCtrlText);
-
-		// Parse color states of all new lines (without coloring)
-		ParseLines((LPCTSTR)strCtrlText, -1, false, nPrevLineCount);
-		}
-	else if(m_nLineCount < nLineCount) {
-		// If lines have been removed - just update the m_nLineCount member. realloc isn't necessary
-		m_nLineCount = nLineCount;
-		}
-	}
-
-/**
- * NOTE: When I press enter on the first line add press chars on the second line, GetLine
- * always returns empty strings???
- */
-int CRichEditCtrlEx::GetLineHelper(int nLineIndex, CString& strLine, int nLineLength /* = -1 */) {
-
-	if(nLineLength == -1)
-		nLineLength = LineLength(LineIndex(nLineIndex));
-	
-	int nChars = GetLine(nLineIndex, strLine.GetBuffer(nLineLength + 3), nLineLength);
-	strLine.ReleaseBuffer(nChars);
-
-	// The RichEditCtrl sometimes appends \r and sometimes \r\n so remove them:
-	TrimRightCrLfHelper(strLine, nLineLength);
-
-	return strLine.GetLength();
-	}
-
-/**
- * The RichEditCtrl sometimes appends \r and sometimes \r\n which interfere with my calculations in ParseLines.
- * However I don't want to allocate a new string with SpanExcluding(_T("\r\n")), so I'm placing NULLs in original string: 
- */
-void CRichEditCtrlEx::TrimRightCrLfHelper(CString& strText, int nLength /* = -1 */) {
-
-	if(nLength == -1)	
-		nLength = strText.GetLength();
-
-	if(nLength >= 1 && (strText[nLength - 1] == _T('\r') || strText[nLength - 1] == _T('\n')))
-		strText.SetAt(nLength - 1, NULL);
-	if(nLength >= 2 && strText[nLength - 2] == _T('\r'))
-		strText.SetAt(nLength - 2, NULL);
-	}
-
-/**
- * Pressing '-' or '!' might bring us to a comment start.
- * Pressing a key inside "<!--" breaks a comment start.
- * Deleting/Pasting inside "<!--" breaks a comment start.
- * Return value: The invalidat position (up to 3 chars before nCharPosition) or -1 of none found
- */
-int CRichEditCtrlEx::FindCommentStartHelper(int nCharPosition) {
-	CString str1backwards, str2backwards, str3backwards;
-	if(nCharPosition > 0)	{int nChars = GetTextRange(nCharPosition - 1 , nCharPosition, str1backwards);}
-	if(nCharPosition > 1)	{int nChars = GetTextRange(nCharPosition - 2 , nCharPosition, str2backwards);}
-	if(nCharPosition > 2)	{int nChars = GetTextRange(nCharPosition - 3 , nCharPosition, str3backwards);}
-	
-	if(str1backwards == _T('<'))			
-		return nCharPosition - 1;
-	else if(str2backwards == _T("<!"))		
-		return nCharPosition - 2;
-	else if(str3backwards == _T("<!-"))	
-		return nCharPosition - 3;
-	else
-		return -1;
-	}
-
-int CRichEditCtrlEx::FindCommentEndHelper(int nCharPosition) {
-	CString str1forward, str2forward;
-    int nChars = GetTextRange(nCharPosition + 1, nCharPosition + 2, str1forward);	// Search for "-->" and this char is the middle '-'
-
-	nChars = GetTextRange(nCharPosition + 1, nCharPosition + 3, str2forward);
-	if(str1forward == _T('>'))				
-		return  nCharPosition + 2;
-	else if(str2forward == _T("->"))		
-		return  nCharPosition + 3;
-	else
-		return -1;
-	}
-
-/**
- * When user presses VK_RETURN or sets caret at begining of line, we must explicitly
- * set the correct color. For example if user writes <a>, then moves caret to line start
- * and presses a char, this char gets the color of the Tag instead of the InNormalText
- */
-void CRichEditCtrlEx::SetFirstLineCharColor(int nLineIndex) {
-
-	// First char of this new line gets the color state of previous line's ending char:
-	FastHtmlColorState prevState = (FastHtmlColorState)(m_pLinesEndState[nLineIndex - 1] &~ LINE_COLORED);
-	if(prevState == epsInTag)
-		{BOOL bRes = SetWordCharFormat(m_cfTags);	ASSERT(bRes);}
-	else if(prevState == epsInDblQuotes)
-		{BOOL bRes = SetWordCharFormat(m_cfQuoted);	ASSERT(bRes);}
-	else if(prevState == epsInComment)
-		{BOOL bRes = SetWordCharFormat(m_cfComment);	ASSERT(bRes);}
-	else
-		{BOOL bRes = SetWordCharFormat(m_cfText);	ASSERT(bRes);}
-	}
-
-/**
- * For back I'm getting OnKeyDown, OnChange, OnChar.
- * For Delete I'm getting OnKeyDown, OnChange.
- * If a text is selected, I'm getting OnKeyDown, OnChar and OnChange.
- *		In this case when base class's OnKeyDown is done, GetWindowText doesn't
- *		return the updated text, so I'm defering the action to OnChange
- */
-void CRichEditCtrlEx::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags) {
-	TRACE(_T("OnKeyDown\n"));
-
-	// TODO: Add your message handler code here and/or call default
-	long lStart = 0, lEnd = 0;
-	GetSel(lStart, lEnd);
-	int nCharPosition = lStart;
-
-	// If caret at begining of line, we must explicitly set the correct color:
-	long lCharStart	= LineIndex();	// Retrieves the character index of the current line (the line that contains the caret)
-	if(lCharStart == lStart)	{
-		int nLineIndex = LineFromChar(lCharStart);
-		SetFirstLineCharColor(nLineIndex);
-	}
-
-	bool bDeferedToOnChange = false;	// When selection is made, we have to defer the action to OnChange
-	
-	CString strDeleted;	// For trapping the deleted char/chars (GetTextRange must be called before base class's OnKeyDown)
-
-	// Pressing ctrl+v invalidates all chars from nCharPosition and might also scroll the control.
-	// OnKeyDown's base class calls OnEnVScroll and finally OnChar. Therefore we can query for updated
-	// line count only after call to base class's OnKeyDown is made (GetWindowText after OnKeyDown returns updated text)
-	bool bIsPasting = false;
-	if(nChar == _T('V') && GetKeyState(VK_CONTROL) & 0x8000)	{//check state of left and right CTRL keys. If high order bit is 1 - indicates the key is down
-		bIsPasting = true;
-		m_bOnEnVscrollDisabled = true;	// Disable OnEnVScroll because we don't have updated line count yet
-		}
-	else {// Not pasted text - check for deleted chars
-		if(lStart != lEnd)	{// A selection is made - pressing any "regular" char would delete the selection.
-		 // However we cannot detect the changes here, so we must defer the action to OnChange
-			int nChars = GetTextRange(lStart, (lEnd == lStart) ? (lEnd + 1) : lEnd, strDeleted);
-			bDeferedToOnChange = true;
-			}
-		else {// The RichEditCtrl seems to add a "regular" char in his OnChar handler.
-		 // However VK_BACK and VK_DELETE seem to be handled here (GetWindowText after OnKeyDown returns updated text)
-			if(nChar == VK_DELETE) {
-				// Trap the about-to-be-deleted char:
-				int nChars = GetTextRange(lStart, lEnd + 1, strDeleted);	// Delete without selection is the same as delete with selecting the next char
-				}
-			else if(nChar == VK_BACK) {// The char just-before-caret-possition will be deleted:
-				int nChars = GetTextRange(lStart - 1 , lStart, strDeleted);
-				nCharPosition--;	// Because after pressing "back" the caret moves to the left
-				}
-			}
-		}
-
-	CRichEditCtrl::OnKeyDown(nChar, nRepCnt, nFlags);
-
-	if(bIsPasting) {
-		// At this point the chars have already been pasted:
-		m_bOnEnVscrollDisabled = false;
-		UpdateLinesArraySize();
-		
-		// Take care of breaking/completing "<!--" combination:
-		int nCommentStart = FindCommentStartHelper(nCharPosition);
-		if(nCommentStart != -1)
-			InvalidateColorStates(nCommentStart);
-		}
-	else if(strDeleted.GetLength()) {// At this point the chars have already been deleted:
-		UpdateLinesArraySize();
-		if(strDeleted.FindOneOf(_T("<>\"")) != -1)	{
-			bDeferedToOnChange ? (m_nOnChangeCharPosition = nCharPosition) : InvalidateColorStates(nCharPosition);
-			}
-		else {// Take care of breaking/completing "<!--" "-->" combinations:
-			int nCommentStart = FindCommentStartHelper(nCharPosition);
-			if(nCommentStart != -1)
-				InvalidateColorStates(nCommentStart);
-			else {
-				int nCommentEnd = FindCommentEndHelper(nCharPosition - 1);	// For VK_DELETE and VK_BACK nCharPosition - 1 should be used
-				if(nCommentEnd != -1)	// Just broke/completed comment end combination
-					InvalidateColorStates(nCommentStart);
-				}
-			}
-		}
-	}
-
-void CRichEditCtrlEx::OnSize(UINT nType, int cx, int cy) {
-	TRACE(_T("OnSize \n"));
-	CRichEditCtrl::OnSize(nType, cx, cy);
-
-	// TODO: Add your message handler code here
-	if(m_nLineCount > 1)	{// m_nLineCount is initialized to 1 in PreSubclassWindow.
-	 // However LoadFile->StreamIn also gets here before m_nLineCount had a chance to be updated,
-	 // so this if is just a workarround for that
-		ColorVisibleLines();
-	}
-}
-
-/**
- * OnEnVscroll handles all cases of change in the view area of the edit control, with one exception -
- * When clicking the scroll bar mouse itself, EN_VSCROLL isn't send.
- * This handler handles this case.
- */
-void CRichEditCtrlEx::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar) {	
-	// TODO: Add your message handler code here and/or call default
-	TRACE(_T("OnVScroll nSBCode = %d\n"), nSBCode);
-	CRichEditCtrl::OnVScroll(nSBCode, nPos, pScrollBar);
-
-	// The SB_THUMBTRACK request code occurs as the user drags the scroll box. 
-	if(nSBCode == SB_THUMBTRACK /*SB_THUMBPOSITION*/)	// Drag scroll box to specified position
-	{
-		SetFocus();	// This is important!!! If the user drags/releases the scroll thumb without focus - the thub jumps and flickers!
-		ColorVisibleLines();
-		}
-	}
-
-/**
- * OnEnVscroll is received when a keyboard event causes a change in the view area of the edit control,
- * for example, pressing HOME, END, PAGE UP, PAGE DOWN, UP ARROW, or DOWN ARROW.
- * However EN_VSCROLL isn't sent when when clicking/dragging the scroll bar mouse itself, which will be handled by OnVScroll.
- * NOTE: Wh might also get here upon ctrl+v when pasted text scrolls the contents.
- */
-void CRichEditCtrlEx::OnEnVscroll() {
-	TRACE(_T("OnEnVScroll\n"));
-	// TODO: Add your control notification handler code here
-
-	if(!m_bOnEnVscrollDisabled)
-		ColorVisibleLines();
-	}
-
-// Activate the background coloring timer if CRichEditCtrl has the focus.
-// Otherwise we'll just wait till WM_SETFOCUS
-void CRichEditCtrlEx::StartColoringTimer() {
-
-	if(m_uiBckgdTimerInterval == 0 || m_nBckgdTimerNumOfLines <= 0)
-		return;	// Timer was disabled by a call to SetBckgdColorTimer
-	
-	m_bBckgdTimerActivated = true;
-	SetTimer(TIMER_BACKGROUNDCOLORING, m_uiBckgdTimerInterval, NULL);
-	}
-
-// CURRENTLY NOT USED
-void CRichEditCtrlEx::StopColoringTimer() {
-
-	if(m_bBckgdTimerActivated)	{// Disable current background coloring timer:
-		BOOL bRes = KillTimer(TIMER_BACKGROUNDCOLORING);	ASSERT(bRes);
-		m_bBckgdTimerActivated = false;
-		}
-	}
-
-int CRichEditCtrlEx::GetTextRange(int nFirst, int nLast, CString& refString) {
-	TEXTRANGE tr;
-
-	tr.chrg.cpMin=0;
-	tr.chrg.cpMax=-1;
-	return SendMessage(EM_GETTEXTRANGE,0,(uint32_t)&tr);
-	}
-
-int CRichEditCtrlEx::CharFromPos(CPoint pt) {
-
-//	return SendMessage(EM_CHARFROMPOS,0,(uint32_t)&pt);
-	return SendMessage(EM_CHARFROMPOS,0,(uint32_t)&pt);
-	}
 
 
 
 BOOL COpenCView::DoSearchText(LPCTSTR lpszFind, BOOL bDown, BOOL bCase, BOOL bWholeWord) {
 
-    if (!lpszFind || lpszFind[0] == _T('\0'))
-        return FALSE;
+  if(!lpszFind || lpszFind[0] == _T('\0'))
+      return FALSE;
 
-    CRichEditCtrl& ctrl = GetRichEditCtrl();
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
 
-    CHARRANGE cr;
-    ctrl.GetSel(cr);
+  CHARRANGE cr;
+  ctrl.GetSel(cr);
 
-    FINDTEXTEXW ft;
-    ::ZeroMemory(&ft, sizeof(ft));
+  FINDTEXTEXW ft;
+  ::ZeroMemory(&ft, sizeof(ft));
 
-    // Buffer fisso per la stringa Unicode
-    WCHAR szUnicodeFind[1024];
+  // Buffer fisso per la stringa Unicode
+  WCHAR szUnicodeFind[1024];
 
 #ifdef _UNICODE
-    // Se il progetto è compilato in Unicode, copia direttamente
-    lstrcpynW(szUnicodeFind, lpszFind, 1024);
+  // Se il progetto è compilato in Unicode, copia direttamente
+  lstrcpynW(szUnicodeFind, lpszFind, 1024);
+  //ft.lpstrText = szUnicodeFind;
 #else
-    // Se il progetto è compilato in ANSI (MBCS), converti manualmente tramite Win32 API
-    ::MultiByteToWideChar(CP_ACP, 0, lpszFind, -1, szUnicodeFind, 1024);
+  // Se il progetto è compilato in ANSI (MBCS), converti manualmente tramite Win32 API
+//  ::MultiByteToWideChar(CP_ACP, 0, lpszFind, -1, szUnicodeFind, 1024);
+	CStringEx Sw(lpszFind /*"culo"*/);		//test
+	WCHAR szUnicode[256];
+	ft.lpstrText=Sw.GetUnicode(szUnicode);
 #endif
 
-    ft.lpstrText = szUnicodeFind;
 
-    // Imposta i flag di ricerca
-    DWORD dwFlags = 0;
-    if (bDown)      dwFlags |= FR_DOWN;
-    if (bCase)      dwFlags |= FR_MATCHCASE;
-    if (bWholeWord) dwFlags |= FR_WHOLEWORD;
+  // Imposta i flag di ricerca
+  DWORD dwFlags = 0;
+  if(bDown)      dwFlags |= FR_DOWN;
+  if(bCase)      dwFlags |= FR_MATCHCASE;
+  if(bWholeWord) dwFlags |= FR_WHOLEWORD;
 
-    if (bDown)
-    {
-        ft.chrg.cpMin = cr.cpMax;
-        ft.chrg.cpMax = -1; // Cerca fino alla fine del documento
-    }
-    else
-    {
-        ft.chrg.cpMin = cr.cpMin;
-        ft.chrg.cpMax = 0;  // Cerca verso l'inizio
-    }
+  if(bDown) {
+    ft.chrg.cpMin = cr.cpMax;
+    ft.chrg.cpMax = -1; // Cerca fino alla fine del documento
+	  }
+  else {
+    ft.chrg.cpMin = cr.cpMin;
+    ft.chrg.cpMax = 0;  // Cerca verso l'inizio
+		}
 
-    // Invio del messaggio nativo Unicode EM_FINDTEXTEXW
-    long nFound = (long)ctrl.SendMessage(EM_FINDTEXTEXW, (WPARAM)dwFlags, (LPARAM)&ft);
+  // Invio del messaggio nativo Unicode EM_FINDTEXTEXW
+  long nFound = (long)ctrl.SendMessage(EM_FINDTEXTEXW, (WPARAM)dwFlags, (LPARAM)&ft);
 
-    if (nFound != -1)
-    {
-        // Seleziona il testo trovato e centra la vista
-        ctrl.SetSel(ft.chrgText);
-        ctrl.SendMessage(EM_HIDESELECTION, FALSE, FALSE);
-        ctrl.SendMessage(EM_SCROLLCARET, 0, 0);
-        return TRUE;
-    }
+  if(nFound != -1) {
+    // Seleziona il testo trovato e centra la vista
+    ctrl.SetSel(ft.chrgText);
+    ctrl.SendMessage(EM_HIDESELECTION, FALSE, FALSE);
+    ctrl.SendMessage(EM_SCROLLCARET, 0, 0);
+    return TRUE;
+		}
 
-    AfxMessageBox(_T("Testo non trovato."), MB_OK | MB_ICONINFORMATION);
-    return FALSE;
-}
+  AfxMessageBox(_T("Testo non trovato."), MB_OK | MB_ICONINFORMATION);
+  return FALSE;
+	}
 
 CString COpenCView::GetRichTextSelection() {
-    CRichEditCtrl& ctrl = GetRichEditCtrl();
-    
-    CHARRANGE cr;
-    ctrl.GetSel(cr);
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
+  
+  CHARRANGE cr;
+  ctrl.GetSel(cr);
 
-    long nLen = cr.cpMax - cr.cpMin;
-    if (nLen <= 0)
-        return _T("");
+  long nLen = cr.cpMax - cr.cpMin;
+  if (nLen <= 0)
+      return _T("");
 
-    // Allocazione di sicurezza: raddoppiamo la dimensione in byte per gestire 
-    // l'eventuale terminatore Unicode a 16-bit che RichEdit scrive nel buffer
-    int nBufferChars = (nLen + 2) * 2; 
-    TCHAR* pBuffer = new TCHAR[nBufferChars];
-    ::ZeroMemory(pBuffer, sizeof(TCHAR) * nBufferChars);
+  // Allocazione di sicurezza: raddoppiamo la dimensione in byte per gestire 
+  // l'eventuale terminatore Unicode a 16-bit che RichEdit scrive nel buffer
+  int nBufferChars = (nLen + 2) * 2; 
+  TCHAR* pBuffer = new TCHAR[nBufferChars];
+  ::ZeroMemory(pBuffer, sizeof(TCHAR) * nBufferChars);
 
-    // Invia EM_GETSELTEXT nativo
-    ctrl.SendMessage(EM_GETSELTEXT, 0, (LPARAM)pBuffer);
+  // Invia EM_GETSELTEXT nativo
+  ctrl.SendMessage(EM_GETSELTEXT, 0, (LPARAM)pBuffer);
 
-    CString strResult;
+  CString strResult;
 
 #ifdef _UNICODE
     strResult = pBuffer;
 #else
     // Se il controllo ha risposto in WCHAR (Unicode), convertiamo in ANSI
-    if (pBuffer[1] == '\0' && pBuffer[0] != '\0')
-    {
+    if (pBuffer[1] == '\0' && pBuffer[0] != '\0') {
         // Il buffer contiene una stringa WCHAR (Unicode)
         WCHAR* pwstr = (WCHAR*)pBuffer;
         int nAnsiLen = ::WideCharToMultiByte(CP_ACP, 0, pwstr, -1, NULL, 0, NULL, NULL);
-        if (nAnsiLen > 0)
-        {
+        if (nAnsiLen > 0) {
             char* pAnsiBuf = new char[nAnsiLen + 1];
             ::ZeroMemory(pAnsiBuf, nAnsiLen + 1);
             ::WideCharToMultiByte(CP_ACP, 0, pwstr, -1, pAnsiBuf, nAnsiLen, NULL, NULL);
             strResult = pAnsiBuf;
             delete[] pAnsiBuf;
         }
-    }
-    else
-    {
+			}
+    else {
         // Il buffer contiene già caratteri ANSI standard
         strResult = pBuffer;
     }
 #endif
 
-    delete[] pBuffer; // Ora la memoria viene liberata in modo sicuro
-    return strResult;
-}
+  delete[] pBuffer; // Ora la memoria viene liberata in modo sicuro
+  return strResult;
+	}
 
 
 void COpenCView::SelectWordAtCaret() {
-    CRichEditCtrl& ctrl = GetRichEditCtrl();
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
 
-    CHARRANGE cr;
-    ctrl.GetSel(cr);
+  CHARRANGE cr;
+  ctrl.GetSel(cr);
 
-    if (cr.cpMin != cr.cpMax)
-        return; // C'è già una selezione
+  if(cr.cpMin != cr.cpMax)
+    return; // C'è già una selezione
 
-    long nPos = cr.cpMin;
-    long nLen = ctrl.GetTextLength();
+  long nPos = cr.cpMin;
+  long nLen = ctrl.GetTextLength();
 
-    if (nLen == 0)
-        return;
+  if(nLen == 0)
+    return;
 
-    // Leggiamo un piccolo blocco di testo intorno al cursore (es. 128 caratteri)
-    long nStartBuf = (nPos > 64) ? (nPos - 64) : 0;
-    long nEndBuf   = (nPos + 64 < nLen) ? (nPos + 64) : nLen;
-    long nBufSize  = nEndBuf - nStartBuf;
+  // Leggiamo un piccolo blocco di testo intorno al cursore (es. 128 caratteri)
+  long nStartBuf = (nPos > 64) ? (nPos - 64) : 0;
+  long nEndBuf   = (nPos + 64 < nLen) ? (nPos + 64) : nLen;
+  long nBufSize  = nEndBuf - nStartBuf;
 
-    TCHAR* pBuf = new TCHAR[nBufSize + 1];
-    ::ZeroMemory(pBuf, sizeof(TCHAR) * (nBufSize + 1));
+/*  TCHAR* pBuf = new TCHAR[nBufSize + 1];
+  ::ZeroMemory(pBuf, sizeof(TCHAR) * (nBufSize + 1));
 
-    TEXTRANGE tr;
-    tr.chrg.cpMin = nStartBuf;
-    tr.chrg.cpMax = nEndBuf;
-    tr.lpstrText  = pBuf;
+  TEXTRANGE tr;
+  tr.chrg.cpMin = nStartBuf;
+  tr.chrg.cpMax = nEndBuf;
+  tr.lpstrText  = pBuf;
 
-    ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
+  ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);*/
 
-    // Indice relativo al buffer
-    long nRelPos = nPos - nStartBuf;
+	CString pBuf;
+	GetTextRange(nStartBuf,nEndBuf,pBuf);
 
-    // Se siamo su uno spazio/delimitatore, avanziamo fino alla prima lettera valida
-    while (nRelPos < nBufSize && _istspace(pBuf[nRelPos]))
-    {
-        nRelPos++;
+  // Indice relativo al buffer
+  long nRelPos = nPos - nStartBuf;
+
+  // Se siamo su uno spazio/delimitatore, avanziamo fino alla prima lettera valida
+  while(nRelPos < nBufSize && _istspace(pBuf[(int)nRelPos]))
+    nRelPos++;
+
+  if(nRelPos >= nBufSize) {
+//    delete[] pBuf;
+    return;
+		}
+
+  // Troviamo l'inizio della parola andando a sinistra
+  long nSelStartRel = nRelPos;
+  while(nSelStartRel > 0 && (_istalnum(pBuf[(int)nSelStartRel - 1]) || pBuf[(int)nSelStartRel - 1] == _T('_'))) {
+    nSelStartRel--;
+	  }
+
+  // Troviamo la fine della parola andando a destra
+  long nSelEndRel = nRelPos;
+  while(nSelEndRel < nBufSize && (_istalnum(pBuf[(int)nSelEndRel]) || pBuf[(int)nSelEndRel] == _T('_'))) {
+    nSelEndRel++;
+		}
+
+  // Convertiamo gli indici relativi in posizioni assolute del documento
+  long nFinalStart = nStartBuf + nSelStartRel;
+  long nFinalEnd   = nStartBuf + nSelEndRel;
+
+  if(nFinalEnd > nFinalStart) {
+    ctrl.SetSel(nFinalStart, nFinalEnd);
+		}
+
+//  delete[] pBuf;
+	}
+
+
+// testo colorato
+void COpenCView::HighlightVisibleRange() {
+  CRichEditCtrl& edit = GetRichEditCtrl();
+  COpenCDoc *pDoc = GetDocument();
+	CStringEx S;
+
+	if(!theApp.TestoColorato)
+		return;
+	S.SplitPath(pDoc->GetTitle(),4);
+	if(S.CompareNoCase(".C") && S.CompareNoCase(".H"))		// per ora :) poi ampliare e gestire
+		return;
+
+	DWORD dwOldEventMask = edit.SetEventMask(edit.GetEventMask() & ~ENM_CHANGE);
+
+	// 1. Blocco del Rendering visivo
+  edit.SetRedraw(FALSE);
+// 1. Salviamo lo stato di modifica reale del documento
+  BOOL bOriginallyModified = pDoc->IsModified();
+
+  // 2. Salvataggio della selezione corrente e dello scroll per ripristinarli dopo
+  CHARRANGE crOriginal;
+  edit.GetSel(crOriginal);
+  
+  int nFirstVisibleLine = edit.GetFirstVisibleLine();
+
+  // 3. Calcolo dell'intervallo di caratteri VISIBILI
+/*  int nStartChar = edit.LineIndex(nFirstVisibleLine);
+  int nLastVisibleLine = nFirstVisibleLine + GetVisibleLineCount();
+  int nEndChar = edit.LineIndex(nLastVisibleLine + 1);
+  
+  if(nEndChar == -1) // Se siamo alla fine del documento
+    nEndChar = edit.GetTextLength();*/
+
+// 3. Calcolo dell'intervallo di caratteri VISIBILI
+	int nStartChar = edit.LineIndex(nFirstVisibleLine);
+	if (nStartChar == -1) nStartChar = 0;
+
+	// Prendiamo qualche riga in più di margine (buffer di sicurezza)
+	int nLastVisibleLine = nFirstVisibleLine + GetVisibleLineCount() + 2; 
+	int nTotalLines = edit.GetLineCount();
+
+	if(nLastVisibleLine >= nTotalLines)
+			nLastVisibleLine = nTotalLines - 1;
+
+	int nLastLineStart = edit.LineIndex(nLastVisibleLine);
+	int nEndChar = edit.GetTextLength();
+
+	if(nLastLineStart != -1) {
+    // L'ultimo carattere è l'inizio dell'ultima riga visibile + la sua lunghezza
+  nEndChar = nLastLineStart + edit.LineLength(nLastLineStart);
+	}
+
+  // 4. Estrazione del buffer di testo visibile
+  CString strText;
+  
+  // Legge soltanto la porzione visibile per il parsing
+// 4. Estrazione del buffer di testo visibile
+	GetTextRange(nStartChar, nEndChar, strText);
+//  edit.GetTextRange(nStartChar, nEndChar, strText.GetBuffer(nEndChar - nStartChar + 1)); non c'è
+//  strText.ReleaseBuffer();
+
+  // 5. Reset del colore base del blocco visibile (es. Nero per testo normale)
+  CHARFORMAT2 cfDefault;
+  ZeroMemory(&cfDefault, sizeof(cfDefault));
+  cfDefault.cbSize = sizeof(cfDefault);
+  cfDefault.dwMask = CFM_COLOR;
+  cfDefault.crTextColor = RGB(0, 0, 0); // Colore default
+  
+  edit.SetSel(nStartChar, nEndChar);
+  edit.SetSelectionCharFormat(cfDefault);
+
+  // 6. Esecuzione del Parser Lexer (C/C++)
+  ParseAndApplyHighlighting(strText, nStartChar);
+
+  // 7. Ripristino della selezione iniziale e dello Scroll
+  edit.SetSel(crOriginal);
+  edit.LineScroll(nFirstVisibleLine - edit.GetFirstVisibleLine());
+
+  // 8. Sblocco e Redraw finale in un unico frame
+  edit.SetRedraw(TRUE);
+  edit.Invalidate();
+
+  // Ripristina la maschera eventi
+  edit.SetEventMask(dwOldEventMask);
+
+	// Ripristiniamo il flag originale! 
+  // Se il file era pulito, TORNA pulito senza asterisco '*'
+  pDoc->SetModifiedFlag(bOriginallyModified);
+
+	}
+
+void COpenCView::ParseAndApplyHighlighting(const CString& strText, int nGlobalOffset) {
+  CRichEditCtrl& edit = GetRichEditCtrl();
+
+  // Tabella Parole Chiave C/C++
+  static const LPCTSTR szKeywords[] = {
+    _T("if"), _T("else"), _T("for"), _T("while"), _T("return"), _T("void"),
+    _T("int"), _T("char"), _T("float"), _T("double"), _T("struct"), _T("class"),
+    _T("const"), _T("static"), _T("switch"), _T("case"), _T("typedef"), 
+		_T("defined"), // andrebbe viola pure questa??
+		NULL
+    };
+
+  // Stili per i Token
+  CHARFORMAT2 cfKeyword = CreateColorFormat(RGB(0, 0, 255));      // Blu
+  CHARFORMAT2 cfComment = CreateColorFormat(RGB(0, 128, 0));     // Verde
+  CHARFORMAT2 cfString  = CreateColorFormat(RGB(163, 21, 21));   // Rosso/Marrone
+  CHARFORMAT2 cfPrep    = CreateColorFormat(RGB(128, 0, 128));   // Viola (#include, #define)
+
+  int nLen = strText.GetLength();
+  int i = 0;
+
+  while(i < nLen)   {
+    // A. Gestione Commenti //
+    if(strText[i] == _T('/') && i + 1 < nLen && strText[i + 1] == _T('/')) {
+      int nStart = i;
+      while(i < nLen && strText[i] != _T('\n') && strText[i] != _T('\r'))
+        i++;
+
+      ApplyStyleToRange(nGlobalOffset + nStart, nGlobalOffset + i, cfComment);
+      continue;
+			}
+
+    // B. Gestione Stringhe "..."
+    if(strText[i] == _T('"')) {
+      int nStart = i++;
+      while(i < nLen && strText[i] != _T('"') && strText[i] != _T('\n')) {
+        if(strText[i] == _T('\\') && i + 1 < nLen) 
+					i++; // Escape \"
+        i++;
+        }
+      if(i < nLen && strText[i] == _T('"')) 
+				i++;
+
+      ApplyStyleToRange(nGlobalOffset + nStart, nGlobalOffset + i, cfString);
+      continue;
+	    }
+
+    // C. Preprocessore #include / #define
+    if(strText[i] == _T('#')) {
+      int nStart = i;
+      while(i < nLen && (_istalnum(strText[i]) || strText[i] == _T('#')))
+        i++;
+
+      ApplyStyleToRange(nGlobalOffset + nStart, nGlobalOffset + i, cfPrep);
+      continue;
+			}
+
+    // D. Parole Chiave (Keywords) e Identificatori
+    if(_istalpha(strText[i]) || strText[i] == _T('_')) {
+      int nStart = i;
+	    while(i < nLen && (_istalnum(strText[i]) || strText[i] == _T('_')))
+        i++;
+
+      CString strWord = strText.Mid(nStart, i - nStart);
+      if(IsKeyword(strWord, szKeywords))
+        ApplyStyleToRange(nGlobalOffset + nStart, nGlobalOffset + i, cfKeyword);
+      continue;
+	    }
+
+    i++;
     }
+	}
 
-    if (nRelPos >= nBufSize)
-    {
-        delete[] pBuf;
-        return;
+CHARFORMAT2 COpenCView::CreateColorFormat(COLORREF color) {
+  CHARFORMAT2 cf;
+
+  ZeroMemory(&cf, sizeof(cf));
+  cf.cbSize = sizeof(cf);
+  cf.dwMask = CFM_COLOR;
+  cf.crTextColor = color;
+  return cf;
+	}
+
+void COpenCView::ApplyStyleToRange(int nStart, int nEnd, const CHARFORMAT2& cf) {
+
+  GetRichEditCtrl().SetSel(nStart, nEnd);
+  GetRichEditCtrl().SetSelectionCharFormat((CHARFORMAT2&)cf);
+	}
+
+int COpenCView::GetVisibleLineCount() {
+  CRichEditCtrl& edit = GetRichEditCtrl();
+
+  CRect rect;
+  edit.GetClientRect(&rect);
+
+  if(rect.Height() <= 0)
+    return 0;
+
+  // Prendiamo il primo carattere in alto a sinistra
+  int nFirstChar = CharFromPos(CPoint(0, 0));
+  // Prendiamo il carattere nell'angolo in basso a destra
+  int nLastChar = CharFromPos(CPoint(rect.right - 1, rect.bottom - 1));
+
+  if(nFirstChar < 0) 
+		return 0;
+  if(nLastChar < 0) 
+		nLastChar = edit.GetTextLength();
+
+  int nFirstLine = edit.LineFromChar(nFirstChar);
+  int nLastLine = edit.LineFromChar(nLastChar);
+
+  // Il numero di righe visibili è la differenza tra l'ultima e la prima riga + 1
+  int nVisible = nLastLine - nFirstLine + 1;
+  
+  // Un piccolo margine di sicurezza (+1 riga) per non tagliare mai l'ultima riga parziale
+  return (nVisible > 0) ? (nVisible + 1) : 1;
+	}
+/*int COpenCView::GetVisibleLineCount() {		// secondo gemini il font non è sempre valido... bah
+  CRichEditCtrl& edit = GetRichEditCtrl();
+
+  CRect rect;
+  edit.GetClientRect(&rect);
+
+  // Otteniamo l'altezza in pixel di una riga di testo usando le metriche dei font (TEXTMETRIC)
+  CClientDC dc(&edit);
+  CFont* pOldFont = dc.SelectObject(edit.GetFont());
+
+  TEXTMETRIC tm;
+  dc.GetTextMetrics(&tm);
+  dc.SelectObject(pOldFont);
+
+  int nLineHeight = tm.tmHeight + tm.tmExternalLeading;
+  if(nLineHeight <= 0)
+      nLineHeight = 16; // Valore di fallback di sicurezza
+
+  return rect.Height() / nLineHeight;
+	}*/
+
+BOOL COpenCView::IsKeyword(const CString& strWord, const LPCTSTR szKeywords[]) {
+
+  for(int i=0; szKeywords[i] != NULL; i++) {
+    // In C/C++ le parole chiave sono case-sensitive (es. "if", non "IF")
+    if(!strWord.Compare(szKeywords[i]))
+      return TRUE;
     }
+  return FALSE;
+	}
 
-    // Troviamo l'inizio della parola andando a sinistra
-    long nSelStartRel = nRelPos;
-    while (nSelStartRel > 0 && (_istalnum(pBuf[nSelStartRel - 1]) || pBuf[nSelStartRel - 1] == _T('_')))
-    {
-        nSelStartRel--;
-    }
+void COpenCView::GetTextRange(int nStart, int nEnd, CString& strText) {
 
-    // Troviamo la fine della parola andando a destra
-    long nSelEndRel = nRelPos;
-    while (nSelEndRel < nBufSize && (_istalnum(pBuf[nSelEndRel]) || pBuf[nSelEndRel] == _T('_')))
-    {
-        nSelEndRel++;
-    }
+  if(nEnd <= nStart) {
+    strText.Empty();
+    return;
+		}
 
-    // Convertiamo gli indici relativi in posizioni assolute del documento
-    long nFinalStart = nStartBuf + nSelStartRel;
-    long nFinalEnd   = nStartBuf + nSelEndRel;
+  int nLen = nEnd - nStart;
+  
+  // Allocazione del buffer temporaneo (+1 per il carattere di fine stringa \0)
+  wchar_t *pBuffer = new wchar_t[nLen + 1];
+  ZeroMemory(pBuffer, (nLen + 1) * sizeof(TCHAR));
 
-    if (nFinalEnd > nFinalStart)
-    {
-        ctrl.SetSel(nFinalStart, nFinalEnd);
-    }
+  TEXTRANGEW tr;
+  tr.chrg.cpMin = nStart;
+  tr.chrg.cpMax = nEnd;
+  tr.lpstrText  = pBuffer;
 
-    delete[] pBuf;
-}
+  // Invia il messaggio nativo Win32 al controllo RichEdit
+  GetRichEditCtrl().SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
+	CStringEx Sw(pBuffer);		//test
+	strText=Sw.GetASCII();
 
+  strText = pBuffer;
+  delete[] pBuffer;
+	}
 
 // ------------------------------------------------------------------
 // GESTORE DEL MESSAGGIO INVIATO DALLA DIALOG (Trova Successivo / Chiusura)
@@ -1831,23 +1248,23 @@ LRESULT COpenCView::OnFindReplaceCmd(WPARAM wParam, LPARAM lParam) {
 
   CFindReplaceDialog* pDlg = CFindReplaceDialog::GetNotifier(lParam);
 
-  if (!pDlg)
+  if(!pDlg)
       return 0;
 
   // Se l'utente ha chiuso la finestra
-  if (pDlg->IsTerminating())    {
+  if(pDlg->IsTerminating())    {
       m_pFindDlg = NULL;
       return 0;
 		}
 
   // Se l'utente ha premuto "Trova Successivo"
-  if (pDlg->FindNext())    {
-      m_strLastSearch = pDlg->GetFindString();
-      m_bMatchCase = pDlg->MatchCase();
-      m_bWholeWord = pDlg->MatchWholeWord();
-      BOOL bDown = pDlg->SearchDown();
+  if(pDlg->FindNext())    {
+    m_strLastSearch = pDlg->GetFindString();
+    m_bMatchCase = pDlg->MatchCase();
+    m_bWholeWord = pDlg->MatchWholeWord();
+    BOOL bDown = pDlg->SearchDown();
 
-      DoSearchText(m_strLastSearch, bDown, m_bMatchCase, m_bWholeWord);
+    DoSearchText(m_strLastSearch, bDown, m_bMatchCase, m_bWholeWord);
 		}
 
   return 0;
@@ -1858,121 +1275,480 @@ LRESULT COpenCView::OnFindReplaceCmd(WPARAM wParam, LPARAM lParam) {
 // ------------------------------------------------------------------
 void COpenCView::OnEditFind() {
 
-    // Se la dialog è già aperta, portala in primo piano
-    if (m_pFindDlg != NULL) {
-        m_pFindDlg->SetActiveWindow();
-        return;
+  // Se la dialog è già aperta, portala in primo piano
+  if(m_pFindDlg) {
+    m_pFindDlg->SetActiveWindow();
+    return;
     }
 
-    // Se c'è del testo selezionato, usalo come testo predefinito nella Dialog
-    CString strInitText = GetRichEditCtrl().GetSelText();
-    strInitText.TrimLeft();
-    strInitText.TrimRight();
-    if (!strInitText.IsEmpty())    {
-        m_strLastSearch = strInitText;
-    }
+  // Se c'è del testo selezionato, usalo come testo predefinito nella Dialog
+  CString strInitText = GetRichEditCtrl().GetSelText();
+  strInitText.TrimLeft();
+  strInitText.TrimRight();
+  if (!strInitText.IsEmpty())    {
+    m_strLastSearch = strInitText;
+	  }
 
-    // Crea e mostra la finestra di dialogo modello di ricerca
-    m_pFindDlg = new CFindReplaceDialog();
-    m_pFindDlg->Create(TRUE, m_strLastSearch, NULL, FR_DOWN, this);
+  // Crea e mostra la finestra di dialogo modello di ricerca
+  m_pFindDlg = new CFindReplaceDialog();
+  m_pFindDlg->Create(TRUE, m_strLastSearch, NULL, FR_DOWN, this);
 	}
 
 
 void COpenCView::OnEditRepeat() {
 
 // Se non è mai stata fatta una ricerca e m_strLastSearch è vuota, 
-    // proviamo prima a prendere il testo eventualmente selezionato
-    if (m_strLastSearch.IsEmpty())    {
-        m_strLastSearch = GetRichTextSelection();
-        m_strLastSearch.TrimLeft();
-        m_strLastSearch.TrimRight();
-    }
+  // proviamo prima a prendere il testo eventualmente selezionato
+  if (m_strLastSearch.IsEmpty())    {
+    m_strLastSearch = GetRichTextSelection();
+    m_strLastSearch.TrimLeft();
+    m_strLastSearch.TrimRight();
+		}
 
-    // Se abbiamo una stringa di ricerca valida, cerchiamo l'occorrenza successiva
-    if (!m_strLastSearch.IsEmpty())    {
-        DoSearchText(m_strLastSearch, TRUE /* Down */, m_bMatchCase, m_bWholeWord);
-    }
-    else    {
-        // Nessun testo da cercare disponibile: apri la dialog o avvisa
-        OnEditFind();
+  // Se abbiamo una stringa di ricerca valida, cerchiamo l'occorrenza successiva
+  if (!m_strLastSearch.IsEmpty())    {
+    DoSearchText(m_strLastSearch, TRUE /* Down */, m_bMatchCase, m_bWholeWord);
+		}
+  else {
+    // Nessun testo da cercare disponibile: apri la dialog o avvisa
+    OnEditFind();
     }	
 	}
 
 void COpenCView::OnUpdateEditRepeat(CCmdUI* pCmdUI) {
 	// TODO: Add your command update UI handler code here
 	
-}
+	}
 
 void COpenCView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags) {
+  BOOL bCtrlPressed  = (::GetKeyState(VK_CONTROL) < 0);
+  BOOL bShiftPressed = (::GetKeyState(VK_SHIFT) < 0);
 
-{
-    BOOL bCtrlPressed  = (::GetKeyState(VK_CONTROL) < 0);
-    BOOL bShiftPressed = (::GetKeyState(VK_SHIFT) < 0);
+  if(bCtrlPressed && (nChar == VK_RIGHT || nChar == VK_LEFT)) {
+    CRichEditCtrl& ctrl = GetRichEditCtrl();
+    
+    CHARRANGE cr;
+    ctrl.GetSel(cr);
 
-    if (bCtrlPressed && (nChar == VK_RIGHT || nChar == VK_LEFT))
+    long nPos = (nChar == VK_RIGHT) ? cr.cpMax : cr.cpMin;
+    long nLen = ctrl.GetTextLength();
+
+    if(nLen == 0) 
+			return;
+
+    // Blocco di lettura (128 caratteri prima e dopo)
+    long nStartBuf = (nPos > 128) ? (nPos - 128) : 0;
+    long nEndBuf   = (nPos + 128 < nLen) ? (nPos + 128) : nLen;
+    long nBufSize  = nEndBuf - nStartBuf;
+
+    // Allocazione WCHAR esplicita per evitare corruzione della memoria con RichEdit 5.0
+    WCHAR* pBuf = new WCHAR[nBufSize + 1];
+    ::ZeroMemory(pBuf, sizeof(WCHAR) * (nBufSize + 1));
+
+    TEXTRANGEW tr;
+    tr.chrg.cpMin = nStartBuf;
+    tr.chrg.cpMax = nEndBuf;
+    tr.lpstrText  = pBuf;
+
+    // Usiamo il messaggio nativo Unicode per non sforare nei buffer
+    ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
+
+    long nRelPos = nPos - nStartBuf;
+
+    if(nChar == VK_RIGHT)        {
+      // 1. Consuma prima tutti i caratteri della parola/identificatore su cui ci troviamo
+      while(nRelPos < nBufSize && (iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
+        nRelPos++;
+
+      // 2. Consuma gli spazi o delimitatori successivi per fermarsi ALL'INIZIO della parola dopo
+      while (nRelPos < nBufSize && !(iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
+        nRelPos++;
+	    }
+    else // VK_LEFT
     {
-        CRichEditCtrl& ctrl = GetRichEditCtrl();
-        
-        CHARRANGE cr;
-        ctrl.GetSel(cr);
+        // Retrocedi se siamo su uno spazio/delimitatore
+      while(nRelPos > 0 && !(iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
+        nRelPos--;
 
-        long nPos = (nChar == VK_RIGHT) ? cr.cpMax : cr.cpMin;
-        long nLen = ctrl.GetTextLength();
+        // Retrocedi finché trova caratteri alfanumerici OPPURE '_'
+      while(nRelPos > 0 && (iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
+        nRelPos--;
+      }
 
-        if (nLen == 0) return;
+    long nNewPos = nStartBuf + nRelPos;
 
-        // Blocco di lettura (128 caratteri prima e dopo)
-        long nStartBuf = (nPos > 128) ? (nPos - 128) : 0;
-        long nEndBuf   = (nPos + 128 < nLen) ? (nPos + 128) : nLen;
-        long nBufSize  = nEndBuf - nStartBuf;
+    delete[] pBuf; // Deallocazione sicura
 
-        // Allocazione WCHAR esplicita per evitare corruzione della memoria con RichEdit 5.0
-        WCHAR* pBuf = new WCHAR[nBufSize + 1];
-        ::ZeroMemory(pBuf, sizeof(WCHAR) * (nBufSize + 1));
+    // Gestione selezione (Ctrl+Shift+Freccia) o semplice movimento del cursore
+    if (bShiftPressed)
+      ctrl.SetSel(cr.cpMin, nNewPos);
+    else
+      ctrl.SetSel(nNewPos, nNewPos);
 
-        TEXTRANGEW tr;
-        tr.chrg.cpMin = nStartBuf;
-        tr.chrg.cpMax = nEndBuf;
-        tr.lpstrText  = pBuf;
-
-        // Usiamo il messaggio nativo Unicode per non sforare nei buffer
-        ctrl.SendMessage(EM_GETTEXTRANGE, 0, (LPARAM)&tr);
-
-        long nRelPos = nPos - nStartBuf;
-
-        if (nChar == VK_RIGHT)        {
-            // 1. Consuma prima tutti i caratteri della parola/identificatore su cui ci troviamo
-            while (nRelPos < nBufSize && (iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
-                nRelPos++;
-
-            // 2. Consuma gli spazi o delimitatori successivi per fermarsi ALL'INIZIO della parola dopo
-            while (nRelPos < nBufSize && !(iswalnum(pBuf[nRelPos]) || pBuf[nRelPos] == L'_'))
-                nRelPos++;
-        }
-        else // VK_LEFT
-        {
-            // Retrocedi se siamo su uno spazio/delimitatore
-            while (nRelPos > 0 && !(iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
-                nRelPos--;
-
-            // Retrocedi finché trova caratteri alfanumerici OPPURE '_'
-            while (nRelPos > 0 && (iswalnum(pBuf[nRelPos - 1]) || pBuf[nRelPos - 1] == L'_'))
-                nRelPos--;
-        }
-
-        long nNewPos = nStartBuf + nRelPos;
-
-        delete[] pBuf; // Deallocazione sicura
-
-        // Gestione selezione (Ctrl+Shift+Freccia) o semplice movimento del cursore
-        if (bShiftPressed)
-            ctrl.SetSel(cr.cpMin, nNewPos);
-        else
-            ctrl.SetSel(nNewPos, nNewPos);
-
-        return; // Intercetta l'evento ed evita la gestione di default di RichEdit
+    return; // Intercetta l'evento ed evita la gestione di default di RichEdit
+	  }
+// 2. Tasti che causano scorrimento o cambio di riga
+  else if(nChar == VK_UP || nChar == VK_DOWN || 
+    nChar == VK_PRIOR || nChar == VK_NEXT || // PageUp / PageDown
+    nChar == VK_HOME || nChar == VK_END) {
+		HighlightVisibleRange(); // Ricoloriamo il blocco visibile appena cambia lo scroll
     }
-    }
-    // Per tutti gli altri tasti, lascia la gestione standard
-    CRichEditView::OnKeyDown(nChar, nRepCnt, nFlags);
+
+  // Per tutti gli altri tasti, lascia la gestione standard
+  CRichEditView::OnKeyDown(nChar, nRepCnt, nFlags);
 	}
+
+
+void COpenCView::OnSize(UINT nType, int cx, int cy) {
+
+  // Lasciamo che la View ridimensioni il RichEdit normalmente
+  CRichEditView::OnSize(nType, cx, cy);
+	}
+
+// Quando lo schermo scorre o il testo cambia, ridisegniamo la gutter
+void COpenCView::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar) {
+
+	CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();
+
+	CWnd* pPaneWnd = pSplitter->GetPane(0,0);
+  CGutterWnd *w = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+  w->Invalidate(); // Richiede un nuovo WM_PAINT per aggiornare la gutter
+	pPaneWnd = pSplitter->GetPane(1,0);
+  w = DYNAMIC_DOWNCAST(CGutterWnd, pPaneWnd);
+  w->Invalidate(); // Richiede un nuovo WM_PAINT per aggiornare la gutter
+
+  CRichEditView::OnVScroll(nSBCode, nPos, pScrollBar);
+	HighlightVisibleRange(); // Ricoloriamo il blocco visibile appena cambia lo scroll
+	}
+
+void COpenCView::OnEnVScroll() {
+
+  Invalidate(); // Richiede un nuovo WM_PAINT per aggiornare la gutter
+	}	
+
+void COpenCView::OnContextMenu(CWnd* pWnd, CPoint point){
+
+  // Se scatenato da tastiera (Shift+F10 / tasto menu), usiamo la posizione del caret
+  if (point.x == -1 && point.y == -1)    {
+    POINT pt;
+    ::GetCaretPos(&pt);
+    ClientToScreen(&pt);
+    point = pt;
+		}
+
+  // Convertiamo le coordinate di schermo in coordinate client per il RichEditCtrl
+  CPoint ptClient = point;
+  GetRichEditCtrl().ScreenToClient(&ptClient);
+
+  // Estragg il nome del file / parola sotto il punto cliccato
+  CString strWord = GetWordAtPoint(ptClient);
+
+  CMenu menu;
+  if (menu.CreatePopupMenu())    {
+    // 1. Comandi di modifica standard
+    CHARRANGE cr;
+    GetRichEditCtrl().GetSel(cr);
+    BOOL bHasSelection = (cr.cpMin != cr.cpMax);
+
+    menu.AppendMenu(MF_STRING | (GetRichEditCtrl().CanUndo() ? MF_ENABLED : MF_GRAYED), ID_EDIT_UNDO, _T("&Annulla"));
+    menu.AppendMenu(MF_SEPARATOR);
+    menu.AppendMenu(MF_STRING | (bHasSelection ? MF_ENABLED : MF_GRAYED), ID_EDIT_CUT, _T("Ta&glia"));
+    menu.AppendMenu(MF_STRING | (bHasSelection ? MF_ENABLED : MF_GRAYED), ID_EDIT_COPY, _T("&Copia"));
+    menu.AppendMenu(MF_STRING | (GetRichEditCtrl().CanPaste() ? MF_ENABLED : MF_GRAYED), ID_EDIT_PASTE, _T("&Incolla"));
+
+    // 2. Opzione custom per l'include
+    if (!strWord.IsEmpty())        {
+        if (strWord.Right(2).CompareNoCase(_T(".h")) == 0 || 
+            strWord.Right(4).CompareNoCase(_T(".hpp")) == 0 ||
+            strWord.Right(2).CompareNoCase(_T(".c")) == 0 ||
+            strWord.Right(4).CompareNoCase(_T(".cpp")) == 0)
+        {
+            menu.AppendMenu(MF_SEPARATOR);
+            CString strLabel;
+            strLabel.Format(_T("Apri '%s'"), (LPCTSTR)strWord);
+						m_strSelectedInclude=strWord;
+            
+            // ID_OPEN_INCLUDE_FILE da definire in resource.h
+            menu.AppendMenu(MF_STRING, ID_OPEN_INCLUDE_FILE, strLabel);
+        }
+			}
+
+    // Mostra il menu contestuale
+    menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
+    }
+	}
+
+CString COpenCView::GetWordAtPoint(CPoint ptClient) {
+  CRichEditCtrl& ctrl = GetRichEditCtrl();
+
+  int nCharIndex = CharFromPos(ptClient);
+  if (nCharIndex < 0)
+      return _T("");
+
+  int nLineIndex = ctrl.LineFromChar(nCharIndex);
+  int nLineStart = ctrl.LineIndex(nLineIndex);
+  int nLineLen = ctrl.LineLength(nCharIndex);
+
+  if (nLineLen <= 0)
+      return _T("");
+
+  CString strLine;
+  ctrl.GetLine(nLineIndex, strLine.GetBuffer(nLineLen + 1), nLineLen);
+  strLine.ReleaseBuffer(nLineLen);
+
+  int nPosInLine = nCharIndex - nLineStart;
+  if (nPosInLine < 0 || nPosInLine >= strLine.GetLength())
+      return _T("");
+
+  // --- Espansione del controllo senza la lambda ---
+  int nStart = nPosInLine;
+  while (nStart > 0)  {
+      TCHAR c = strLine[nStart - 1];
+      if (_istalnum(c) || c == _T('.') || c == _T('_') || c == _T('\\') || c == _T('/'))
+          nStart--;
+      else
+          break;
+		}
+
+  int nEnd = nPosInLine;
+  while (nEnd < strLine.GetLength())  {
+      TCHAR c = strLine[nEnd];
+      if (_istalnum(c) || c == _T('.') || c == _T('_') || c == _T('\\') || c == _T('/'))
+          nEnd++;
+      else
+          break;
+		}
+
+  return strLine.Mid(nStart, nEnd - nStart);
+	}
+
+void COpenCView::OnOpenIncludeFile() {
+  COpenCDoc* pDoc = GetDocument();
+  ASSERT_VALID(pDoc);
+
+  if(pDoc && !m_strSelectedInclude.IsEmpty()) {
+    pDoc->OpenIncludeFile(m_strSelectedInclude);
+    }
+	}
+
+LRESULT COpenCView::OnFileChangedExternally(WPARAM wParam, LPARAM lParam) {
+  COpenCDoc* pDoc = GetDocument();
+  if(!pDoc)
+		return 0;
+
+	if(((::GetTickCount() - pDoc->m_dwLastSelfSaveTime) > 1000) /*!pDoc->m_bIsSavingSelf*/) {
+		CString strMsg;
+		strMsg.Format(_T("Il file '%s' è stato modificato all'esterno.\nRicaricarlo?"), pDoc->GetTitle());
+
+		if (AfxMessageBox(strMsg, MB_YESNO | MB_ICONQUESTION) == IDYES) {
+					// Ora siamo nel thread GUI nativo, OnOpenDocument è sicuro al 100%!
+			pDoc->OnOpenDocument(pDoc->GetPathName());
+			}
+		}
+
+  return 0;
+	}
+
+
+#if 0 // uso manager globale, v. OpenCApp
+struct SMonThreadParams {
+  HWND hWndDoc;          // Handle HWND della vista o del frame
+  CString strPath;       // Copia del percorso del file
+  HANDLE hNotify;        // Handle di FindFirstChangeNotification
+  HANDLE hStopEvent;     // Evento per dire al thread di chiudersi pulito
+  FILETIME ftLastWrite;  // Data/ora conosciuta del file
+	};
+
+UINT FileMonTask(LPVOID param) {
+  SMonThreadParams* pParams = (SMonThreadParams*)param;
+  HANDLE hEvents[2] = { pParams->hNotify, pParams->hStopEvent };
+
+  WIN32_FILE_ATTRIBUTE_DATA mywfd;
+
+  while (TRUE)    {
+    // Aspetta O una modifica del file, O il segnale di chiusura del thread
+    DWORD dwWait = WaitForMultipleObjects(2, hEvents, FALSE, INFINITE);
+
+    if (dwWait == WAIT_OBJECT_0) // Il file è cambiato!
+    {
+      // Verifichiamo la data (usando l'API nativa direttamente)
+      if (GetFileAttributesEx(pParams->strPath, GetFileExInfoStandard, &mywfd))            {
+        if (CompareFileTime(&mywfd.ftLastWriteTime, &pParams->ftLastWrite) > 0)                {
+          // Aggiorniamo la data interna
+          pParams->ftLastWrite = mywfd.ftLastWriteTime;
+
+          // NON usiamo AfxMessageBox né OnOpenDocument qui!
+          // Mandiamo un messaggio asincrono al thread GUI principale
+          ::PostMessage(pParams->hWndDoc, WM_MY_FILE_CHANGED, 0, 0);
+          }
+        }
+
+      FindNextChangeNotification(pParams->hNotify);
+	    }
+    else        {
+      // Chiesto lo stop del thread o errore -> usciamo dal ciclo puliti
+      break;
+      }
+    }
+
+  delete pParams;
+  return 0;
+	}
+#endif
+
+
+/////////////////////////////////////////////////////////////////////////////
+
+IMPLEMENT_DYNCREATE(CGutterWnd, CWnd)
+
+BEGIN_MESSAGE_MAP(CGutterWnd, CWnd)
+  ON_WM_ERASEBKGND()
+	ON_WM_PAINT()
+	ON_WM_SETCURSOR()
+  ON_WM_LBUTTONDBLCLK()
+  ON_WM_LBUTTONDOWN()
+END_MESSAGE_MAP()
+
+CGutterWnd::CGutterWnd() {}
+CGutterWnd::~CGutterWnd() { TRACE(_T("CGutterWnd distrutto!\n")); }
+
+BOOL CGutterWnd::OnEraseBkgnd(CDC* pDC) {
+  return TRUE; // Evita lo sfarfallio (flicker)
+	}
+
+void CGutterWnd::OnPaint() {
+  CPaintDC dc(this);
+
+	CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();
+
+	CWnd* pPaneWnd = pSplitter->GetPane(0, 1);
+  COpenCView *w = DYNAMIC_DOWNCAST(COpenCView, pPaneWnd);
+
+/*	if(pPaneWnd) {
+
+		w=(COpenCView*)((CMainFrame*)GetParent()->GetParent())->GetActiveView();*/
+  if(!w) 
+		return;
+
+  CRect clientRect;
+  GetClientRect(&clientRect);
+
+  // Sfondo della gutter (grigio chiaro da editor)
+  dc.FillSolidRect(&clientRect, RGB(240, 240, 240));
+
+  // Linea divisoria a destra
+  //dc.FillSolidRect(clientRect.right - 1, clientRect.top, 1, clientRect.Height(), RGB(210, 210, 210));
+
+  CRichEditCtrl& ctrl = w->GetRichEditCtrl();
+  COpenCDoc* pDoc = w->GetDocument();
+  if(!pDoc) 
+		return;
+
+  int firstLine = ctrl.GetFirstVisibleLine();
+  int lineCount = ctrl.GetLineCount();
+
+  for(int i = firstLine; i < lineCount; ++i)    {
+    int charIndex = ctrl.LineIndex(i);
+    CPoint pt = ctrl.GetCharPos(charIndex);
+
+    // Se la riga esce dalla parte inferiore della finestra, interrompiamo
+    if(pt.y > clientRect.bottom)
+      break;
+
+    // Disegna il segnalibro se la riga è presente in CUIntArray
+    if(pDoc->HasBookmark(i+1)) {				// il contatore parte da 0, i bookmark e i brk da 1
+      CBrush brush(RGB(0, 215, 120)); // verde Windows
+      CBrush* pOldBrush = dc.SelectObject(&brush);
+      CPen pen(PS_SOLID, 1, RGB(0, 180, 90));
+      CPen* pOldPen = dc.SelectObject(&pen);
+
+			dc.RoundRect(2, pt.y + 2, 20, pt.y + 14,6,10);
+
+      dc.SelectObject(pOldBrush);
+      dc.SelectObject(pOldPen);
+      }
+
+    if(pDoc->HasBreakpoint(i+1))        {
+      CBrush brush(RGB(215, 20, 0)); // rosso Windows
+      CBrush* pOldBrush = dc.SelectObject(&brush);
+      CPen pen(PS_SOLID, 1, RGB(180, 10, 0));
+      CPen* pOldPen = dc.SelectObject(&pen);
+
+      // Centra un cerchietto da 12px di diametro
+      dc.Ellipse(5, pt.y + 2, 17, pt.y + 14);
+
+      dc.SelectObject(pOldBrush);
+      dc.SelectObject(pOldPen);
+      }
+    }
+	}
+
+BOOL CGutterWnd::OnSetCursor() {
+
+	SetCursor(LoadCursor(theApp.m_hInstance,MAKEINTRESOURCE(IDC_RIGHT_CURSOR)));
+
+	return TRUE;
+
+	}
+
+void CGutterWnd::OnLButtonDblClk(UINT nFlags, CPoint point) {
+  CRect rc;
+	int i;
+
+  GetClientRect(&rc);
+
+	CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();
+
+	CWnd* pPaneWnd = pSplitter->GetPane(0, 1);
+  COpenCView *w = DYNAMIC_DOWNCAST(COpenCView, pPaneWnd);
+
+  if(!w) 
+		return;
+
+  CRichEditCtrl& ctrl = w->GetRichEditCtrl();
+  COpenCDoc* pDoc = w->GetDocument();
+  if(!pDoc) 
+		return;
+
+	i=(point.y-rc.top)/13;		// cmq 0! e usare RichEditCtrl fontsize
+	pDoc->ToggleBreakpoint(i+1);
+	Invalidate();
+	}
+
+void CGutterWnd::OnLButtonDown(UINT nFlags, CPoint point) {
+// Supponiamo che 'nLine' sia l'indice della riga zero-based da selezionare
+// (es. ricavata da LineFromChar / Y coordinate)
+	CSplitterWnd* pSplitter = (CSplitterWnd*)GetParent();
+
+	CWnd* pPaneWnd = pSplitter->GetPane(0, 1);
+  COpenCView *w = DYNAMIC_DOWNCAST(COpenCView, pPaneWnd);
+
+  if(!w) 
+		return;
+
+  CRichEditCtrl& ctrl = w->GetRichEditCtrl();
+
+  // Convertiamo la coordinata Y del mouse nel numero di riga
+  int nCharIndex = w->CharFromPos(point);
+  int nLine = ctrl.LineFromChar(nCharIndex);
+  
+  int nStartChar = ctrl .LineIndex(nLine);
+  if (nStartChar != -1) {
+    int nLineLength = ctrl .LineLength(nStartChar);
+    
+    // Selezioniamo la riga
+    ctrl .SetSel(nStartChar, nStartChar + nLineLength);
+		}
+  
+  CWnd::OnLButtonDown(nFlags, point);
+	}
+
+void CGutterWnd::PostNcDestroy() {		// serve perché non è una CView ma è usta dentro lo splitter!
+  // Chiama prima la classe base
+  CWnd::PostNcDestroy(); 
+  
+  // Forziamo la liberazione della memoria dell'oggetto C++
+  delete this; 
+	}
+
+

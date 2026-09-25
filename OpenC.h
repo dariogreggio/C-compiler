@@ -7,10 +7,12 @@
 
 #include "resource.h"       // main symbols
 #include <stdint.h>
+#include <afxadv.h>
+#include <afxmt.h>		// per ccriticalsection
 
 #define WM_ADDTEXT (WM_USER+1)
 #define WM_CLSWINDOW (WM_USER+2)
-
+#define WM_MY_FILE_CHANGED (WM_USER + 501)
 
 /////////////////////////////////////////////////////////////////////////////
 // COpenCApp:
@@ -62,6 +64,8 @@ class CStringEx : public CString {
 		CStringEx FormatTime(int m=0,CTime mT=0);
 		CStringEx FormatSize(DWORD);
 		CStringEx SplitPath(LPCTSTR,BYTE mode);
+		CStringEx GetASCII();
+		WCHAR *GetUnicode(WCHAR *szUnicode);
 		void Print();
 		void Debug();
 		CStringEx() : CString() {};		// servono tutti i costruttori "perché non ne ha di virtual, la CString" !
@@ -203,7 +207,101 @@ protected:
 	int m_iSavedVersionMinor;
 	};
 
-class COpenCDoc2;
+
+class CMyDocManager : public CDocManager {
+public:
+  virtual BOOL DoPromptFileName(CString& fileName, UINT nIDSTitle, DWORD lFlags, BOOL bOpenFileDialog, CDocTemplate* pTemplate)    {
+    // Se stiamo aprendo un file (File -> Apri)
+    if (bOpenFileDialog) {
+      // Filtro costruito appositamente per l'API di Windows
+      // Nota: Ogni sezione visiva e la relativa maschera sono separate da \0 (carattere nullo)
+      // e le estensioni multiple usano la sintassi *.ext1;*.ext2
+      
+      TCHAR szFilter[] = 
+          _T("File sorgenti C (*.c;*.h;*.inc)\0*.c;*.h;*.inc\0")
+          _T("Tutti i file (*.*)\0*.*\0\0");
+
+      CFileDialog dlgFile(TRUE, NULL, NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, NULL, AfxGetMainWnd());
+
+      dlgFile.m_ofn.lpstrFilter = szFilter;
+
+      CString strTitle;
+      if (strTitle.LoadString(nIDSTitle))
+        dlgFile.m_ofn.lpstrTitle = strTitle;
+
+      if (dlgFile.DoModal() == IDOK) {
+        fileName = dlgFile.GetPathName();
+        return TRUE;
+				}
+      return FALSE;
+			}
+
+    // Per il Salva con nome o altri casi, usa il comportamento standard
+    return CDocManager::DoPromptFileName(fileName, nIDSTitle, lFlags, bOpenFileDialog, pTemplate);
+    }
+};
+
+#if 0
+class CMultiExtDocTemplate : public CMultiDocTemplate {
+public:
+  CMultiExtDocTemplate(UINT nIDResource, CRuntimeClass* pDocClass,
+                       CRuntimeClass* pFrameClass, CRuntimeClass* pViewClass)
+      : CMultiDocTemplate(nIDResource, pDocClass, pFrameClass, pViewClass) {}
+
+  virtual BOOL GetDocString(CString& rString, enum DocStringIndex i) const {
+    // Intercettiamo solo la richiesta della maschera di estensione per il dialogo File Open
+    if(i == CDocTemplate::filterExt) {
+      rString = _T(".c;.h;.inc"); // Le tue estensioni
+      return TRUE;
+			}
+    else if (i == CDocTemplate::filterName) {
+      rString = _T("File sorgenti C (*.c, *.h, *.inc)");
+      return TRUE;
+    }
+
+  return CMultiDocTemplate::GetDocString(rString, i);
+  }
+    
+    // ... mantieni anche il tuo MatchDocTemplate ...
+};
+#endif
+
+class CRecentProjectList : public CRecentFileList {
+public:
+  CRecentProjectList(UINT nStart, LPCTSTR lpszSection,
+                    LPCTSTR lpszEntryFormat, int nSize,
+                    int nMaxDispLen = AFX_ABBREV_FILENAME_LEN)
+      : CRecentFileList(nStart, lpszSection, lpszEntryFormat, nSize, nMaxDispLen)
+  {
+  }
+
+  // Override del metodo UpdateMenu per forzare la scrittura dentro m_pSubMenu
+  virtual void UpdateMenu(CCmdUI* pCmdUI);
+};
+
+class CCommandLineInfoEx : public CCommandLineInfo {
+
+public:
+	BYTE m_debugLevel,m_autoBuild;
+public:
+	void ParseParam(LPCTSTR, BOOL, BOOL);
+  CCommandLineInfoEx();
+	};
+
+
+struct SMonitoredFile {
+  CString  strPath;         // Percorso completo del file
+  FILETIME ftLastWrite;     // Timestamp dell'ultima modifica nota
+  HWND     hWndView;        // HWND della vista a cui inviare la notifica
+	};
+
+struct PROGETTO_ENTRY {
+	CStringEx nomefile;
+	bool flag;
+	RECT rc;
+	};
+
+class COpenCDoc;
 
 class COpenCApp : public CWinAppEx {
 public:
@@ -212,6 +310,7 @@ public:
 		preProcOnly=1,
 		noMacro=2,
 		synCheckOnly=4,
+		preProcCommenti=8,
 		checkStack=0x100,
 		checkPtr=0x200,
 		charUnsigned=0x400,
@@ -228,6 +327,9 @@ public:
 		};
 
 public:
+	int LoadProject(const char *,COpenCDoc *pDoc=NULL);
+	int SaveProject(const char *);
+	int SaveProjectSection(const char *nomeprj,COpenCDoc *pDoc);
 	COpenCApp();
 	~COpenCApp();
 
@@ -260,29 +362,89 @@ public:
 	int WritePrivateProfileTime(char *, char *, CTimeSpan );
 	int WritePrivateProfileTime(char *s, int k, CTimeSpan t) { char ks[32]; LoadString(m_hInstance,k,ks,32); return WritePrivateProfileTime(s,ks,t); }
 	char *getProfileKey(char *,const char *);
+
 	void WriteOutputWndText(char *,int n=-1);
 	void ClearOutputWnd();
+
+	void updateWindowTitle(CStringEx);
+
+	void COpenCApp::RestoreStandaloneSession();
+
+	BOOL AddFileToProject(const char *,bool mode,RECT *rc=NULL);
+	void ReparseProgetto();
+	CString ParseOpzioni();
+	COpenCDoc *GetDocByTitle(LPCTSTR );
+
+	static FILETIME GetFileLastWriteTime(LPCTSTR);
+	static LONG CompareFileTimes(const FILETIME&, const FILETIME&);
+	static FILETIME GetMaxIncludeTimestamp(const CString&, CStringList&);
+	FILETIME CercaInclude(const CString& strFilePath);
+
+	BOOL CompilaFile(CStringEx,CStringEx ous="");
+	BOOL BuildAll(LPCTSTR lpszOutputDir, BOOL bForceRebuild= FALSE);
+	BOOL ExecuteAndCaptureOutput(LPCTSTR lpszCommandLine, CEdit& wndEditOutput);
+
+// --- Monitoraggio File Globale ---
+  void StartFileMonitoring();
+  void StopFileMonitoring();
+  
+  void RegisterMonitoredFile(LPCTSTR lpszPath, HWND hWndView, FILETIME ftLastWrite);
+  void UnregisterMonitoredFile(HWND hWndView);
+  void UpdateMonitoredFileTimestamp(LPCTSTR lpszPath, FILETIME ftNewTime);
+
+  static UINT AFX_CDECL GlobalFileMonTask(LPVOID pParam);
 
 public:
 	char *variabiliKey,*fileApertiKey;
 	DWORD Opzioni;
-	BYTE MemoryModel,Warning,AbsRel;
+	BYTE MemoryModel,Warning,AbsRel,TestoColorato,AutoRicaricaProgetto;
+	CString CartellaInclude,CartellaLibrerie;
 
 	CMultiDocTemplate *pDocTemplate;
-	CString ccName,altreDefine;
+	CStringEx ccName,altreDefine;
+	CStringEx nomeProgetto;
+	CStringEx flagsProgetto;
+	CStringEx pathProgetto;
+
+	CArray < struct PROGETTO_ENTRY, struct PROGETTO_ENTRY > fileProgetto; //(che cazzo c'ha?? serve header!
+	bool progettoModified;
+
+  CArray<SMonitoredFile, SMonitoredFile&> m_arrMonitoredFiles;
+  CCriticalSection m_csMonitoredFiles;
+  
+  HANDLE      m_hMonStopEvent;
+  CWinThread* m_pMonThread;
+
 
 	HINSTANCE m_hinstRE41;
 
+	// Secondo gestore MRU dedicato ai soli file di Progetto (.MAK / .PRJ)
+  CRecentProjectList *m_pRecentProjectList;
+
+	afx_msg void OnUpdateRecentFileMenu(CCmdUI* pCmdUI);
+
+	// Handler per la selezione dei progetti recenti
+  afx_msg BOOL OnOpenRecentProject(UINT nID);
+  afx_msg void OnUpdateRecentProjectMenu(CCmdUI* pCmdUI);
+		
+public:
 	//{{AFX_MSG(COpenCApp)
 	afx_msg void OnAppAbout();
 	afx_msg void OnStrumentiOpzioni();
-	afx_msg void OnFileNew();
 	afx_msg void OnUpdateFileApriprogetto(CCmdUI* pCmdUI);
 	afx_msg void OnFileApriprogetto();
-	afx_msg void OnFileNuovo();
-	afx_msg void OnUpdateFileNuovo(CCmdUI* pCmdUI);
-	afx_msg void OnCompilaTutto();
-	afx_msg void OnUpdateCompilaTutto(CCmdUI* pCmdUI);
+	afx_msg void OnFileNew();
+	afx_msg void OnCompilaProgetto();
+	afx_msg void OnUpdateCompilaProgetto(CCmdUI* pCmdUI);
+	afx_msg void OnFileSalvaprogetto();
+	afx_msg void OnUpdateFileSalvaprogetto(CCmdUI* pCmdUI);
+	afx_msg void OnFileChiudiprogetto();
+	afx_msg void OnUpdateFileChiudiprogetto(CCmdUI* pCmdUI);
+	afx_msg void OnFileSalvaprogettoconnome();
+	afx_msg void OnUpdateFileSalvaprogettoconnome(CCmdUI* pCmdUI);
+	afx_msg void OnFileNuovoprogetto();
+	afx_msg void OnCompilaCompilatutto();
+	afx_msg void OnUpdateCompilaCompilatutto(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 };

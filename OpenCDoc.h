@@ -77,6 +77,8 @@ public:
 
 protected:
 	uint32_t m_nDocLines;
+//	BOOL m_bIsSavingSelf;
+	DWORD m_dwLastSelfSaveTime;
 
 // Overrides
 	virtual CRichEditCntrItem* CreateClientItem(REOBJECT* preo) const;
@@ -95,6 +97,26 @@ protected:
 public:
 	virtual ~COpenCDoc();
   UINT GetDocumentLength() { return m_nDocLines; }		// cmq non viene usata... v. skypic
+	BOOL OpenIncludeFile(LPCTSTR lpszIncludeName);
+
+public:
+  CUIntArray m_bookmarks; // Memorizza gli indici delle righe (0-based)
+  CUIntArray m_breakpoints; // Memorizza 
+
+  // Aggiunge o rimuove un segnalibro mantenendo l'array ordinato
+	void SetBookmark(UINT nLine);
+  void ToggleBookmark(UINT nLine);
+  BOOL HasBookmark(UINT nLine) const;
+	void SetBreakpoint(UINT nLine);
+  void ToggleBreakpoint(UINT nLine);
+  BOOL HasBreakpoint(UINT nLine) const;
+
+	void UpdateMarkers(int nCaretLine, int nDelta);
+
+  virtual void SetModifiedFlag(BOOL bModified = TRUE);
+  virtual void SetPathName(LPCTSTR lpszPathName, BOOL bAddToMRU = TRUE);
+	void UpdateFrameTitle();
+
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;
@@ -107,8 +129,17 @@ protected:
 	//{{AFX_MSG(COpenCDoc)
 	afx_msg void OnCompilaFile();
 	afx_msg void OnUpdateCompilaFile(CCmdUI* pCmdUI);
+	afx_msg void OnModificaInseriscisegnalibro();
+	afx_msg void OnDebugTogglebreakpoint();
+	afx_msg void OnUpdateDebugTogglebreakpoint(CCmdUI* pCmdUI);
+	afx_msg void OnModificaVaialprossimosegnalibro();
+	afx_msg void OnModificaVaialsegnalibroprecedente();
+	afx_msg void OnUpdateModificaVaialsegnalibroprecedente(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateModificaVaialprossimosegnalibro(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
+
+	friend class COpenCView;
 	};
 
 /////////////////////////////////////////////////////////////////////////////

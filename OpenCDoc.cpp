@@ -4,9 +4,14 @@
 #include "stdafx.h"
 #include "OpenC.h"
 
+#include "mainfrm.h"
 #include "OpenCDoc.h"
 #include "openCview.h"
-#include "openCview2.h"
+//#include <afxext.h>		// per GetWindowFrame dice, ma ovviamente non è vero
+//#include <afxpriv.h>		// idem
+//#include "childfrm.h"
+
+//#include "openCview2.h"
 //#include "cc\cc.h"
 
 
@@ -25,6 +30,13 @@ BEGIN_MESSAGE_MAP(COpenCDoc, CRichEditDoc)
 	//{{AFX_MSG_MAP(COpenCDoc)
 	ON_COMMAND(ID_COMPILA_FILE, OnCompilaFile)
 	ON_UPDATE_COMMAND_UI(ID_COMPILA_FILE, OnUpdateCompilaFile)
+	ON_COMMAND(ID_MODIFICA_INSERISCISEGNALIBRO, OnModificaInseriscisegnalibro)
+	ON_COMMAND(ID_DEBUG_TOGGLEBREAKPOINT, OnDebugTogglebreakpoint)
+	ON_UPDATE_COMMAND_UI(ID_DEBUG_TOGGLEBREAKPOINT, OnUpdateDebugTogglebreakpoint)
+	ON_COMMAND(ID_MODIFICA_VAIALPROSSIMOSEGNALIBRO, OnModificaVaialprossimosegnalibro)
+	ON_COMMAND(ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE, OnModificaVaialsegnalibroprecedente)
+	ON_UPDATE_COMMAND_UI(ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE, OnUpdateModificaVaialsegnalibroprecedente)
+	ON_UPDATE_COMMAND_UI(ID_MODIFICA_VAIALPROSSIMOSEGNALIBRO, OnUpdateModificaVaialprossimosegnalibro)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -34,6 +46,9 @@ END_MESSAGE_MAP()
 COpenCDoc::COpenCDoc() {
 
 	prfSection=myPrfSection;
+	m_nDocLines=0;
+	//m_bIsSavingSelf=FALSE; 
+	m_dwLastSelfSaveTime = 0;
 	}
 
 COpenCDoc::~COpenCDoc() {
@@ -49,13 +64,16 @@ BOOL COpenCDoc::OnNewDocument() {
 	}
 
 BOOL COpenCDoc::OnOpenDocument(LPCTSTR lpszPathName) {
-	char myBuf[64],*p;
+	char myBuf[256],myBuf2[64],*p;
 	RECT rc;
 	COpenCView *w=(COpenCView *)getView();
 
 	if(!CExRichDocument::OnOpenDocument(lpszPathName))
 		return FALSE;
 	
+//	CStringEx S,S1;
+//	S.SplitPath(lpszPathName,5);
+
 	p=strrchr(lpszPathName,'\\');
 	if(p) {
 		p++;
@@ -73,35 +91,143 @@ BOOL COpenCDoc::OnOpenDocument(LPCTSTR lpszPathName) {
 //			rc.top=10; rc.bottom=200;
 //			w->GetParent()->GetParent()->SetWindowPos(NULL,rc.left,rc.top,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
 			// DUE GetParent perche' c'e' Splitter!!
-			w->GetParent()->GetParent()->SetWindowPos(NULL,rc.left,rc.top,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
+			w->GetParent()->GetParent()->SetWindowPos(NULL,rc.left -(215-30),rc.top,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
+
+		/* DOPO windowplacement, v. sopra
+		CWnd* pChildFrame = pView->GetParentFrame();
+        if(pChildFrame ) {
+            // Applichiamo le coordinate direttamente alla Child Frame.
+            // Essendo figlia dell'MDIClient, si posizionerà al millimetro!
+            pChildFrame->SetWindowPos(
+                NULL, 
+                nLeft, 
+                nTop, 
+                nWidth, 
+                nHeight, 
+                SWP_NOZORDER | SWP_NOACTIVATE
+            );
+        }*/
+
 		}
+
+//	          m_bookmarks.InsertAt(0, 2); // PROVA
+	//          m_breakpoints.InsertAt(0, 5); // PROVA
+
+
+	CMainFrame*f=((CMainFrame*)theApp.m_pMainWnd);
+/*	HTREEITEM tp0,tp1;
+
+	tp0=f->m_wndProjectTree.GetNextItem(f->projectTreeRoot,TVGN_CHILD);
+	S1.SplitPath(lpszPathName,4);
+	if(!S1.CompareNoCase(".c"))
+		((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.InsertItem(S,2,2,tp0);
+	else if(!S1.CompareNoCase(".h")) {
+		tp0=f->m_wndProjectTree.GetNextSiblingItem(tp0);
+		((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.InsertItem(S,2,2,tp0);
+		}
+
+
+//	tp1=m_wndProjectTree.InsertItem("Source",0,1,projectTreeRoot);
+	f->m_wndProjectTree.Expand(tp0,TVE_EXPAND);
+*/
+
+//	((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.SetItemImage(tp0,0,0);
+
 
 	return TRUE;
 	}
 
 BOOL COpenCDoc::OnSaveDocument(LPCTSTR lpszPathName) {
+	WIN32_FILE_ATTRIBUTE_DATA wfd;
+	BOOL bRet;
 
-	return CDocument::OnSaveDocument(lpszPathName);
+//	m_bIsSavingSelf=TRUE;
+	m_dwLastSelfSaveTime = ::GetTickCount();
+	if(GetFileAttributesEx(GetPathName(), GetFileExInfoStandard, &wfd))
+   	theApp.UpdateMonitoredFileTimestamp(GetPathName(), wfd.ftLastWriteTime);
+
+	bRet=CDocument::OnSaveDocument(lpszPathName);
+//	m_bIsSavingSelf=FALSE;
+	return bRet;
 	}
-
 
 void COpenCDoc::OnCloseDocument() {
 	CString S,S1;
 	RECT rc,rc2;
 	char myBuf[64];
 	COpenCView *w=(COpenCView *)getView();
+
+	theApp.SaveProjectSection(theApp.nomeProgetto,this);		// per i segnalibri
+
 	
 	strcpy(myPrfSection,(LPCTSTR)GetTitle());
 
-	w->GetWindowPos(&rc);
-	S.LoadString(IDS_OPZIONI);
-	S1.LoadString(IDS_COORDINATECHILD);
-	wsprintf(myBuf,"%d,%d,%d,%d",rc.left,rc.top,rc.right,rc.bottom);
-	theApp. /*prStore->*/ WritePrivateProfileString(myPrfSection,S1,myBuf);
+	if(w) {		// in chiusura o se file non trovato!
+		w->GetWindowPos(&rc);
+		CWnd* pFrame = w->GetParentFrame();
+    if(pFrame) {
+			// 3. Otteniamo posizione e stato (Normal, Minimized, Maximized)
+			WINDOWPLACEMENT wp;
+			wp.length = sizeof(WINDOWPLACEMENT);
+    
+			if(pFrame->GetWindowPlacement(&wp)) {
+				// wp.rcNormalPosition contiene il CRect con le coordinate (Left, Top, Right, Bottom)
+				// wp.showCmd contiene lo stato (SW_SHOWMAXIMIZED, SW_SHOWNORMAL, ecc.)
+      
+				// Salvi queste coordinate nel file di progetto!
+				}
+			}
+		S.LoadString(IDS_OPZIONI);
+		S1.LoadString(IDS_COORDINATECHILD);
+		wsprintf(myBuf,"%d,%d,%d,%d",rc.left,rc.top,rc.right,rc.bottom);
+		theApp. /*prStore->*/ WritePrivateProfileString(myPrfSection,S1,myBuf);
+		}
 
 //	SaveState(m_nDocType);
 
 	CExRichDocument::OnCloseDocument();
+	}
+
+BOOL COpenCDoc::OpenIncludeFile(LPCTSTR lpszIncludeName) {
+
+  if(!lpszIncludeName || !_tcslen(lpszIncludeName))
+    return FALSE;
+
+  CString strFoundPath;
+
+  // 1. Cerca nella stessa directory di questo documento
+  if(!GetPathName().IsEmpty())    {
+    TCHAR szDrive[_MAX_DRIVE], szDir[_MAX_DIR];
+    _splitpath(GetPathName(), szDrive, szDir, NULL, NULL);
+
+    CString strCurrentDir;
+    strCurrentDir.Format(_T("%s%s"), szDrive, szDir);
+
+    CString strCandidate = strCurrentDir + lpszIncludeName;
+		DWORD dwAttr = ::GetFileAttributes(strCandidate);
+		if(dwAttr != 0xFFFFFFFF /*INVALID_FILE_ATTRIBUTES*/ && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY)) {
+			// Il file esiste ed è un file valido (non una cartella)
+			strFoundPath = strCandidate;
+			}
+    }
+
+  // 2. Fallback: cerca nelle sottocartelle del progetto / include
+  if(strFoundPath.IsEmpty())    {
+      // ... eventuale ricerca su cartelle relative ...
+		}
+
+  // 3. Se trovato, delega all'applicazione l'apertura MDI
+  if(!strFoundPath.IsEmpty()) {
+    ((CMainFrame*)theApp.m_pMainWnd)->ActivateViewByTitle/*OpenDocumentFile*/(strFoundPath);
+    return TRUE;
+    }
+
+  // Notifica l'errore se non trovato
+  CString strMsg;
+  strMsg.Format(_T("Impossibile trovare il file include '%s'."), lpszIncludeName);
+  AfxMessageBox(strMsg, MB_ICONEXCLAMATION);
+
+  return FALSE;
 	}
 
 CRichEditCntrItem* COpenCDoc::CreateClientItem(REOBJECT* preo) const {
@@ -110,7 +236,7 @@ CRichEditCntrItem* COpenCDoc::CreateClientItem(REOBJECT* preo) const {
 	}
 
 void COpenCDoc::OnDeactivateUI(BOOL bUndoable) {
-	COpenCView *w=(COpenCView *)getView();
+	COpenCView *w=(COpenCView*)getView();
 
 	if(w->m_bDelayUpdateItems)
 		UpdateAllItems(NULL);
@@ -125,6 +251,167 @@ void COpenCDoc::OnDeactivateUI(BOOL bUndoable) {
 		}*/
 	}
 
+
+// Aggiunge o rimuove un segnalibro mantenendo l'array ordinato
+void COpenCDoc::ToggleBookmark(UINT nLine) {
+
+  for(INT_PTR i=0; i < m_bookmarks.GetSize(); i++)    {
+    if(m_bookmarks[i] == nLine)        {
+      m_bookmarks.RemoveAt(i); // Rimuove se presente
+      return;
+      }
+    else if(m_bookmarks[i] > nLine)        {
+      SetBookmark(nLine); // Inserisce in ordine crescente
+      return;
+      }
+    }
+  // Se è maggiore di tutti gli elementi
+  SetBookmark(nLine);
+	}
+
+void COpenCDoc::SetBookmark(UINT nLine) {
+
+  for(INT_PTR i=0; i < m_bookmarks.GetSize(); i++)    {
+    if(m_bookmarks[i] == nLine)
+			return;
+    if(m_bookmarks[i] > nLine)        {
+      m_bookmarks.InsertAt(i,nLine); // Inserisce in ordine crescente
+      return;
+      }
+    }
+  m_bookmarks.Add(nLine);
+	}
+
+BOOL COpenCDoc::HasBookmark(UINT nLine) const {
+
+  for(INT_PTR i=0; i < m_bookmarks.GetSize(); i++)    {
+    if(m_bookmarks[i] == nLine)
+      return TRUE;
+    if(m_bookmarks[i] > nLine)
+      break; // Siccome è ordinato, possiamo interrompere la ricerca prima
+		}
+  return FALSE;
+	}
+
+void COpenCDoc::ToggleBreakpoint(UINT nLine) {
+
+  for(INT_PTR i=0; i < m_breakpoints.GetSize(); i++)    {
+    if(m_breakpoints[i] == nLine)        {
+      m_breakpoints.RemoveAt(i); // Rimuove se presente
+      return;
+      }
+    else if (m_breakpoints[i] > nLine)        {
+      SetBreakpoint(nLine); // Inserisce in ordine crescente
+      return;
+      }
+    }
+  // Se è maggiore di tutti gli elementi
+  SetBreakpoint(nLine);
+	}
+
+void COpenCDoc::SetBreakpoint(UINT nLine) {
+
+  for(INT_PTR i=0; i < m_breakpoints.GetSize(); i++)    {
+    if(m_breakpoints[i] == nLine)
+			return;
+    if(m_breakpoints[i] > nLine)        {
+      m_breakpoints.InsertAt(i, nLine); // Inserisce in ordine crescente
+      return;
+      }
+    }
+  // Se è maggiore di tutti gli elementi
+  m_breakpoints.Add(nLine);
+	}
+
+BOOL COpenCDoc::HasBreakpoint(UINT nLine) const    {
+
+  for(INT_PTR i=0; i < m_breakpoints.GetSize(); i++)    {
+    if(m_breakpoints[i] == nLine)
+      return TRUE;
+    if(m_breakpoints[i] > nLine)
+      break; // Siccome è ordinato, possiamo interrompere la ricerca prima
+		}
+  return FALSE;
+	}
+
+void COpenCDoc::UpdateMarkers(int nCaretLine, int nDelta) {
+
+  // Esempio con un vector di int per i breakpoint
+	int i=0;
+  while(i < m_bookmarks.GetSize()) {
+		int nBpLine = m_bookmarks[i];
+
+    if(nDelta > 0) {
+      // Aggiunte righe (es. ENTER o Incolla multiriga):
+      // Spostiamo verso il basso tutti i breakpoint che si trovano SOTTO la riga dove stiamo scrivendo
+      // --- RIGHE AGGIUNTE (es. Enter / Incolla multiriga) ---
+      // Spostiamo verso il basso tutti i breakpoint SOTTO la riga corrente
+      if(nBpLine > nCaretLine)
+        m_bookmarks[i] += nDelta;
+      i++; // Passiamo al prossimo
+	    }
+		else if (nDelta < 0) {
+      // --- RIGHE RIMOSSE (es. Backspace / Delete / Cut) ---
+      // nDelta è negativo (es. -3). La zona cancellata va da (nCaretLine + nDelta) a nCaretLine
+      int nStartDeleted = nCaretLine + nDelta;
+      int nEndDeleted   = nCaretLine;
+
+      if(nBpLine > nStartDeleted && nBpLine <= nEndDeleted) {
+          // Il breakpoint cadeva nelle righe cancellate -> Eliminiamo l'elemento!
+        m_bookmarks.RemoveAt(i);
+          // NON incrementiamo 'i': l'elemento successivo ha preso il posto di quello appena rimosso
+				}
+      else {
+        if (nBpLine > nEndDeleted)          {
+          // Se era al di sotto delle righe cancellate, lo tiriamo su
+          m_bookmarks.SetAt(i, nBpLine + nDelta); // nDelta è negativo (es. nBpLine + (-3))
+          }
+        i++; // Passiamo al prossimo
+        }
+			}
+    else
+      i++;
+		}
+
+	i=0;
+  while(i < m_breakpoints.GetSize()) {
+		int nBpLine = m_breakpoints[i];
+
+    if(nDelta > 0) {
+      // Aggiunte righe (es. ENTER o Incolla multiriga):
+      // Spostiamo verso il basso tutti i breakpoint che si trovano SOTTO la riga dove stiamo scrivendo
+      // --- RIGHE AGGIUNTE (es. Enter / Incolla multiriga) ---
+      // Spostiamo verso il basso tutti i breakpoint SOTTO la riga corrente
+      if(nBpLine > nCaretLine)
+        m_breakpoints[i] += nDelta;
+      i++; // Passiamo al prossimo
+	    }
+		else if (nDelta < 0) {
+      // --- RIGHE RIMOSSE (es. Backspace / Delete / Cut) ---
+      // nDelta è negativo (es. -3). La zona cancellata va da (nCaretLine + nDelta) a nCaretLine
+      int nStartDeleted = nCaretLine + nDelta;
+      int nEndDeleted   = nCaretLine;
+
+      if(nBpLine > nStartDeleted && nBpLine <= nEndDeleted) {
+          // Il breakpoint cadeva nelle righe cancellate -> Eliminiamo l'elemento!
+        m_breakpoints.RemoveAt(i);
+          // NON incrementiamo 'i': l'elemento successivo ha preso il posto di quello appena rimosso
+				}
+      else {
+        if (nBpLine > nEndDeleted)          {
+          // Se era al di sotto delle righe cancellate, lo tiriamo su
+          m_breakpoints.SetAt(i, nBpLine + nDelta); // nDelta è negativo (es. nBpLine + (-3))
+          }
+        i++; // Passiamo al prossimo
+        }
+			}
+    else
+      i++;
+		}
+
+	}
+
+
 /////////////////////////////////////////////////////////////////////////////
 // COpenCDoc serialization
 
@@ -138,6 +425,8 @@ void COpenCDoc::Serialize(CArchive& ar) {
 
 //		((CRichEditView*)m_viewList.GetHead())->Serialize(ar);  //da MultiPad...
 
+		//m_bookmarks.Serialize(ar);
+
 		}
 	else {
 //		CFile cFile(ar.stream,CFile::read);
@@ -149,8 +438,51 @@ void COpenCDoc::Serialize(CArchive& ar) {
 
 //		((CRichEditView*)m_viewList.GetHead())->Serialize(ar);  //da MultiPad...
 		m_nDocLines=((COpenCView*)m_viewList.GetHead())->GetLineCount();		// FINIRE
+		//m_bookmarks.Serialize(ar);
 		}
 	}
+
+
+void COpenCDoc::SetModifiedFlag(BOOL bModified) {
+  // Chiama l'implementazione base di MFC
+  CExRichDocument::SetModifiedFlag(bModified);
+
+  // Aggiorna la barra del titolo della finestra MDI
+  UpdateFrameTitle();
+	}
+
+void COpenCDoc::SetPathName(LPCTSTR lpszPathName, BOOL bAddToMRU) {
+  CExRichDocument::SetPathName(lpszPathName, bAddToMRU);
+  
+  // Assicura che il titolo sia corretto anche all'apertura/salvataggio
+  UpdateFrameTitle();
+	}
+
+void COpenCDoc::UpdateFrameTitle() {
+
+  // Se il documento non ha ancora una finestra associata, usciamo
+  if (m_strTitle.IsEmpty())
+    return;
+
+  CString strTitle = GetTitle();
+
+  // Rimuoviamo l'asterisco se già presente per evitare "nome.c **"
+  if(strTitle.Right(2) == _T(" *")) {
+    strTitle = strTitle.Left(strTitle.GetLength() - 2);
+		}
+
+  // Se il file è modificato, aggiungiamo l'asterisco
+  if(IsModified()) {
+    strTitle += _T(" *");
+		}
+
+  // Impostiamo il nuovo titolo del documento
+  SetTitle(strTitle);
+
+  // Notifica le viste e la MDI Child Frame di aggiornare la barra del titolo
+  UpdateAllViews(NULL);
+	}
+
 
 /////////////////////////////////////////////////////////////////////////////
 // COpenCDoc diagnostics
@@ -171,125 +503,14 @@ void COpenCDoc::Dump(CDumpContext& dc) const
 // COpenCDoc commands
 
 void COpenCDoc::OnCompilaFile() {
-	char *args[32];
-	char myBuf[256],myBuf2[256],n[256],*p;
-	int i,j;
-	CString ts,parms;
-	HINSTANCE hInst;
-	HANDLE hFile;
-	WIN32_FIND_DATA wfd;
-	typedef DWORD (__stdcall *ccFunc)(CWnd *,int,char **);		// "stdcall" serve proprio!!
-	ccFunc f;
-
-	
-/*		char *zz=0;
-	*zz=34;*/
 
 	if(((COpenCView*)m_viewList.GetHead())->IsModified() /*IsModified()*/)
 		OnSaveDocument(GetPathName());	
-	ts=GetPathName();
-	args[0]="openc.exe";		// per compatibilità...
-	args[1]=(char *)(LPCTSTR)ts;
-	if(!theApp.altreDefine.IsEmpty()) {
-		parms+="-D";
-		parms+=theApp.altreDefine;
-		parms+=" ";
-		}
-	if(theApp.Opzioni & COpenCApp::debugMode)
-		parms+="-d ";
-	if(theApp.Opzioni & COpenCApp::synCheckOnly)
-		parms+="-E ";		// non e' proprio cosi'... questo dovrebbe applicarsi anche al codice C e non al solo preprocessore...
-	else {
-		if(theApp.Opzioni & COpenCApp::preProcOnly)
-			parms+="-P ";
-		}
-	if(theApp.Opzioni & COpenCApp::outSource)
-		parms+="-Fc ";
-	if(theApp.Opzioni & COpenCApp::outAsm)
-		parms+="-Fa ";
-	if(theApp.Opzioni & COpenCApp::outListing)
-		parms+="-Fl ";
-	if(theApp.Opzioni & COpenCApp::checkStack)
-		parms+="-Ge ";
-	else
-		parms+="-Gs ";
-	if(theApp.Opzioni & COpenCApp::pascalCalls)
-		parms+="-Gc ";
-	else
-		parms+="-Gd ";
-	if(theApp.Opzioni & COpenCApp::multipleStrings)
-		parms+="-Gf ";
-// parms+="Ox" // tipo CPU...
-	if(theApp.Opzioni & COpenCApp::charUnsigned)
-		parms+="-J ";
-// parms+="NT" ND // data segment, text segment
 
-	// v. anche O1 O2 ecc per ottimizzazioni
-	if(theApp.Opzioni & COpenCApp::ottimizzaSpeed)
-		parms+="-Ot ";
-	if(theApp.Opzioni & COpenCApp::ottimizzaSize)
-		parms+="-Os ";
-	if(theApp.Opzioni & COpenCApp::ottimizzaLoop)
-		parms+="-Ol ";
-	if(theApp.Opzioni & COpenCApp::ottimizzaConst)
-		parms+="-O1 ";
-	// altre ottimizzazioni...
-	if(theApp.Opzioni & COpenCApp::noMacro)
-		parms+="-u ";
-//	if(theApp.Opzioni & COpenCApp::preProcOnly)
-//		parms+="-w ";		// no warning...
-//	if(theApp.Opzioni & COpenCApp::preProcOnly)
-//		parms+="-WX ";		// warning as errors
-//	if(theApp.Opzioni & COpenCApp::preProcOnly)
-//		parms+="-Wn ";		// livello..
-	if(theApp.Opzioni & COpenCApp::checkPtr)
-		parms+="-Zr ";
+	theApp.m_pMainWnd->PostMessage(WM_CLSWINDOW,0,(LPARAM)NULL);
 
-	switch(theApp.MemoryModel) {		// in MSVC... in MSDEV son poi spariti :)
-		case 0:
-			parms+="-AT ";		// Tiny/Compact
-			break;
-		case 1:
-			parms+="-AS ";		// SMALL questo non c'è, credo vada di default
-			break;
-		case 2:
-			parms+="-AM ";		// Medium
-			break;
-		case 3:
-			parms+="-AL ";		// LARGE
-			break;
-		}
-
-	if(theApp.AbsRel) {
-		parms+="-mr ";		// relativo
-		}
-
-	if(theApp.Warning>0) {
-		CStringEx S;
-		S.Format("-W%u ",theApp.Warning);
-		parms+=S;
-		}
-
-	strcpy(myBuf,(LPCTSTR)parms);			// non funziona!! lei si aspetta un puntatore per ogni switch...
-	p=strtok(myBuf," ");
-	for(i=2; i<32 && p!=NULL; i++) {
-		args[i]=p;
-		p=strtok(NULL," ");
-		}
-
-	hInst=LoadLibrary((LPCTSTR)theApp.ccName);
-	if(hInst) {
-		f=(ccFunc)GetProcAddress(hInst,"Compila");
-		if(f) {
-			CWnd *v=theApp.m_pMainWnd;
-
-			(*f)(v,i,(char **)args);
-			goto fine;
-			}
-		FreeLibrary(hInst);
-		}
-	
-	AfxMessageBox("Impossibile caricare il compilatore",MB_ICONEXCLAMATION);
+	if(!theApp.CompilaFile(GetPathName()))
+		AfxMessageBox("Impossibile caricare il compilatore",MB_ICONEXCLAMATION);
 
 fine:
 		;
@@ -298,8 +519,19 @@ fine:
 	}
 
 void COpenCDoc::OnUpdateCompilaFile(CCmdUI* pCmdUI) {
+	CString strFileName=GetPathName();
 	
-	pCmdUI->Enable(!GetPathName().IsEmpty() && !theApp.ccName.IsEmpty());
+	if(!strFileName.IsEmpty() && !theApp.ccName.IsEmpty()) {
+	// Se è un header (.h, .hpp, .i), disabilita la voce di menu
+    if(strFileName.Right(2).CompareNoCase(_T(".h")) == 0 ||
+      strFileName.Right(4).CompareNoCase(_T(".hpp")) == 0) {
+      pCmdUI->Enable(FALSE); // O usi pCmdUI->Enable(FALSE) per ingrigirlo
+			}
+    else {
+      pCmdUI->Enable(TRUE);
+			}
+		}
+
 	}
 
 /////////////////////////////////////////////////////////////////////////////
@@ -329,5 +561,83 @@ void COpenCCntrItem::Dump(CDumpContext& dc) const
 
 
 
+
+
+
+void COpenCDoc::OnModificaInseriscisegnalibro() {
+	COpenCView *w=((COpenCView*)getView());
+
+	int nLineIndex1 = w->GetRichEditCtrl().LineFromChar(-1)  +1;		// zero based
+	ToggleBookmark(nLineIndex1);
+	w->Invalidate();
+	}
+
+
+void COpenCDoc::OnDebugTogglebreakpoint() {
+	COpenCView *w=((COpenCView*)getView());
+
+	int nLineIndex1 = w->GetRichEditCtrl().LineFromChar(-1)  +1;
+	ToggleBreakpoint(nLineIndex1);
+	w->Invalidate();
+	}
+
+void COpenCDoc::OnUpdateDebugTogglebreakpoint(CCmdUI* pCmdUI) {
+	
+	}
+
+void COpenCDoc::OnModificaVaialprossimosegnalibro() {
+	COpenCView *w=((COpenCView*)getView());
+	int nLineIndex1 = w->GetRichEditCtrl().LineFromChar(-1) +1;		// zero based
+	bool found=FALSE;
+
+  for(INT_PTR i=0; i < m_bookmarks.GetSize(); i++) {
+    if(m_bookmarks[i] > nLineIndex1) {
+			found=TRUE;
+			break;
+			}
+		}
+	if(found) {
+		((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[i],NULL,FALSE);
+		}
+	else {
+		MessageBeep(-1);
+		if(m_bookmarks.GetSize() > 0)
+			((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[0],NULL,FALSE);
+		}
+	
+	}
+
+void COpenCDoc::OnModificaVaialsegnalibroprecedente() {
+	COpenCView *w=((COpenCView*)getView());
+	int nLineIndex1 = w->GetRichEditCtrl().LineFromChar(-1) +1;
+	bool found=FALSE;
+
+	if(m_bookmarks.GetSize() == 0)
+		return;
+
+  for(INT_PTR i=m_bookmarks.GetSize()-1; i >= 0; i--) {
+    if(m_bookmarks[i] < nLineIndex1) {
+			found=TRUE;
+			break;
+			}
+		}
+	if(found) {
+		((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[i],NULL,FALSE);
+		}
+	else {
+		MessageBeep(-1);
+		if(m_bookmarks.GetSize() > 0)
+			((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[m_bookmarks.GetSize()-1],NULL,FALSE);
+		}
+
+	}
+
+void COpenCDoc::OnUpdateModificaVaialsegnalibroprecedente(CCmdUI* pCmdUI) {
+	
+	}
+
+void COpenCDoc::OnUpdateModificaVaialprossimosegnalibro(CCmdUI* pCmdUI) {
+	
+	}
 
 

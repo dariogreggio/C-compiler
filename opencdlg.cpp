@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "OpenC.h"
 #include "OpenCdlg.h"
+#include <afxdlgs.h>		// per CFolderPicker
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -71,6 +72,7 @@ IMPLEMENT_DYNCREATE(COpzioniCompilPropPage1, CPropertyPage)
 COpzioniCompilPropPage1::COpzioniCompilPropPage1() : CPropertyPage(COpzioniCompilPropPage1::IDD)
 {
 	//{{AFX_DATA_INIT(COpzioniCompilPropPage1)
+	m_RicaricaProgettoPartenza = FALSE;
 	//}}AFX_DATA_INIT
 	isInitialized=FALSE;
 }
@@ -83,13 +85,18 @@ void COpzioniCompilPropPage1::DoDataExchange(CDataExchange* pDX)
 {
 	CPropertyPage::DoDataExchange(pDX);
 	//{{AFX_DATA_MAP(COpzioniCompilPropPage1)
+	DDX_Control(pDX, IDC_COMBO5, m_CartellaLibrerie);
+	DDX_Control(pDX, IDC_COMBO4, m_CartellaInclude);
 	DDX_Control(pDX, IDC_COMBO1, m_CCcombo);
+	DDX_Check(pDX, IDC_CHECK2, m_RicaricaProgettoPartenza);
 	//}}AFX_DATA_MAP
 }
 
 
 BEGIN_MESSAGE_MAP(COpzioniCompilPropPage1, CPropertyPage)
 	//{{AFX_MSG_MAP(COpzioniCompilPropPage1)
+	ON_BN_CLICKED(IDC_BUTTON1, OnButton1)
+	ON_BN_CLICKED(IDC_BUTTON2, OnButton2)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -105,7 +112,7 @@ BOOL COpzioniCompilPropPage1::OnInitDialog() {
 
 	CPropertyPage::OnInitDialog();
 	
-	strcpy(myBuf,"cc*.dll");
+	_tcscpy(myBuf,"cc*.dll");
 	if((hFile=FindFirstFile(myBuf,&wfd)) != INVALID_HANDLE_VALUE) {
 		do {
 			hInst=LoadLibrary(wfd.cFileName);
@@ -126,6 +133,9 @@ BOOL COpzioniCompilPropPage1::OnInitDialog() {
 		FindClose(hFile);
 		}
 	m_CCcombo.SelectString(0,theApp.ccName);
+	m_RicaricaProgettoPartenza=theApp.AutoRicaricaProgetto;
+	m_CartellaInclude.SelectString(0,theApp.CartellaInclude);
+	m_CartellaLibrerie.SelectString(0,theApp.CartellaLibrerie);
 
 	isInitialized=TRUE;
 	UpdateData(FALSE);
@@ -175,6 +185,8 @@ COpzioniCompilPropPage2::COpzioniCompilPropPage2() : CPropertyPage(COpzioniCompi
 	m_OttimizzaVelocita = FALSE;
 	m_AbsRel = -1;
 	m_Warning = -1;
+	m_InserisciCommenti = FALSE;
+	m_WarningErrori = FALSE;
 	//}}AFX_DATA_INIT
 	isInitialized=FALSE;
 }
@@ -209,6 +221,8 @@ void COpzioniCompilPropPage2::DoDataExchange(CDataExchange* pDX)
 	DDX_Check(pDX, IDC_CHECK15, m_OttimizzaVelocita);
 	DDX_Radio(pDX, IDC_RADIO1, m_AbsRel);
 	DDX_CBIndex(pDX, IDC_COMBO3, m_Warning);
+	DDX_Check(pDX, IDC_CHECK19, m_InserisciCommenti);
+	DDX_Check(pDX, IDC_CHECK18, m_WarningErrori);
 	//}}AFX_DATA_MAP
 }
 
@@ -229,6 +243,7 @@ BOOL COpzioniCompilPropPage2::OnInitDialog() {
 	m_SoloPre=theApp.Opzioni &  COpenCApp::preProcOnly ? 1 : 0;
 	m_NoMacro=theApp.Opzioni & COpenCApp::noMacro ? 1 : 0;
 	m_SynCheckOnly=theApp.Opzioni & COpenCApp::synCheckOnly ? 1 : 0;
+	m_InserisciCommenti=theApp.Opzioni & COpenCApp::preProcCommenti ? 1 : 0;
 	m_CheckStack=theApp.Opzioni & COpenCApp::checkStack ? 1 : 0;
 	m_CheckPtr=theApp.Opzioni & COpenCApp::checkPtr ? 1 : 0;
 	m_CharUnsigned=theApp.Opzioni & COpenCApp::charUnsigned ? 1 : 0;
@@ -254,6 +269,69 @@ BOOL COpzioniCompilPropPage2::OnInitDialog() {
 	return TRUE;  // return TRUE unless you set the focus to a control
 	              // EXCEPTION: OCX Property Pages should return FALSE
 	}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// COpzioniCompilPropPage3 property page
+
+IMPLEMENT_DYNCREATE(COpzioniCompilPropPage3, CPropertyPage)
+
+COpzioniCompilPropPage3::COpzioniCompilPropPage3() : CPropertyPage(COpzioniCompilPropPage3::IDD)
+{
+	//{{AFX_DATA_INIT(COpzioniCompilPropPage3)
+	m_TabSize = 0;
+	m_TestoColorato = FALSE;
+	m_SalvaCompila = FALSE;
+	m_SalvaChiedi = FALSE;
+	m_RicaricaFileAuto = FALSE;
+	//}}AFX_DATA_INIT
+	isInitialized=FALSE;
+}
+
+COpzioniCompilPropPage3::~COpzioniCompilPropPage3()
+{
+}
+
+void COpzioniCompilPropPage3::DoDataExchange(CDataExchange* pDX)
+{
+	CPropertyPage::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(COpzioniCompilPropPage3)
+	DDX_Text(pDX, IDC_EDIT1, m_TabSize);
+	DDX_Check(pDX, IDC_CHECK1, m_TestoColorato);
+	DDX_Check(pDX, IDC_CHECK2, m_SalvaCompila);
+	DDX_Check(pDX, IDC_CHECK3, m_SalvaChiedi);
+	DDX_Check(pDX, IDC_CHECK4, m_RicaricaFileAuto);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(COpzioniCompilPropPage3, CPropertyPage)
+	//{{AFX_MSG_MAP(COpzioniCompilPropPage3)
+		// NOTE: the ClassWizard will add message map macros here
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// COpzioniCompilPropPage3 message handlers
+
+BOOL COpzioniCompilPropPage3::OnInitDialog() {
+
+	CPropertyPage::OnInitDialog();
+
+	m_TestoColorato = theApp.TestoColorato;
+//	m_SalvaCompila = ;
+//	m_SalvaChiedi = ;
+//	m_RicaricaFileAuto = ;
+
+	isInitialized=TRUE;
+
+	UpdateData(FALSE);
+
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+	}
+
+
 
 /////////////////////////////////////////////////////////////////////////////
 // COpzioniCompilPropSheet
@@ -285,50 +363,52 @@ END_MESSAGE_MAP()
 // COpzioniCompilPropSheet message handlers
 
 
-/////////////////////////////////////////////////////////////////////////////
-// COpzioniCompilPropPage3 property page
 
-IMPLEMENT_DYNCREATE(COpzioniCompilPropPage3, CPropertyPage)
+void COpzioniCompilPropPage1::OnButton1() {
+// non lo trova mai...	CFolderPickerDialog myDlg(		);
+	BROWSEINFO bi;
+	char lpBuffer[256];
+	LPITEMIDLIST lpdi;
 
-COpzioniCompilPropPage3::COpzioniCompilPropPage3() : CPropertyPage(COpzioniCompilPropPage3::IDD)
-{
-	//{{AFX_DATA_INIT(COpzioniCompilPropPage3)
-		// NOTE: the ClassWizard will add member initialization here
-	//}}AFX_DATA_INIT
-	isInitialized=FALSE;
-}
+	ZeroMemory(&bi,sizeof(bi));
+	bi.hwndOwner=m_hWnd;
+	bi.pidlRoot=NULL; //DESKTOP
+	bi.pszDisplayName=lpBuffer;
+	bi.lpszTitle="Scegliere la cartella:";
+	bi.ulFlags=0;
+	bi.iImage=NULL;
+	if(lpdi=SHBrowseForFolder(&bi)) {
+		if(SHGetPathFromIDList(lpdi, lpBuffer)) {
+//			m_CartellaLibrerie=lpBuffer;
+ 			UpdateData(FALSE);
+			}
+		else
+			AfxMessageBox("Selezionare una posizione valida!",MB_ICONEXCLAMATION);
+		}
 
-COpzioniCompilPropPage3::~COpzioniCompilPropPage3()
-{
-}
-
-void COpzioniCompilPropPage3::DoDataExchange(CDataExchange* pDX)
-{
-	CPropertyPage::DoDataExchange(pDX);
-	//{{AFX_DATA_MAP(COpzioniCompilPropPage3)
-		// NOTE: the ClassWizard will add DDX and DDV calls here
-	//}}AFX_DATA_MAP
-}
-
-
-BEGIN_MESSAGE_MAP(COpzioniCompilPropPage3, CPropertyPage)
-	//{{AFX_MSG_MAP(COpzioniCompilPropPage3)
-		// NOTE: the ClassWizard will add message map macros here
-	//}}AFX_MSG_MAP
-END_MESSAGE_MAP()
-
-/////////////////////////////////////////////////////////////////////////////
-// COpzioniCompilPropPage3 message handlers
-
-BOOL COpzioniCompilPropPage3::OnInitDialog() {
-
-	CPropertyPage::OnInitDialog();
-
-	isInitialized=TRUE;
-	UpdateData(FALSE);
-
-	return TRUE;  // return TRUE unless you set the focus to a control
-	              // EXCEPTION: OCX Property Pages should return FALSE
+	
 	}
 
+void COpzioniCompilPropPage1::OnButton2() {
+// non lo trova mai...	CFolderPickerDialog myDlg(		);
+	BROWSEINFO bi;
+	char lpBuffer[256];
+	LPITEMIDLIST lpdi;
 
+	ZeroMemory(&bi,sizeof(bi));
+	bi.hwndOwner=m_hWnd;
+	bi.pidlRoot=NULL; //DESKTOP
+	bi.pszDisplayName=lpBuffer;
+	bi.lpszTitle="Scegliere la cartella:";
+	bi.ulFlags=0;
+	bi.iImage=NULL;
+	if(lpdi=SHBrowseForFolder(&bi)) {
+		if(SHGetPathFromIDList(lpdi, lpBuffer)) {
+//			m_CartellaLibrerie=lpBuffer;
+ 			UpdateData(FALSE);
+			}
+		else
+			AfxMessageBox("Selezionare una posizione valida!",MB_ICONEXCLAMATION);
+		}
+	
+	}

@@ -113,7 +113,10 @@ public:
 // Dialog Data
 	//{{AFX_DATA(COpzioniCompilPropPage1)
 	enum { IDD = IDD_OPZIONI_COMPIL_PAGE1 };
+	CComboBox	m_CartellaLibrerie;
+	CComboBox	m_CartellaInclude;
 	CComboBox	m_CCcombo;
+	BOOL	m_RicaricaProgettoPartenza;
 	//}}AFX_DATA
 
 
@@ -131,6 +134,8 @@ protected:
 	// Generated message map functions
 	//{{AFX_MSG(COpzioniCompilPropPage1)
 	virtual BOOL OnInitDialog();
+	afx_msg void OnButton1();
+	afx_msg void OnButton2();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
@@ -174,6 +179,8 @@ public:
 	BOOL	m_OttimizzaVelocita;
 	int		m_AbsRel;
 	int		m_Warning;
+	BOOL	m_InserisciCommenti;
+	BOOL	m_WarningErrori;
 	//}}AFX_DATA
 
 
@@ -247,8 +254,11 @@ public:
 // Dialog Data
 	//{{AFX_DATA(COpzioniCompilPropPage3)
 	enum { IDD = IDD_OPZIONI_COMPIL_PAGE3 };
-		// NOTE - ClassWizard will add data members here.
-		//    DO NOT EDIT what you see in these blocks of generated code !
+	BYTE	m_TabSize;
+	BOOL	m_TestoColorato;
+	BOOL	m_SalvaCompila;
+	BOOL	m_SalvaChiedi;
+	BOOL	m_RicaricaFileAuto;
 	//}}AFX_DATA
 
 

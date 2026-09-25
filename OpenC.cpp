@@ -10,9 +10,10 @@
 #include "ChildFrm.h"
 #include "OpenCDoc.h"
 #include "OpenCView.h"
-#include "OpenCView2.h"
+//#include "OpenCView2.h"
 #include "OpenCdlg.h"
 #include <mmsystem.h>
+#include <afxadv.h>		// per RecentFileList/progetti
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -28,18 +29,27 @@ BEGIN_MESSAGE_MAP(COpenCApp, CWinAppEx)
 	ON_COMMAND(ID_APP_ABOUT, OnAppAbout)
 	ON_COMMAND(ID_STRUMENTI_OPZIONI, OnStrumentiOpzioni)
 	ON_COMMAND(ID_FILE_NEW, OnFileNew)
-	ON_UPDATE_COMMAND_UI(ID_FILE_APRIPROGETTO, OnUpdateFileApriprogetto)
 	ON_COMMAND(ID_FILE_APRIPROGETTO, OnFileApriprogetto)
-	ON_COMMAND(ID_FILE_NUOVO, OnFileNuovo)
-	ON_UPDATE_COMMAND_UI(ID_FILE_NUOVO, OnUpdateFileNuovo)
-	ON_COMMAND(ID_COMPILA_TUTTO, OnCompilaTutto)
-	ON_UPDATE_COMMAND_UI(ID_COMPILA_TUTTO, OnUpdateCompilaTutto)
+	ON_UPDATE_COMMAND_UI(ID_FILE_APRIPROGETTO, OnUpdateFileApriprogetto)
+	ON_COMMAND(ID_COMPILA_TUTTO, OnCompilaProgetto)
+	ON_UPDATE_COMMAND_UI(ID_COMPILA_TUTTO, OnUpdateCompilaProgetto)
+	ON_COMMAND(ID_FILE_SALVAPROGETTO, OnFileSalvaprogetto)
+	ON_UPDATE_COMMAND_UI(ID_FILE_SALVAPROGETTO, OnUpdateFileSalvaprogetto)
+	ON_COMMAND(ID_FILE_CHIUDIPROGETTO, OnFileChiudiprogetto)
+	ON_UPDATE_COMMAND_UI(ID_FILE_CHIUDIPROGETTO, OnUpdateFileChiudiprogetto)
+	ON_COMMAND(ID_FILE_SALVAPROGETTOCONNOME, OnFileSalvaprogettoconnome)
+	ON_UPDATE_COMMAND_UI(ID_FILE_SALVAPROGETTOCONNOME, OnUpdateFileSalvaprogettoconnome)
+	ON_COMMAND(ID_FILE_NUOVOPROGETTO, OnFileNuovoprogetto)
+	ON_COMMAND(ID_COMPILA_COMPILATUTTO, OnCompilaCompilatutto)
+	ON_UPDATE_COMMAND_UI(ID_COMPILA_COMPILATUTTO, OnUpdateCompilaCompilatutto)
 	//}}AFX_MSG_MAP
 	// Standard file based document commands
-	ON_COMMAND(ID_FILE_NEW, CWinApp::OnFileNew)
 	ON_COMMAND(ID_FILE_OPEN, CWinApp::OnFileOpen)
 	// Standard print setup command
 	ON_COMMAND(ID_FILE_PRINT_SETUP, CWinApp::OnFilePrintSetup)
+	ON_COMMAND_EX_RANGE(ID_PROJECT_MRU_1, ID_PROJECT_MRU_LAST, OnOpenRecentProject)
+	ON_UPDATE_COMMAND_UI_RANGE(ID_FILE_MRU_FILE1, ID_FILE_MRU_FILE1 + 7, OnUpdateRecentFileMenu)
+  ON_UPDATE_COMMAND_UI_RANGE(ID_PROJECT_MRU_1, ID_PROJECT_MRU_LAST, OnUpdateRecentProjectMenu)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -50,7 +60,7 @@ COpenCApp::COpenCApp() {
 	CoInitialize(NULL); //this must be called FIRST!
 
 
-	//m_hinstRE41 is a HINSTANCE type member var of CMyApp
+	//m_hinstRE41 is a HINSTANCE type member var of COpenCApp
 	m_hinstRE41=LoadLibrary(TEXT("msftedit.dll"));			// per usare RichEdit più recenti!
 	//this DLL must be loaded.
 // ovvero	AfxInitRichEdit2();
@@ -84,7 +94,7 @@ BOOL COpenCApp::InitInstance() {
 	//  the specific initialization routines you do not need.
 
 	// Parse command line for standard shell commands, DDE, file open
-	CCommandLineInfo cmdInfo;
+	CCommandLineInfoEx cmdInfo;
 	ParseCommandLine(cmdInfo);
 
 #ifdef _AFXDLL
@@ -110,10 +120,37 @@ BOOL COpenCApp::InitInstance() {
 
 	LoadStdProfileSettings(8);  // Load standard INI file options (including MRU)
 
+
+	m_pRecentProjectList = new CRecentProjectList(ID_PROJECT_MRU_1, 
+        _T("Recent Project List"), 
+        _T("Progetto&%d"), 
+        4);
+
+  // Carica i progetti recenti salvati nelle precedenti sessioni
+ // m_pRecentProjectList->ReadList();
+// 3. Prova a leggere il registro dentro il try/catch sicuro (al primo giro non c'è!
+	try {
+		m_pRecentProjectList->ReadList();
+		}
+	catch (...) {
+			// Ignora eventuali errori di prima lettura
+		}
+
+//	m_pRecentProjectList->Add(_T("C:\\straporcodio.mak"));
+	// 4. Se la lista è vuota (es. prima volta che la lanci), 
+	// scriviamo subito la struttura base nel registro per crearla!
+	if(m_pRecentProjectList->GetSize() == 0)	{
+		m_pRecentProjectList->WriteList();
+		}
+
+
 	// Register the application's document templates.  Document templates
 	//  serve as the connection between documents, frame windows and views.
 
-	pDocTemplate = new CMultiDocTemplate(
+// Assegniamo il nostro DocManager custom ad MFC
+    m_pDocManager = new CMyDocManager();
+		
+		pDocTemplate = new CMultiDocTemplate(
 		IDR_CTYPE,
 		RUNTIME_CLASS(COpenCDoc),
 		RUNTIME_CLASS(CChildFrame), // base MDI child frame
@@ -145,6 +182,12 @@ BOOL COpenCApp::InitInstance() {
 	AbsRel=GetPrivateProfileInt(variabiliKey,IDS_ABSREL);
 
 	Warning=GetPrivateProfileInt(variabiliKey,IDS_WARNING);
+	TestoColorato=GetPrivateProfileInt(variabiliKey,IDS_TESTOCOLORATO);
+	AutoRicaricaProgetto=GetPrivateProfileInt(variabiliKey,IDS_AUTORICARICAPROGETTO);
+  i= GetPrivateProfileString(variabiliKey,IDS_CARTELLAINCLUDE,myBuf,128);
+	CartellaInclude=myBuf;
+  i= GetPrivateProfileString(variabiliKey,IDS_CARTELLALIBRERIE,myBuf,128);
+	CartellaLibrerie=myBuf;
 
 	// Enable drag/drop open
 	m_pMainWnd->DragAcceptFiles();
@@ -153,9 +196,47 @@ BOOL COpenCApp::InitInstance() {
 	EnableShellOpen();
 	RegisterShellFileTypes(TRUE);
 
-	// Dispatch commands specified on the command line
-	if (!ProcessShellCommand(cmdInfo))
-		return FALSE;
+	// Se m_nShellCommand è FileOpen, Windows o l'utente ha passato un percorso di file
+	if(cmdInfo.m_nShellCommand == CCommandLineInfo::FileOpen && !cmdInfo.m_strFileName.IsEmpty()) 	{
+		// Estraiamo l'estensione per capire il tipo di file
+		int nDotPos = cmdInfo.m_strFileName.ReverseFind('.');
+		CString strExt = (nDotPos != -1) ? cmdInfo.m_strFileName.Mid(nDotPos) : _T("");
+		strExt.MakeUpper();
+
+		if(strExt == _T(".MAK")) {
+			// È un progetto: carichi l'intero ambiente .MAK
+			LoadProject(cmdInfo.m_strFileName);
+			}
+		else if (strExt == _T(".C") || strExt == _T(".H") || strExt == _T(".CPP") || strExt == _T(".ASM") || strExt == _T(".INC")) {
+			// È un sorgente singolo: apri solo il documento
+			/*ActivateViewByTitle?*/OpenDocumentFile(cmdInfo.m_strFileName);
+			}
+
+			// Evitiamo che MFC tenti di riaprire di nuovo il file o crei un documento vuoto
+			cmdInfo.m_nShellCommand = CCommandLineInfo::FileNothing;
+		}
+	else if(cmdInfo.m_nShellCommand == CCommandLineInfo::FileNew) {
+		// RIGA DI COMANDO VUOTA: Auto-reload dell'ultimo progetto!
+		if(AutoRicaricaProgetto) {
+			if(m_pRecentProjectList) {
+				OnOpenRecentProject(ID_PROJECT_MRU_1);
+	//			OnFileNuovoprogetto();
+		//		LoadProject((*m_pRecentProjectList)[0]);
+				}
+			}
+
+		else
+			RestoreStandaloneSession();
+
+		cmdInfo.m_nShellCommand = CCommandLineInfo::FileNothing;
+		}
+
+	// Passiamo a ProcessShellCommand solo se c'è altro da gestire
+	if(cmdInfo.m_nShellCommand != CCommandLineInfo::FileNothing)	{
+		// Dispatch commands specified on the command line
+		if(!ProcessShellCommand(cmdInfo))
+			return FALSE;
+		}
 
 	// The main window has been initialized, so show and update it.
 	pMainFrame->ShowWindow(m_nCmdShow);
@@ -168,21 +249,32 @@ BOOL COpenCApp::InitInstance() {
 	return TRUE;
 	}
 
-
-
 int COpenCApp::ExitInstance() {
 
+	StopFileMonitoring();
+
+// Salva e libera la memoria all'uscita
+  if(m_pRecentProjectList) {
+    m_pRecentProjectList->WriteList();
+    delete m_pRecentProjectList;
+    m_pRecentProjectList = NULL;
+    }
 	WritePrivateProfileInt(variabiliKey,IDS_OPZIONI,Opzioni);
 	WritePrivateProfileInt(variabiliKey,IDS_MEMORYMODEL,MemoryModel);
 	WritePrivateProfileInt(variabiliKey,IDS_ABSREL,AbsRel);
 	WritePrivateProfileInt(variabiliKey,IDS_WARNING,Warning);
+	WritePrivateProfileInt(variabiliKey,IDS_TESTOCOLORATO,TestoColorato);
+	WritePrivateProfileInt(variabiliKey,IDS_AUTORICARICAPROGETTO,AutoRicaricaProgetto);
 	WritePrivateProfileString(variabiliKey,IDS_ALTREDEFINE,(LPCTSTR)altreDefine);
 	WritePrivateProfileString(variabiliKey,IDS_NOMECC,(LPCTSTR)ccName);
-	return CWinApp::ExitInstance();
+	WritePrivateProfileString(variabiliKey,IDS_CARTELLAINCLUDE,(LPCTSTR)CartellaInclude);
+	WritePrivateProfileString(variabiliKey,IDS_CARTELLALIBRERIE,(LPCTSTR)CartellaLibrerie);
+  return CWinApp::ExitInstance();
 	}
 
 
 char *COpenCApp::getProfileKey(char *d,const char *s) {
+
 	strcpy(d,m_pszRegistryKey);
 	strcat(d,"\\");
 	strcat(d,m_pszAppName);
@@ -379,6 +471,11 @@ void COpenCApp::OnAppAbout() {
 	}
 
 void COpenCApp::OnFileNew() {
+	
+	pDocTemplate->OpenDocumentFile(NULL);
+	}
+
+void COpenCApp::RestoreStandaloneSession() {
 	char myBuf[256],myBuf1[64];
 	int i;
 	
@@ -387,10 +484,10 @@ void COpenCApp::OnFileNew() {
 		wsprintf(myBuf1,"File%u",i);
 		theApp.GetPrivateProfileString(fileApertiKey,myBuf1,myBuf,256);
 		if(*myBuf)
-			pDocTemplate->OpenDocumentFile(myBuf);
+			((CMainFrame*)m_pMainWnd)->ActivateViewByTitle(myBuf);
+//			pDocTemplate->OpenDocumentFile(myBuf);
 		i++;
 		} while(*myBuf);
-
 	}
 
 void COpenCApp::OnStrumentiOpzioni() {
@@ -406,6 +503,9 @@ void COpenCApp::OnStrumentiOpzioni() {
 	if(mySheet.DoModal() == IDOK) {
 		if(myPage0.isInitialized) {
 			ccName=myPage0.theCC.Left(myPage0.theCC.Find(':'));
+//			CartellaInclude=myPage0.;
+//			CartellaLibrerie=myPage0.;
+			AutoRicaricaProgetto=myPage0.m_RicaricaProgettoPartenza;
 			}
 		if(myPage1.isInitialized) {
 			Opzioni=0;
@@ -413,6 +513,7 @@ void COpenCApp::OnStrumentiOpzioni() {
 			Opzioni |= myPage1.m_SoloPre ? preProcOnly : 0;
 			Opzioni |= myPage1.m_NoMacro ? noMacro : 0;
 			Opzioni |= myPage1.m_SynCheckOnly ? synCheckOnly : 0;
+			Opzioni |= myPage1.m_InserisciCommenti ? preProcCommenti : 0;
 			Opzioni |= myPage1.m_CheckStack ? checkStack : 0;
 			Opzioni |= myPage1.m_CheckPtr ? checkPtr : 0;
 			Opzioni |= myPage1.m_CharUnsigned ? charUnsigned : 0;
@@ -432,40 +533,1133 @@ void COpenCApp::OnStrumentiOpzioni() {
 			Warning=myPage1.m_Warning;
 			}
 		if(myPage2.isInitialized) {
+			TestoColorato=myPage2.m_TestoColorato;
 			}
 		}
 	}
 
 
 
+int COpenCApp::LoadProject(const char *nomeprj,COpenCDoc *pDoc) {
+	CStdioFile file;
+	int i;
 
-void COpenCApp::OnUpdateFileApriprogetto(CCmdUI* pCmdUI) {
-	
+	/* per file MAK
+PROGETTO.EXE: FILE1.OBJ FILE2.OBJ
+	link.exe FILE1.OBJ FILE2.OBJ /OUT:PROGETTO.EXE
+
+FILE1.OBJ: FILE1.C
+	cl.exe /c FILE1.C
+
+FILE2.OBJ: FILE2.C
+	cl.exe /c FILE2.C*/
+
+	CStringEx strLine;
+	RECT rc;
+	bool bInOpenCSession = false;
+	enum Section { SEC_NONE, SEC_BOOKMARKS, SEC_BREAKPOINTS } currentSec = SEC_NONE;
+
+	if(file.Open(nomeprj,CFile::modeRead)) {
+
+		while(file.ReadString(strLine)) {
+			strLine.Trim();
+
+			// Se è un commento dell'IDE
+			if(strLine.Left(1) == _T("#"))    {
+				if(strLine.FindNoCase(_T("[BOOKMARKS]")) != -1)        {
+					currentSec = SEC_BOOKMARKS;
+					continue;
+					}
+				else if(strLine.FindNoCase(_T("[BREAKPOINTS]")) != -1)        {
+					currentSec = SEC_BREAKPOINTS;
+					continue;
+					}
+				else if(strLine.Find(_T("FILE: ")) != -1)        {
+					CStringEx strData = strLine.Mid(1); // Rimuovi '#'
+					SetRectEmpty(&rc);
+					strData.Trim();
+					int nEqual = strData.Find(_T(':'));
+					if(nEqual != -1)            {
+						CStringEx strFile = strData.Mid(nEqual + 2),S;
+						bool mode;
+						S=strFile;
+						strFile.Trim();
+
+						if(strFile[0]=='\"') {
+							strFile=strFile.Mid(1,strFile.Find('\"',1)-1);
+							}
+						if(S.Find(',')>=0) {
+							S=S.Mid(S.Find(',')+1);
+							S.Trim();
+							mode=S[0] == '1';
+							S=S.Mid(S.Find(',')+1);		// ev. coordinate finestra, poi... e anche flag di aperta (ovvero ambe le cose :) se 0 chiusa se no aperta
+							S.Trim();
+							rc.left=atoi(S);
+//							if(atoi(S)) {		// DOPO perché richiama questa!
+//								OpenDocumentFile(strFile);
+//								}
+
+
+							}
+
+						if(!pDoc) {// solo se apertura progetto
+							strFile.MakeUpper();
+							AddFileToProject(strFile,mode,&rc);
+							}
+
+						// reparse andrebbe fatto solo alla fine, se all'apertura, v.sotto
+						
+						}
+					}
+
+				// Se siamo in una sezione dati, pulisci il '#' iniziale e leggi il valore
+				if(currentSec == SEC_BOOKMARKS) {
+					if(pDoc) {
+						CStringEx strData = strLine.Mid(1),S; // Rimuovi '#'
+						strData.Trim();
+
+						int nEqual = strData.Find(_T('='));
+						if(nEqual != -1)            {
+							CStringEx strFile = strData.Left(nEqual);
+							CStringEx strLines = strData.Mid(nEqual + 1);
+							strFile.Trim();
+							strLines.Trim();
+
+							S=pDoc->GetTitle();
+//							S.SplitPath(pDoc->GetPathName(),5);
+							if(!strFile.CompareNoCase(S)) {
+								int i=0,j;
+								while(S=strLines.Tokenize(',',i)) {
+									if(S.IsEmpty())
+										break;
+									j=atoi(S);
+									pDoc->SetBookmark(j);
+									}
+								}
+
+							}
+						}
+					}
+				else if(currentSec == SEC_BREAKPOINTS) {
+					if(pDoc) {
+						CStringEx strData = strLine.Mid(1),S; // Rimuovi '#'
+						strData.Trim();
+
+						int nEqual = strData.Find(_T('='));
+						if(nEqual != -1)            {
+							CStringEx strFile = strData.Left(nEqual);
+							CStringEx strLines = strData.Mid(nEqual + 1);
+							strFile.Trim();
+							strLines.Trim();
+
+							S=pDoc->GetTitle();
+//							S.SplitPath(pDoc->GetPathName(),5);
+							if(!strFile.CompareNoCase(S)) {
+								int i=0,j;
+								while(S=strLines.Tokenize(',',i)) {
+									if(S.IsEmpty())
+										break;
+									j=atoi(S);
+									pDoc->SetBreakpoint(j);
+									}
+								}
+
+							}
+						}
+					}
+				}
+			else    {
+				currentSec = SEC_NONE; // Se si esce dai commenti, azzera la sezione
+
+				if(strLine.Left(3) == _T("CPU"))    {
+					ccName=strLine.Mid(6,20);
+					}
+				else if(strLine.Left(6) == _T("CFLAGS"))    {
+					flagsProgetto=strLine.Mid(9,100);
+					if(flagsProgetto.Find('$')) {		// patch per ora, elimino le variabili $
+						flagsProgetto=flagsProgetto.Left(flagsProgetto.Find('$')-1);
+						}
+					}
+				else if(strLine.Left(7) == _T("OPTIMIZ"))    {
+
+					}
+				else if(strLine.Left(8) == _T("INCLUDES"))    {
+
+					}
+				else if(strLine.Left(4) == _T("ROOT"))    {
+					pathProgetto=strLine.Mid(7,100);
+					}
+
+				}
+			}
+		file.Close();
+
+		if(!pDoc) {
+			ReparseProgetto();
+			for(i=0; i<fileProgetto.GetSize(); i++) {
+				if(fileProgetto[i].rc.left) {		// per ora lo usiamo come flag!
+					((CMainFrame*)m_pMainWnd)->ActivateViewByTitle/*OpenDocumentFile*/(fileProgetto[i].nomefile);
+					}
+				}
+			}
+		return 1;
+		}
+
+	return 0;
+	}
+
+CString COpenCApp::ParseOpzioni() {
+	CString parms;
+
+	if(!theApp.altreDefine.IsEmpty()) {
+		parms+="-D";
+		parms+=theApp.altreDefine;
+		parms+=" ";
+		}
+	if(theApp.Opzioni & COpenCApp::debugMode)
+		parms+="-d ";
+	if(theApp.Opzioni & COpenCApp::synCheckOnly)
+		parms+="-E ";		// non e' proprio cosi'... questo dovrebbe applicarsi anche al codice C e non al solo preprocessore...
+	else {
+		if(theApp.Opzioni & COpenCApp::preProcOnly)
+			parms+="-P ";
+		if(theApp.Opzioni & COpenCApp::preProcCommenti)
+			parms+="-C ";
+		}
+	if(theApp.Opzioni & COpenCApp::outSource)
+		parms+="-Fc ";
+	if(theApp.Opzioni & COpenCApp::outAsm)
+		parms+="-Fa ";
+	if(theApp.Opzioni & COpenCApp::outListing)
+		parms+="-Fl ";
+	if(theApp.Opzioni & COpenCApp::checkStack)
+		parms+="-Ge ";
+	else
+		parms+="-Gs ";
+	if(theApp.Opzioni & COpenCApp::pascalCalls)
+		parms+="-Gc ";
+	else
+		parms+="-Gd ";
+	if(theApp.Opzioni & COpenCApp::multipleStrings)
+		parms+="-Gf ";
+// parms+="Ox" // tipo CPU...
+	if(theApp.Opzioni & COpenCApp::charUnsigned)
+		parms+="-J ";
+// parms+="NT" ND // data segment, text segment
+
+	// v. anche O1 O2 ecc per ottimizzazioni
+	if(theApp.Opzioni & COpenCApp::ottimizzaSpeed)
+		parms+="-Ot ";
+	if(theApp.Opzioni & COpenCApp::ottimizzaSize)
+		parms+="-Os ";
+	if(theApp.Opzioni & COpenCApp::ottimizzaLoop)
+		parms+="-Ol ";
+	if(theApp.Opzioni & COpenCApp::ottimizzaConst)
+		parms+="-O1 ";
+	// altre ottimizzazioni...
+	if(theApp.Opzioni & COpenCApp::noMacro)
+		parms+="-u ";
+//	if(theApp.Opzioni & COpenCApp::preProcOnly)
+//		parms+="-w ";		// no warning...
+//	if(theApp.Opzioni & COpenCApp::preProcOnly)
+//		parms+="-WX ";		// warning as errors
+//	if(theApp.Opzioni & COpenCApp::preProcOnly)
+//		parms+="-Wn ";		// livello..
+	if(theApp.Opzioni & COpenCApp::checkPtr)
+		parms+="-Zr ";
+
+	switch(theApp.MemoryModel) {		// in MSVC... in MSDEV son poi spariti :)
+		case 0:
+			parms+="-AT ";		// Tiny/Compact
+			break;
+		case 1:
+			parms+="-AS ";		// SMALL questo non c'è, credo vada di default
+			break;
+		case 2:
+			parms+="-AM ";		// Medium
+			break;
+		case 3:
+			parms+="-AL ";		// LARGE
+			break;
+		}
+
+	if(theApp.AbsRel) {
+		parms+="-mr ";		// relativo
+		}
+
+	if(theApp.Warning>0) {
+		CStringEx S;
+		S.Format("-W%u ",theApp.Warning);
+		parms+=S;
+		}
+
+	return parms;
 	}
 
 void COpenCApp::OnFileApriprogetto() {
+	CStringEx S,S1;
+	CFileDialog myDlg(TRUE,NULL,nomeProgetto,OFN_FILEMUSTEXIST | OFN_SHOWHELP | OFN_HIDEREADONLY,
+		"File progetto (*.mak)|*.mak|Tutti i file (*.*)|*.*||"
+		);
 
+	if(myDlg.DoModal() == IDOK) {
+
+		OnFileNuovoprogetto();
+
+		nomeProgetto=myDlg.GetPathName();
+		S1.SplitPath(nomeProgetto,5);
+
+		if(LoadProject(myDlg.GetPathName())) {
+
+			updateWindowTitle(S1);
+
+			S="Progetto "+S+" aperto correttamente.";
+			((CMainFrame*)m_pMainWnd)->m_wndStatusBar.SetWindowText(S);
+
+	// Aggiunge il percorso in testa alla lista dei progetti recenti
+			COpenCApp* pApp = (COpenCApp*)AfxGetApp();
+			if(pApp && pApp->m_pRecentProjectList) {
+				pApp->m_pRecentProjectList->Add(myDlg.GetPathName());
+				}
+				
+//			CloseAllDocuments(FALSE); // v. sotto
+			}
+		else {
+			nomeProgetto.Empty();
+			AfxMessageBox("File non trovato!");
+			}
+		}
 	}
 
-void COpenCApp::OnFileNuovo() {
+/* per notificare a ev. file aperti i nuovi bookmark ecc... mah (per ora faccio AfxGetApp()->CloseAllDocuments(FALSE);
+// Dopo aver caricato i bookmark del file 'strFilePath' dal .MAK:
+CDocManager* pDocMgr = AfxGetApp()->m_pDocManager;
+if (pDocMgr){
+    POSITION posTemplate = pDocMgr->GetFirstDocTemplatePosition();
+    while (posTemplate != NULL)
+    {
+        CDocTemplate* pTemplate = pDocMgr->GetNextDocTemplate(posTemplate);
+        POSITION posDoc = pTemplate->GetFirstDocPosition();
+        while (posDoc != NULL)
+        {
+            CDocument* pDoc = pTemplate->GetNextDoc(posDoc);
+            
+            // Verifichiamo se questo documento aperto corrisponde al file del progetto
+            if (pDoc->GetPathName().CompareNoCase(strFilePath) == 0)
+            {
+                // Opzione A: Se hai un metodo custom sulla tua vista/documento
+                POSITION posView = pDoc->GetFirstViewPosition();
+                while (posView != NULL)
+                {
+                    CView* pView = pDoc->GetNextView(posView);
+                    if (pView && pView->IsKindOf(RUNTIME_CLASS(CMySourceView)))
+                    {
+                        ((CMySourceView*)pView)->ApplyBookmarks(listOfBookmarks);
+                    }
+                }
+                
+                // Opzione B: Usa la notifica standard MFC per aggiornare le viste
+                // pDoc->UpdateAllViews(NULL, HINT_RELOAD_BOOKMARKS);
+            }
+        }
+    }
+}*/
+
+void COpenCApp::OnUpdateFileApriprogetto(CCmdUI* pCmdUI) {
+
 	
-	pDocTemplate->OpenDocumentFile(NULL);
 	}
 
-void COpenCApp::OnUpdateFileNuovo(CCmdUI* pCmdUI) {
+
+int COpenCApp::SaveProject(const char *nomeprj) {
+	CStdioFile file;
+	char myBuf[256];
+	int i;
+	const char *separator="# ====================================================================\n";
+	CStringEx S,S2,thePath;
+
+	SaveAllModified();
+
+	S.SplitPath(nomeprj,1);
+	thePath.SplitPath(nomeprj,2);
+	thePath=S+thePath;
+
+	if(file.Open(nomeprj,CFile::modeCreate | CFile::modeWrite)) {
+		file.WriteString(separator);
+		file.WriteString("# MAKEFILE generato da OpenC\n");
+		file.WriteString(separator);
+		file.WriteString("# --- PROJECT SETTINGS ---\n");
+		sprintf(myBuf,"PROJECT = %s\n",(LPCTSTR)S.SplitPath(nomeprj,3));
+		file.WriteString(myBuf);
+		sprintf(myBuf,"TARGET = $(PROJECT).exe\n");		// beh verificare personalizzare!
+		file.WriteString(myBuf);
+		file.WriteString(separator);
+
+		file.WriteString("# ROOT DIRECTORY\n");
+		file.WriteString("ROOT = .\n");		// o thePath, ma così è rilocabile
+		file.WriteString("\n");
+		for(i=0; i<fileProgetto.GetSize(); i++) {
+			COpenCDoc *pDoc=GetDocByTitle(fileProgetto[i].nomefile);
+			RECT rc={0,0,0,0};
+			if(pDoc) {
+				COpenCView *w=(COpenCView *)pDoc->getView();
+				if(w) 		// 
+					w->GetWindowPos(&rc);
+				}
+
+			if(fileProgetto[i].nomefile.FindNoCase(thePath) >= 0) {
+				S.SplitPath(fileProgetto[i].nomefile,5);
+				wsprintf(myBuf,"# FILE: \"%s\",%u,%u,%u,%u,%u\n",(LPCTSTR)S,fileProgetto[i].flag,rc.left,rc.top,rc.right,rc.bottom);
+				}// left è sempre >0 (causa Tree) per cui è ok come flag! top può essere 0
+			else
+				wsprintf(myBuf,"# FILE: \"%s\",%u,%u,%u,%u,%u\n",(LPCTSTR)fileProgetto[i].nomefile,fileProgetto[i].flag,rc.left,rc.top,rc.right,rc.bottom);
+			// ev. aggiungere coord finestra
+			file.WriteString(myBuf);
+			}
+
+		file.WriteString("\n");
+		file.WriteString(separator);
+		file.WriteString("# OPZIONI DI COMPILAZIONE (Gestite da OpenC IDE)\n");
+		sprintf(myBuf,"CPU = %s\n",(LPCTSTR)ccName);
+		file.WriteString(myBuf);
+		sprintf(myBuf,"OPTIMIZ = %s\n",(LPCTSTR)ccName);
+		file.WriteString(myBuf);
+		sprintf(myBuf,"INCLUDES = -I.\\include\n");
+		file.WriteString(myBuf);
+		file.WriteString(separator);
+
+		file.WriteString("\n");
+//		sprintf(myBuf,"CFLAGS = %s\n","-Fc; -Fa; -Fl; -Gs; -Gd; -O1; -AM;  $(CPU) $(OPTIMIZ) $(INCLUDES) -Wall");
+		sprintf(myBuf,"CFLAGS = %s %s\n",(LPCTSTR)ParseOpzioni(),"$(CPU) $(OPTIMIZ) $(INCLUDES)");
+		file.WriteString(myBuf);
+/*!IF "$(DEBUG)" == "1"
+CFLAGS = -c -Zi -Od -D_DEBUG $(INCLUDES)
+!ELSE
+CFLAGS = -c -O2 -DNDEBUG $(INCLUDES)
+!ENDIF*/
+
+		file.WriteString("\n");
+		file.WriteString(separator);
+		file.WriteString("# TARGET E REGOLE\n");
+		file.WriteString(separator);
+
+/*		PROGETTO.EXE: FILE1.OBJ FILE2.OBJ
+	link.exe FILE1.OBJ FILE2.OBJ /OUT:PROGETTO.EXE
+
+FILE1.OBJ: FILE1.C
+	cl.exe /c FILE1.C
+
+FILE2.OBJ: FILE2.C
+	cl.exe /c FILE2.C*/
+
+		file.WriteString("OBJS = ");
+		for(i=0; i<fileProgetto.GetSize(); i++) {
+			if(fileProgetto[i].nomefile.ReverseFindNoCase(".C")>=0) {
+				if(fileProgetto[i].nomefile.FindNoCase(thePath) >= 0) {
+					S2.SplitPath(fileProgetto[i].nomefile,5);
+					}
+				else
+					S2=fileProgetto[i].nomefile;
+				S=S2.Left(S2.ReverseFindNoCase('.'));
+				S+=".obj";
+				if(S.Find(' ')>=0) {
+					file.WriteString(" \"");
+					file.WriteString((LPCTSTR)S);
+					file.WriteString("\" ");
+					}
+				else {
+					file.WriteString(" ");
+					file.WriteString((LPCTSTR)S);
+					}
+				}
+			}
+		file.WriteString("\n\n");
+
+
+		sprintf(myBuf,"all: $(OBJS)\n");
+		file.WriteString(myBuf);
+
+
+		// questo non dovrebbe servire, la regola è semplicemente .c.obj e poi ci penserà l'esecutore del build (dice
+		for(i=0; i<fileProgetto.GetSize(); i++) {
+			if(fileProgetto[i].nomefile.ReverseFindNoCase(".C")>=0) {
+				if(fileProgetto[i].nomefile.FindNoCase(thePath) >= 0) {
+					S2.SplitPath(fileProgetto[i].nomefile,5);
+					}
+				else
+					S2=fileProgetto[i].nomefile;
+				S=S2;
+				S=S.Mid(S.ReverseFindNoCase('.'));
+				S+=".obj";
+				sprintf(myBuf,"%s: %s\n",(LPCTSTR)S,(LPCTSTR)S2);		// .c.obj
+				file.WriteString(myBuf);
+				sprintf(myBuf,"\t cc %s %s\n","$(CFLAGS)",(LPCTSTR)S2);		// "$<"
+				file.WriteString(myBuf);
+				}
+			}
+
+
+		file.WriteString("\n");
+		file.WriteString(separator);
+		file.WriteString("# [OpenC-Session] - DO NOT EDIT MANUALLY\n");
+		file.WriteString(separator);
+
+		file.WriteString("# [Bookmarks]\n");
+//		SaveProjectSection(const char *nomeprj,COpenCDoc *pDoc);
+		for(i=0; i<fileProgetto.GetSize(); i++) {
+			file.WriteString("# ");
+			S.SplitPath(fileProgetto[i].nomefile,5);
+			file.WriteString(S);
+			file.WriteString("=");
+			file.WriteString("\n");
+			}
+
+		file.WriteString("\n# [Breakpoints]\n");
+		for(i=0; i<fileProgetto.GetSize(); i++) {
+			file.WriteString("# ");
+			S.SplitPath(fileProgetto[i].nomefile,5);
+			file.WriteString(S);
+			file.WriteString("=");
+			file.WriteString("\n");
+			}
+		//# IFS.C=15,30
+
+		file.Close();
+		return 1;
+		}
+
+	return 0;
+	}
+
+COpenCDoc *COpenCApp::GetDocByTitle(LPCTSTR lpszTitle) {
+
+  if(!lpszTitle)
+      return NULL;
+
+  // 1. Accediamo al template manager dell'applicazione
+  POSITION posTemplate = AfxGetApp()->GetFirstDocTemplatePosition();
+  while (posTemplate) {
+    CDocTemplate* pTemplate = AfxGetApp()->GetNextDocTemplate(posTemplate);
+    if(pTemplate) {
+      // 2. Scorriamo tutti i documenti aperti gestiti da questo template
+      POSITION posDoc = pTemplate->GetFirstDocPosition();
+      while(posDoc) {
+        COpenCDoc *pDoc = (COpenCDoc*)pTemplate->GetNextDoc(posDoc);
+        if(pDoc) {
+          // 3. Confrontiamo il titolo (o se preferisci il percorso completo pDoc->GetPathName())
+          if(pDoc->GetTitle().CompareNoCase(lpszTitle) == 0) {
+            return pDoc; // Trovato!
+						}
+          }
+        }
+      }
+    }
+
+  return NULL; // Non trovato (il file non è attualmente aperto nell'IDE)
+	}
+
+int COpenCApp::SaveProjectSection(const char *nomeprj,COpenCDoc *pDoc) {
+	CStdioFile file1,file2;
+	char myBuf[256],myBuf2[64];
+	int i;
+	enum Section { SEC_NONE, SEC_BOOKMARKS, SEC_BREAKPOINTS } currentSec = SEC_NONE;
+	CStringEx S,S2,thePath;
+	CStringEx strLine;
+	CStringEx strBookmarks,strBreakpoints;
+
+	S.SplitPath(nomeprj,1);
+	thePath.SplitPath(nomeprj,2);
+	thePath=S+thePath;
+	S2.SplitPath(nomeprj,3);
+	S2 += ".TMP";
+
+	if(file1.Open(nomeprj,CFile::modeRead)) {
+		if(file2.Open(S2,CFile::modeCreate | CFile::modeWrite)) {
+			for(;;) {
+				if(!file1.ReadString(strLine))
+					break;
+
+				if(strLine.Left(1) == _T("#"))    {
+					if(strLine.FindNoCase(_T("[BOOKMARKS]")) != -1)        {
+						currentSec = SEC_BOOKMARKS;
+						file2.WriteString(strLine);
+						file2.WriteString("\n");
+						continue;
+						}
+					else if(strLine.FindNoCase(_T("[BREAKPOINTS]")) != -1)        {
+						currentSec = SEC_BREAKPOINTS;
+						file2.WriteString(strLine);
+						file2.WriteString("\n");
+						continue;
+						}
+					
+
+					// Se siamo in una sezione dati, pulisci il '#' iniziale e leggi il valore
+					if(currentSec == SEC_BOOKMARKS) {
+						if(pDoc) {
+							CStringEx strData = strLine.Mid(1); // Rimuovi '#'
+							strData.Trim();
+
+							int nEqual = strData.Find(_T('='));
+							if(nEqual != -1)            {
+								CStringEx strFile = strData.Left(nEqual);
+								CStringEx strLines = strData.Mid(nEqual + 1);
+								strFile.Trim();
+								strLines.Trim();
+
+								S=pDoc->GetTitle();
+								if(!strFile.CompareNoCase(S)) {
+/*								_tcscpy(myBuf,pDoc->GetTitle());
+								_tcscat(myBuf,"=");
+								for(i=0; i<pDoc->m_bookmarks.GetSize(); i++) {
+									wsprintf(myBuf2,"%u,",pDoc->m_bookmarks[i]);
+									_tcscat(myBuf,myBuf2);
+									}
+								if(myBuf[_tcslen(myBuf)-1] == ',')
+									myBuf[_tcslen(myBuf)-1]=0;
+*/
+								
+									strBookmarks.Format(_T("# %s="), pDoc->GetTitle());
+
+									for(int i=0; i < pDoc->m_bookmarks.GetSize(); i++) {
+										CString strNum;
+										strNum.Format(_T("%u,"), pDoc->m_bookmarks[i]);
+										strBookmarks += strNum; // Nessuna reallocazione, va diretto nella memoria già pronta!
+										}
+
+									strBookmarks.TrimRight(_T(','));
+									strLine=strBookmarks;
+									}
+								}
+							}
+						}
+					else if(currentSec == SEC_BREAKPOINTS) {
+						if(pDoc) {
+							CStringEx strData = strLine.Mid(1),S; // Rimuovi '#'
+							strData.Trim();
+
+							int nEqual = strData.Find(_T('='));
+							if(nEqual != -1)            {
+								CStringEx strFile = strData.Left(nEqual);
+								CStringEx strLines = strData.Mid(nEqual + 1);
+								strFile.Trim();
+								strLines.Trim();
+
+								S=pDoc->GetTitle();
+								if(!strFile.CompareNoCase(S)) {
+/*								S=pDoc->GetTitle();
+								_tcscpy(myBuf,pDoc->GetTitle());
+								_tcscat(myBuf,"=");
+								for(i=0; i<pDoc->m_breakpoints.GetSize(); i++) {
+									wsprintf(myBuf2,"%u,",pDoc->m_breakpoints[i]);
+									_tcscat(myBuf,myBuf2);
+									}
+								if(myBuf[_tcslen(myBuf)-1] == ',')
+									myBuf[_tcslen(myBuf)-1]=0;*/
+									strBreakpoints.Format(_T("# %s="), pDoc->GetTitle());
+
+									for(int i=0; i < pDoc->m_breakpoints.GetSize(); i++) {
+										CString strNum;
+										strNum.Format(_T("%u,"), pDoc->m_breakpoints[i]);
+										strBreakpoints += strNum; // Nessuna reallocazione, va diretto nella memoria già pronta!
+										}
+
+									strBreakpoints.TrimRight(_T(','));
+									strLine=strBreakpoints;
+									}
+
+								}
+							}
+						}
+					}
+				else {
+//					if(strLine.Left(1) == _T("#"))
+						currentSec = SEC_NONE; // Se si esce dai commenti, azzera la sezione (
+
+					}
+
+				file2.WriteString(strLine);
+				file2.WriteString("\n");
+				/*
+				file.WriteString("# [Bookmarks]\n");
+				if(pDoc) {
+					}
+				//# ARROWS.C=12,45,102
+
+
+				file.WriteString("\n");
+				file.WriteString("# [Breakpoints]\n");
+				if(pDoc) {
+					}
+				//# IFS.C=15,30
+				*/
+				}
+
+			file2.Close();
+			file1.Close();
+			// Sostituisce "test.tmp" a "test.mak" sovrascrivendolo se esiste già
+			if(::MoveFileEx(S2, nomeprj, MOVEFILE_REPLACE_EXISTING)) {
+				// Rinomina/Sostituzione avvenuta con successo
+				}
+			else {
+				DWORD dwErr = ::GetLastError(); // Gestione errore (es. file bloccato)
+				}
+			return 1;
+			}
+		}
+
+	return 0;
+	}
+
+void COpenCApp::OnFileSalvaprogetto() {
+
+	if(!nomeProgetto.IsEmpty())
+		SaveProject(nomeProgetto);
+	else
+		OnFileSalvaprogettoconnome();
 	
 	}
 
+void COpenCApp::OnUpdateFileSalvaprogetto(CCmdUI* pCmdUI) {
+
+	pCmdUI->Enable(!nomeProgetto.IsEmpty() || progettoModified);
+	}
+
+void COpenCApp::OnUpdateRecentFileMenu(CCmdUI* pCmdUI) {		// serve per andare insubmenu causa bug  https://www.codeguru.com/cplusplus/mru-list-in-a-submenu-the-mfc-bug-and-how-to-correct-it/
+
+	if(pCmdUI->m_pSubMenu) { // updating a submenu?
+		// update your submenu here, if you need to
+		return;
+		}
+	CWinApp::OnUpdateRecentFileMenu(pCmdUI);
+	}
 
 
-void COpenCApp::OnCompilaTutto() {
+void CRecentProjectList::UpdateMenu(CCmdUI* pCmdUI){
+  ASSERT(pCmdUI != NULL);
+
+  // 1. Individuiamo il sottomenu target
+  CMenu* pTargetMenu = pCmdUI->m_pSubMenu;
+  if(pTargetMenu == NULL && pCmdUI->m_pMenu != NULL)    {
+    pTargetMenu = pCmdUI->m_pMenu->GetSubMenu(pCmdUI->m_nIndex);
+	  }
+
+  if(!pTargetMenu)    {
+    CRecentFileList::UpdateMenu(pCmdUI);
+    return;
+		}
+
+  // 2. Determiniamo l'ID base (es. ID_PROJECT_MRU_1 / 32820)
+  UINT nBaseID = (m_nStart != 0) ? m_nStart : pCmdUI->m_nID;
+
+  // 3. Pulizia totale delle vecchie voci nel sottomenu
+  for (int i = 0; i < m_nSize; i++) {
+    pTargetMenu->DeleteMenu(nBaseID + i, MF_BYCOMMAND);
+    }
+  pTargetMenu->DeleteMenu(pCmdUI->m_nID, MF_BYCOMMAND); // Rimuove "Nessun progetto"
+
+  // 4. Inserimento dinamico sicuro (senza dipendere da GetDisplayName)
+  int nInserted = 0;
+
+  for(int iMRU = 0; iMRU < m_nSize; iMRU++) {
+    // Accesso diretto a m_arrNames (evita i bachi di GetDisplayName in Release)
+    if (iMRU >= m_nSize) 
+        break;
+
+    CString strPath = m_arrNames[iMRU];
+
+    if (!strPath.IsEmpty()) {
+      CString strItem;
+      strItem.Format(_T("&%d %s"), nInserted + 1, (LPCTSTR)strPath);
+
+      // Posizione = nInserted (0, 1, 2...)
+      // ID Comando = nBaseID + iMRU (32820, 32821...)
+      pTargetMenu->InsertMenu(nInserted, MF_STRING | MF_ENABLED | MF_BYPOSITION, 
+                              nBaseID + iMRU, strItem);
+      
+      nInserted++;
+      }
+		}
+
+  // Se non abbiamo inserito nulla, disabilitiamo il menu
+  if(nInserted == 0)
+    pCmdUI->Enable(FALSE);
+
+  pCmdUI->m_bEnableChanged = TRUE;
+	}
+
+
+void COpenCApp::OnUpdateRecentProjectMenu(CCmdUI* pCmdUI) {
+
+	TRACE(_T("OnUpdateRecentProjectMenu chiamato, pCmdUI->m_nID = %d, m_pMenu = %p, m_pSubMenu = %p\n"), 
+    pCmdUI->m_nID, pCmdUI->m_pMenu,pCmdUI->m_pSubMenu);
+
+  if(m_pRecentProjectList)
+    // Chiamata alla nuova UpdateMenu sovrascritta
+    m_pRecentProjectList->UpdateMenu(pCmdUI);
+  else
+    pCmdUI->Enable(FALSE);
+	}
+
+
+// Gestisce il click dell'utente su uno dei progetti recenti nel menu
+BOOL COpenCApp::OnOpenRecentProject(UINT nID) {
+	CStringEx S,S1;
+
+  if(!m_pRecentProjectList)
+    return FALSE;
+
+  int nIndex = nID - ID_PROJECT_MRU_1;
+  CString strProjectPath = (*m_pRecentProjectList)[nIndex];
+
+  if(!strProjectPath.IsEmpty()) {
+		CloseAllDocuments(FALSE); // v. sotto
+
+		nomeProgetto=strProjectPath;
+		S.SplitPath(nomeProgetto,5);
+
+    // Invoca la tua funzione personalizzata per caricare il Makefile / Progetto
+    CMainFrame* pMainFrame = (CMainFrame*)m_pMainWnd;
+    if(!LoadProject(strProjectPath)) {
+      // Se il file non esiste più, rimuovilo dall'MRU!
+      m_pRecentProjectList->Remove(nIndex);
+			nomeProgetto.Empty();
+			AfxMessageBox("Il progetto non esiste o è stato rimosso",MB_ICONEXCLAMATION);
+      }
+		else {
+			updateWindowTitle(S);
+
+			S="Progetto "+strProjectPath+" aperto correttamente.";
+			pMainFrame->m_wndStatusBar.SetWindowText(S);
+
+      }
+    }
+  return TRUE;
+	}
+
+
+BOOL COpenCApp::CompilaFile(CStringEx ts,CStringEx ots) {
+	char *args[32];
+	char myBuf[256],myBuf2[256],n[256],*p;
+	int i,j;
+	CStringEx parms;
+	HINSTANCE hInst;
+	HANDLE hFile;
+	WIN32_FIND_DATA wfd;
+	typedef DWORD (__stdcall *ccFunc)(CWnd *,int,char **);		// "stdcall" serve proprio!!
+	ccFunc f;
+
+	args[0]="cc.exe";		// per compatibilità...
+	args[1]=(char *)(LPCTSTR)ts;
+
+	parms=theApp.ParseOpzioni();
+
+	if(!nomeProgetto.IsEmpty())
+		parms=flagsProgetto;
+
+	strcpy(myBuf,(LPCTSTR)parms);			// non funziona!! lei si aspetta un puntatore per ogni switch...
+	p=strtok(myBuf," ");
+	for(i=2; i<32 && p!=NULL; i++) {
+		args[i]=p;
+		p=strtok(NULL," ");
+		}
+
+	hInst=LoadLibrary((LPCTSTR)theApp.ccName);
+	if(hInst) {
+		f=(ccFunc)GetProcAddress(hInst,"Compila");
+		// ev. passare ots
+		if(f) {
+			CWnd *v=theApp.m_pMainWnd;
+
+			(*f)(v,i,(char **)args);
+			goto fine;
+			}
+		FreeLibrary(hInst);
+		}
+	
+	AfxMessageBox("Impossibile caricare il compilatore",MB_ICONEXCLAMATION);
+	return 0;
+
+fine:
+	return 1;
+	}
+
+
+FILETIME COpenCApp::CercaInclude(const CString& strFilePath) {
+	CStringList visitedFiles;
+
+	return GetMaxIncludeTimestamp(strFilePath,visitedFiles);
+	}
+
+// gestione ricerca file include con controllo al rientro (Esempio di firma ricorsiva
+FILETIME COpenCApp::GetMaxIncludeTimestamp(const CString& strFilePath, CStringList& visitedFiles) {
+	CStdioFile file;
+	CStringEx strLine;
+
+  // 1. Se il file è già stato analizzato in questa catena, usciamo subito (evita loop infiniti)
+  if(visitedFiles.Find(strFilePath))
+    return GetFileLastWriteTime(strFilePath); // Ritorna la data di questo file senza ri-esplorarlo
+
+  visitedFiles.AddTail(strFilePath);
+
+  FILETIME ftMax = GetFileLastWriteTime(strFilePath);
+
+  // 2. Apri il file, leggi riga per riga, cerca #include
+  // 3. Per ogni include trovato e risolto nel percorso su disco:
+	if(file.Open(strFilePath,CFile::modeRead)) {
+
+		while(file.ReadString(strLine)) {
+			strLine.Trim();
+
+			}
+		file.Close();
+		}
+			//  FILETIME ftChild = GetMaxIncludeTimestamp(strIncPath, visitedFiles);
+//  if(CompareFileTime(&ftChild, &ftMax) > 0) 
+//		ftMax = ftChild;
+
+  return ftMax;
+	}
+
+// Struttura ausiliaria per ottenere il timestamp di un file
+FILETIME COpenCApp::GetFileLastWriteTime(LPCTSTR lpszPath) {
+  FILETIME ftLastWrite = { 0, 0 };
+  HANDLE hFile = ::CreateFile(lpszPath, GENERIC_READ, FILE_SHARE_READ, 
+                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+  if(hFile != INVALID_HANDLE_VALUE) {
+    ::GetFileTime(hFile, NULL, NULL, &ftLastWrite);
+    ::CloseHandle(hFile);
+    }
+  return ftLastWrite;
+	}
+
+// Confronta due FILETIME (-1 se ft1 < ft2, 1 se ft1 > ft2, 0 se uguali)
+LONG COpenCApp::CompareFileTimes(const FILETIME& ft1, const FILETIME& ft2) {
+  return ::CompareFileTime(&ft1, &ft2);
+	}
+
+BOOL COpenCApp::BuildAll(LPCTSTR lpszOutputDir, BOOL bForceRebuild /* = FALSE */) {
+  int nTotalFiles = fileProgetto.GetSize();
+  int nCompiledCount = 0;
+  BOOL bSuccess = TRUE;
+	CString S;
+
+	m_pMainWnd->PostMessage(WM_CLSWINDOW,0,(LPARAM)NULL);
+  for(int i=0; i < nTotalFiles; i++) {
+		if(fileProgetto.GetAt(i).flag) {
+			CStringEx strSourcePath = fileProgetto.GetAt(i).nomefile;
+    
+			// Costruiamo il percorso del file .OBJ
+			CStringEx strFileNameOnly;
+			strFileNameOnly.SplitPath(strSourcePath,4);
+			if(!strFileNameOnly.CompareNoCase(".C")) {
+				strFileNameOnly.SplitPath(strSourcePath,3);
+				int nDotPos = strFileNameOnly.ReverseFind(_T('.'));
+				if(nDotPos != -1)
+					strFileNameOnly = strFileNameOnly.Left(nDotPos);
+
+				CString strObjPath;
+	//			strObjPath.Format(_T("%s\\%s.OBJ"), lpszOutputDir, strFileNameOnly);
+				strObjPath.Format(_T("%s\\%s.ASM"), lpszOutputDir, (LPCTSTR)strFileNameOnly);
+
+				BOOL bNeedsRecompile = FALSE;
+
+				// SE bForceRebuild è TRUE, forziamo la compilazione a prescindere!
+				if(bForceRebuild)
+					bNeedsRecompile = TRUE;
+				else    {
+					// Altrimenti eseguiamo il solito controllo sui timestamp
+					FILETIME ftSource = GetFileLastWriteTime(strSourcePath);
+					FILETIME ftObj    = GetFileLastWriteTime(strObjPath);
+
+					if(ftObj.dwLowDateTime == 0 && ftObj.dwHighDateTime == 0)
+						bNeedsRecompile = TRUE; // .OBJ inesistente
+					else if(CompareFileTimes(ftSource, ftObj) > 0)
+						bNeedsRecompile = TRUE; // .C modificato
+					else if(CompareFileTimes(CercaInclude(strSourcePath),ftSource) > 0)
+						bNeedsRecompile = TRUE; // .H modificato
+					}
+
+				// Esecuzione Compilazione
+				if(bNeedsRecompile) {
+					BOOL bResult = CompilaFile(strSourcePath, strObjPath);
+					if(!bResult) {
+						bSuccess = FALSE;
+						break; // Si interrompe al primo errore di compilazione
+						}
+					nCompiledCount++;
+					}
+				else {
+					char *p=(LPSTR)GlobalAlloc(GPTR,256);
+					_tcscpy(p,(LPCTSTR)strSourcePath);
+					m_pMainWnd->PostMessage(WM_ADDTEXT,0,(LPARAM)p);
+					p=(LPSTR)GlobalAlloc(GPTR,256);
+					_tcscpy(p,"Salto... (non necessario)");
+					m_pMainWnd->PostMessage(WM_ADDTEXT,0,(LPARAM)p);
+					}
+				} // .C
+			else if(!strFileNameOnly.CompareNoCase(".ASM")) {
+				strFileNameOnly.SplitPath(strSourcePath,3);
+				int nDotPos = strFileNameOnly.ReverseFind(_T('.'));
+				if(nDotPos != -1)
+					strFileNameOnly = strFileNameOnly.Left(nDotPos);
+
+				CString strObjPath;
+				strObjPath.Format(_T("%s\\%s.OBJ"), lpszOutputDir, (LPCTSTR)strFileNameOnly);
+
+				if(ccName.FindNoCase("GD24032")>=0)
+					S="as24";
+				else if(ccName.FindNoCase("68000")>=0)
+					S="as68";
+				else if(ccName.FindNoCase("8086")>=0)
+					S="as86";
+				else
+					S="as";
+				//chiamare ASxx a seconda
+				CString flags=" /l /E /Fe /x /s";		// v. as, ELF, silent, listing, map/error, 
+				strObjPath.Empty();		// qua non serve :) di default
+				S=_T("as24.exe ")+flags+" "+strSourcePath +" "+ strObjPath;
+				ExecuteAndCaptureOutput((LPCTSTR)S, ((CMainFrame*)m_pMainWnd)->m_wndOutputBar.m_wndOutputEdit);
+//				S=flags+" "+strSourcePath;
+	//			ShellExecute(m_pMainWnd->m_hWnd,NULL,"as24.exe",S,NULL,SW_SHOW);
+
+				}
+			}
+		}
+
+  return bSuccess;
+	}
+
+BOOL COpenCApp::ExecuteAndCaptureOutput(LPCTSTR lpszCommandLine, CEdit& wndEditOutput) {
+  HANDLE hReadPipe   = NULL;
+  HANDLE hWritePipe  = NULL;
+  HANDLE hStdInRead  = NULL;
+  HANDLE hStdInWrite = NULL;
+
+  SECURITY_ATTRIBUTES sa;
+  sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+  sa.bInheritHandle = TRUE;
+  sa.lpSecurityDescriptor = NULL;
+
+  // Pipe per STDOUT / STDERR
+  if(!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+    return FALSE;
+
+  SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+
+    // Pipe vuota per STDIN (invia EOF se l'eseguibile attende input da tastiera)
+  if(CreatePipe(&hStdInRead, &hStdInWrite, &sa, 0)) {
+    SetHandleInformation(hStdInWrite, HANDLE_FLAG_INHERIT, 0);
+    }
+
+  STARTUPINFO si;
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(si);
+  si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+  si.wShowWindow = SW_HIDE;
+  si.hStdOutput = hWritePipe;
+  si.hStdError  = hWritePipe;
+  si.hStdInput  = hStdInRead; // Imposta lo STDIN vuoto
+
+  PROCESS_INFORMATION pi;
+  ZeroMemory(&pi, sizeof(pi));
+
+  TCHAR szCmd[MAX_PATH * 2];
+  _tcscpy(szCmd, lpszCommandLine);
+
+  BOOL bSuccess = CreateProcess(
+    NULL, 
+    szCmd, 
+    NULL, 
+    NULL, 
+    TRUE, 
+    0/*CREATE_NO_WINDOW*/, 
+    NULL, 
+    NULL, 
+    &si, 
+    &pi
+    );
+
+  // Chiudiamo subito il lato lettura/scrittura di STDIN nel padre
+  if(hStdInRead)  
+		CloseHandle(hStdInRead);
+  if(hStdInWrite) 
+		CloseHandle(hStdInWrite);
+
+  if(!bSuccess) {
+    CloseHandle(hWritePipe);
+    CloseHandle(hReadPipe);
+    return FALSE;
+		}
+
+  // Chiudiamo l'handle di scrittura del padre: resta attivo solo quello del figlio
+  CloseHandle(hWritePipe);
+
+  char szBuffer[512];
+  DWORD dwBytesRead = 0;
+
+  // Ora la ReadFile legge tutto fino alla fine senza più bloccarsi sulle macro o sul getch()!
+  while(ReadFile(hReadPipe, szBuffer, sizeof(szBuffer) - 1, &dwBytesRead, NULL) && dwBytesRead > 0) {
+    szBuffer[dwBytesRead] = '\0';
+
+    int nLen = wndEditOutput.GetWindowTextLength();
+    wndEditOutput.SetSel(nLen, nLen);
+
+    #ifdef _UNICODE
+        CA2W wBuffer(szBuffer);
+        wndEditOutput.ReplaceSel(wBuffer);
+    #else
+        wndEditOutput.ReplaceSel(szBuffer);
+    #endif
+
+    wndEditOutput.UpdateWindow();
+    }
+
+  WaitForSingleObject(pi.hProcess, INFINITE);
+
+  DWORD dwExitCode = 0;
+  GetExitCodeProcess(pi.hProcess, &dwExitCode);
+
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+  CloseHandle(hReadPipe);
+
+  return (dwExitCode == 0);
+	}
+	
+
+void COpenCApp::OnCompilaProgetto() {
 	
 	pDocTemplate->SaveAllModified();
+
+	BuildAll(theApp.pathProgetto,FALSE);
+
 	}
 
-void COpenCApp::OnUpdateCompilaTutto(CCmdUI* pCmdUI) {
+void COpenCApp::OnUpdateCompilaProgetto(CCmdUI* pCmdUI) {
 
-	pCmdUI->Enable(!ccName.IsEmpty());
+	pCmdUI->Enable(!nomeProgetto.IsEmpty() && !ccName.IsEmpty());
+	}
+
+void COpenCApp::OnCompilaCompilatutto() {
+	pDocTemplate->SaveAllModified();
+	
+	// Se il percorso del file nel Makefile non è già assoluto (es. non inizia con "C:\" o "\\")
+/*	if(::PathIsRelative(strFileName)) {
+			// Combiniamo la cartella del file .mak con il percorso relativo del file
+			TCHAR szFullPath[MAX_PATH];
+			::PathCombine(szFullPath, strProjectPath, strFileName);
+			strFinalPath = szFullPath;
+		}
+	else
+			strFinalPath = strFileName;*/
+	BuildAll(theApp.pathProgetto,TRUE);
+	}
+
+void COpenCApp::OnUpdateCompilaCompilatutto(CCmdUI* pCmdUI) {
+	pCmdUI->Enable(!nomeProgetto.IsEmpty() && !ccName.IsEmpty());
+	
 	}
 
 
@@ -998,7 +2192,7 @@ CStringEx CStringEx::FormatSize(DWORD dwFileSize) {
 	}
 
 CStringEx CStringEx::SplitPath(LPCTSTR path,BYTE mode) {
-	char myBuf[256];
+	char myBuf[256],myBuf2[64];
 
 	switch(mode) {
 		case 1:
@@ -1017,10 +2211,341 @@ CStringEx CStringEx::SplitPath(LPCTSTR path,BYTE mode) {
 			_splitpath(path,NULL,NULL,NULL,myBuf);
 			*this=myBuf;
 			break;
+		case 5:
+			_splitpath(path,NULL,NULL,myBuf,myBuf2);
+			_tcscat(myBuf,myBuf2);
+			*this=myBuf;
+			break;
 		}
 
 	return *this;
 	}
 
+CStringEx CStringEx::GetASCII() {
+  char  szASCII[1024];
 
+  ::WideCharToMultiByte(CP_ACP, 0,(WCHAR*)(LPCTSTR)*this, 1024, szASCII, -1, NULL,NULL);		// hmm non ha molto senso, bisognerebbe sapere che la CString è unicode
+	return szASCII;
+	}
+
+WCHAR *CStringEx::GetUnicode(WCHAR *szUnicode) {
+
+  ::MultiByteToWideChar(CP_ACP, 0, *this, -1, szUnicode, 1024);
+	return szUnicode;
+	}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+void COpenCApp::OnFileChiudiprogetto() {
+	CStringEx S;
+	int i;
+
+	if(progettoModified) {
+		i=AfxMessageBox("Il progetto è stato modificato: salvarlo?",MB_YESNOCANCEL | MB_DEFBUTTON1 | MB_ICONQUESTION);
+		if(i == IDOK)
+			OnFileSalvaprogetto();
+		else if(i == IDCANCEL)
+			return;
+		}
+
+	((CMainFrame*)m_pMainWnd)->PostMessage(WM_COMMAND,ID_FINESTRA_CHIUDITUTTE,0);
+
+	updateWindowTitle("");
+
+	fileProgetto.RemoveAll();	
+	nomeProgetto.Empty();
+	progettoModified=FALSE;
+	((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.DeleteAllItems();
+	((CMainFrame*)theApp.m_pMainWnd)->projectTreeRoot=((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.InsertItem("Progetto",4,4);
+	}
+
+void COpenCApp::OnUpdateFileChiudiprogetto(CCmdUI* pCmdUI) {
+	
+	pCmdUI->Enable(!nomeProgetto.IsEmpty());
+	}
+
+void COpenCApp::OnFileSalvaprogettoconnome() {
+	CStringEx S,S1;
+	CFileDialog myDlg(FALSE,".mak",nomeProgetto,OFN_OVERWRITEPROMPT | OFN_SHOWHELP,
+		"File progetto (*.mak)|*.mak|Tutti i file (*.*)|*.*||"
+		);
+	
+	if(myDlg.DoModal() == IDOK) {
+		S=myDlg.GetPathName();
+		S.SplitPath(S,5);
+		nomeProgetto=S;
+
+		SaveProject(myDlg.GetPathName());
+		m_pRecentProjectList->Add(myDlg.GetPathName());		// pare logico
+
+		updateWindowTitle(S);
+
+		progettoModified=FALSE;
+		}
+	}
+
+void COpenCApp::OnUpdateFileSalvaprogettoconnome(CCmdUI* pCmdUI) {
+
+	pCmdUI->Enable(!nomeProgetto.IsEmpty() || progettoModified);
+	}
+
+void COpenCApp::updateWindowTitle(CStringEx S) {
+	CStringEx S1,S2;
+	int i;
+
+	S.SplitPath(S,5);
+
+	S1="Progetto";
+	if(!S.IsEmpty()) {
+		S2.SplitPath(S,3);
+		S2.MakeUpper();
+		S1 += ": "+S2;
+		}
+	((CMainFrame*)theApp.m_pMainWnd)->m_wndProjectTree.SetItemText(((CMainFrame*)theApp.m_pMainWnd)->projectTreeRoot,S1);
+
+	m_pMainWnd->GetWindowText(S1);
+	i=S1.ReverseFindNoCase("[");
+	if(i>0) 
+		S1=S1.Mid(0,i-1);
+//	m_pMainWnd->SetWindowText(S1);
+//	m_pMainWnd->GetWindowText(S1);
+	if(!S.IsEmpty()) {
+		S1+=" ["+S;
+		S1+="]";
+		}
+	m_pMainWnd->SetWindowText(S1);
+	}
+
+void COpenCApp::OnFileNuovoprogetto() {
+	int i;
+
+	if(progettoModified) {
+		i=AfxMessageBox("Il progetto è stato modificato: salvarlo?",MB_YESNOCANCEL | MB_DEFBUTTON1 | MB_ICONQUESTION);
+		if(i == IDOK)
+			OnFileSalvaprogetto();
+		else if(i == IDCANCEL)
+			return;
+		}
+
+//	((CMainFrame*)m_pMainWnd)->PostMessage(WM_COMMAND,ID_FINESTRA_CHIUDITUTTE,0);
+	CloseAllDocuments(FALSE); // 
+
+	fileProgetto.RemoveAll();	
+	nomeProgetto.Empty();
+	pathProgetto.Empty();
+	flagsProgetto.Empty();
+	progettoModified=FALSE;
+
+	ReparseProgetto();
+	updateWindowTitle("");
+	}
+
+BOOL COpenCApp::AddFileToProject(const char *s,bool mode,RECT *rc) {
+	int i;
+	struct PROGETTO_ENTRY pe;
+
+	for(i=0; i<fileProgetto.GetSize(); i++) {
+		if(!fileProgetto[i].nomefile.CompareNoCase(s)) {
+			AfxMessageBox("Il file è già presente nel progetto!",MB_ICONEXCLAMATION);
+			return FALSE;
+			}
+		}
+
+	pe.flag=mode;
+	pe.nomefile=s;
+	if(rc)
+		pe.rc=*rc;
+	fileProgetto.Add(pe);
+	ReparseProgetto();		// hmmm andrebbe fatto solo alla fine, se all'apertura, v.sopra
+	return TRUE;
+	}
+
+void COpenCApp::ReparseProgetto() {
+	CMainFrame *f=((CMainFrame*)theApp.m_pMainWnd);
+	int i;
+	HTREEITEM tp1,tp2,tp3,tp;
+	CString S;
+
+	f->m_wndProjectTree.DeleteAllItems();
+	f->projectTreeRoot=f->m_wndProjectTree.InsertItem("Progetto",4,4);
+	f->m_wndProjectTree.SetItemData(f->projectTreeRoot,0);//marker
+//	m_wndProjectTree.SetItemImage(tp1,0,1);
+	tp1=f->m_wndProjectTree.InsertItem("Source",0,1,f->projectTreeRoot);
+	f->m_wndProjectTree.SetItemData(tp1,1);//marker
+	tp2=f->m_wndProjectTree.InsertItem("Header",0,1,f->projectTreeRoot);
+	f->m_wndProjectTree.SetItemData(tp1,2);//marker
+	tp3=f->m_wndProjectTree.InsertItem("Altro",0,1,f->projectTreeRoot);
+	f->m_wndProjectTree.SetItemData(tp1,3);//marker
+	for(i=0; i<fileProgetto.GetSize(); i++) {
+		CStringEx S;
+		S.SplitPath(fileProgetto[i].nomefile,5);
+		if(fileProgetto[i].nomefile.ReverseFindNoCase(".C")>=0) {
+			tp=f->m_wndProjectTree.InsertItem(S,2,2,tp1);
+			f->m_wndProjectTree.SetItemImage(tp,fileProgetto[i].flag ? 2 : 3,fileProgetto[i].flag ? 2 : 3);
+			f->m_wndProjectTree.SetItemData(tp,(DWORD)&fileProgetto[i]);
+			}
+		else if(fileProgetto[i].nomefile.ReverseFindNoCase(".H")>=0 || fileProgetto[i].nomefile.ReverseFindNoCase(".INC")>=0) {
+			tp=f->m_wndProjectTree.InsertItem(S,2,2,tp2);
+			f->m_wndProjectTree.SetItemImage(tp,fileProgetto[i].flag ? 2 : 3,fileProgetto[i].flag ? 2 : 3);
+			f->m_wndProjectTree.SetItemData(tp,(DWORD)&fileProgetto[i]);
+			}
+		else {
+			tp=f->m_wndProjectTree.InsertItem(S,2,2,tp3);
+			f->m_wndProjectTree.SetItemImage(tp,fileProgetto[i].flag ? 2 : 3,fileProgetto[i].flag ? 2 : 3);
+			f->m_wndProjectTree.SetItemData(tp,(DWORD)&fileProgetto[i]);
+			}
+		}
+
+	f->m_wndProjectTree.Expand(f->projectTreeRoot,TVE_EXPAND);
+	f->m_wndProjectTree.Expand(tp1,TVE_EXPAND);
+	f->m_wndProjectTree.Expand(tp2,TVE_EXPAND);
+	f->m_wndProjectTree.Expand(tp3,TVE_EXPAND);
+
+	}
+
+
+// --- Monitoraggio File Globale ---------------------------------------------------------------------------------
+void COpenCApp::StartFileMonitoring() {
+
+  if(m_pMonThread)
+    return; // Già avviato
+
+  // Evento manuale per fermare il thread alla chiusura dell'IDE
+  m_hMonStopEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
+
+  // Avvia il thread worker globale a priorità bassa
+  m_pMonThread = AfxBeginThread(GlobalFileMonTask, this, THREAD_PRIORITY_IDLE);
+	}
+
+void COpenCApp::StopFileMonitoring() {
+
+  if(m_hMonStopEvent)
+    ::SetEvent(m_hMonStopEvent);
+
+  if(m_pMonThread != NULL && m_pMonThread->m_hThread) {
+    // Attende la chiusura pulita del thread (max 1,5 secondi)
+    ::WaitForSingleObject(m_pMonThread->m_hThread, 2000);
+    m_pMonThread = NULL;
+		}
+
+  if(m_hMonStopEvent) {
+    ::CloseHandle(m_hMonStopEvent);
+    m_hMonStopEvent = NULL;
+    }
+	}
+
+// --- Funzioni Thread-Safe per registrare e rimuovere file ---
+
+void COpenCApp::RegisterMonitoredFile(LPCTSTR lpszPath, HWND hWndView, FILETIME ftLastWrite) {
+  CSingleLock lock(&m_csMonitoredFiles, TRUE);
+
+  // Evita duplicati per lo stesso HWND
+  for(int i=0; i < m_arrMonitoredFiles.GetSize(); i++) {
+    if(m_arrMonitoredFiles[i].hWndView == hWndView) {
+      m_arrMonitoredFiles[i].strPath = lpszPath;
+      m_arrMonitoredFiles[i].ftLastWrite = ftLastWrite;
+      return;
+      }
+		}
+
+  SMonitoredFile item;
+  item.strPath = lpszPath;
+  item.hWndView = hWndView;
+  item.ftLastWrite = ftLastWrite;
+  m_arrMonitoredFiles.Add(item);
+
+  // Se è il primo file registrato, avvia il thread se non era attivo
+  if(!m_pMonThread) {
+    StartFileMonitoring();
+    }
+	}
+
+void COpenCApp::UnregisterMonitoredFile(HWND hWndView) {
+  CSingleLock lock(&m_csMonitoredFiles, TRUE);
+
+  for(int i=0; i < m_arrMonitoredFiles.GetSize(); i++) {
+    if(m_arrMonitoredFiles[i].hWndView == hWndView) {
+      m_arrMonitoredFiles.RemoveAt(i);
+      break;
+      }
+    }
+	}
+
+// Da chiamare quando SALVI il file dall'editor, per evitare falsi allarmi
+void COpenCApp::UpdateMonitoredFileTimestamp(LPCTSTR lpszPath, FILETIME ftNewTime) {
+  CSingleLock lock(&m_csMonitoredFiles, TRUE);
+
+  for(int i=0; i < m_arrMonitoredFiles.GetSize(); i++) {
+    if(m_arrMonitoredFiles[i].strPath.CompareNoCase(lpszPath) == 0)
+      m_arrMonitoredFiles[i].ftLastWrite = ftNewTime;
+    }
+	}
+
+// --- Il Thread di Polling ---
+
+UINT AFX_CDECL COpenCApp::GlobalFileMonTask(LPVOID pParam) {
+  COpenCApp* pApp = (COpenCApp*)pParam;
+
+  while(TRUE)    {
+    // Attende 1500 ms; se nel frattempo m_hMonStopEvent viene segnalato, esce dal loop
+    DWORD dwWait = ::WaitForSingleObject(pApp->m_hMonStopEvent, 1500);
+    if(dwWait == WAIT_OBJECT_0) {
+      break; // Chiusura applicazione richiesta!
+		  }
+
+		// Scansione thread-safe di tutti i file aperti
+		CSingleLock lock(&pApp->m_csMonitoredFiles, TRUE);
+
+		for(int i=0; i < pApp->m_arrMonitoredFiles.GetSize(); i++) {
+			SMonitoredFile& file = pApp->m_arrMonitoredFiles[i];
+
+			if(file.hWndView && ::IsWindow(file.hWndView)) {
+				WIN32_FILE_ATTRIBUTE_DATA wfd;
+				if(::GetFileAttributesEx(file.strPath, GetFileExInfoStandard, &wfd)) {
+					// Se la data su disco è più recente del nostro timestamp
+					if(::CompareFileTime(&wfd.ftLastWriteTime, &file.ftLastWrite) > 0) {
+						// Aggiorna subito il timestamp per evitare notifiche doppie
+						file.ftLastWrite = wfd.ftLastWriteTime;
+
+						// Invia il messaggio in asincrono alla Vista interessata
+						::PostMessage(file.hWndView, WM_MY_FILE_CHANGED, 0, 0);
+						}
+					}
+				}
+			}
+		lock.Unlock();
+		}
+
+  return 0;
+	}
+
+
+/////////////////////////////////////////////////////////////////////////////
+CCommandLineInfoEx::CCommandLineInfoEx() {
+
+	m_bShowSplash=TRUE;
+	m_debugLevel=0;
+	}
+
+void CCommandLineInfoEx::ParseParam(LPCTSTR lpszParam, BOOL bFlag, BOOL bLast) {
+
+  if(bFlag) {
+    // Gestione degli switch /flag o -flag
+    if(!_tcsicmp(lpszParam, _T("nobanner")))
+      m_bShowSplash = FALSE;
+    else if(!_tcsnicmp(lpszParam, _T("debuglevel="), 11))
+      m_debugLevel = _ttoi(lpszParam + 11);
+    else if(!_tcsicmp(lpszParam, _T("debug")))
+      m_debugLevel = 1;
+    else if(!_tcsicmp(lpszParam, _T("autobuild")))
+      m_autoBuild = 1;
+    else
+      CCommandLineInfo::ParseParam(lpszParam, bFlag, bLast);
+			}
+    else {
+      // È stato passato un nome di file direttamente (senza / o -)
+      // Salvi il percorso nella classe base o in una variabile tua
+      CCommandLineInfo::ParseParam(lpszParam, bFlag, bLast);
+    }
+	}
 

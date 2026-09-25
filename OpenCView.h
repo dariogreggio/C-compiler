@@ -13,6 +13,25 @@ class CRichEditCtrlEx;
 #define WB_RIGHTSTART      7
 
 
+
+class COpenCView; // Forward declaration
+
+class CGutterWnd : public CWnd {
+public:
+  CGutterWnd();
+	DECLARE_DYNCREATE(CGutterWnd)
+  virtual ~CGutterWnd();
+	void PostNcDestroy();
+
+protected:
+	afx_msg void OnPaint();
+  afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+	afx_msg BOOL OnSetCursor();
+	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
+	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+  DECLARE_MESSAGE_MAP()
+	};
+
 class COpenCView : public CRichEditView {
 protected: // create from serialization only
 	COpenCView();
@@ -22,8 +41,10 @@ protected: // create from serialization only
 public:
 	UINT_PTR m_uTimerID;
 	BOOL m_bDelayUpdateItems;
+	BOOL m_bInitialUpdateDone;
 
 	BOOL CreateView(int row, int col, CRuntimeClass* pViewClass, SIZE sizeInit, CCreateContext* pContext);
+	BOOL PreTranslateMessage(MSG*);
 	COpenCDoc* GetDocument();
 	BOOL IsModified() { return GetRichEditCtrl().GetModify(); }
 	static DWORD CALLBACK MyStreamInCallback(DWORD , LPBYTE , LONG , LONG *);
@@ -37,11 +58,25 @@ protected:
   BOOL m_bMatchCase;              // Rispetta maiuscole/minuscole
   BOOL m_bWholeWord;              // Parola intera
 
+	CString m_strSelectedInclude; // Mantiene il nome del file (es. "stdio.h" o "mioheader.h")
+
+
+//	CGutterWnd m_gutterWnd;
+//  const int m_nGutterWidth; // Larghezza della gutter in pixel
+
 	// Funzione helper per eseguire la ricerca vera e propria nel testo
   BOOL DoSearchText(LPCTSTR lpszFind, BOOL bDown, BOOL bCase, BOOL bWholeWord);
 	CString GetRichTextSelection();
 	void SelectWordAtCaret();
 
+	// per testo colorato
+	void HighlightVisibleRange();
+	void ParseAndApplyHighlighting(const CString&, int);
+	CHARFORMAT2 CreateColorFormat(COLORREF);
+	void ApplyStyleToRange(int, int, const CHARFORMAT2&);
+	int GetVisibleLineCount();
+	BOOL IsKeyword(const CString& strWord, const LPCTSTR szKeywords[]);
+	void GetTextRange(int nStart, int nEnd, CString& strText);
 
 
 // Operations
@@ -56,18 +91,23 @@ public:
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(COpenCEditView)
 	public:
-	virtual void OnDraw(CDC* pDC);  // overridden to draw this view
+//	virtual void OnDraw(CDC* pDC);  // overridden to draw this view
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 	protected:
 	virtual BOOL OnPreparePrinting(CPrintInfo* pInfo);
 	virtual void OnBeginPrinting(CDC* pDC, CPrintInfo* pInfo);
 	virtual void OnEndPrinting(CDC* pDC, CPrintInfo* pInfo);
+	virtual void OnPaint();
 	//}}AFX_VIRTUAL
 	void OnUpdatePosIndicator(CCmdUI* pCmdUI);
   // Gestori dei messaggi
   afx_msg void OnEditFindCustom();
   afx_msg void OnFindWordNext();
-  afx_msg LRESULT OnFindReplaceCmd(WPARAM wParam, LPARAM lParam);
+  afx_msg LRESULT OnFindReplaceCmd(WPARAM, LPARAM);
+
+	CString GetWordAtPoint(CPoint ptClient);
+	void OnOpenIncludeFile();
+	afx_msg LRESULT OnFileChangedExternally(WPARAM, LPARAM);
 
 // Implementation
 public:
@@ -83,7 +123,6 @@ protected:
 protected:
 	//{{AFX_MSG(COpenCView)
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
-	afx_msg void OnInitialUpdate();
 	afx_msg void OnDestroy();
 	afx_msg void OnChar(UINT nChar, UINT nRepCnt, UINT nFlags);
 	afx_msg void OnEditTrovaselezione();
@@ -93,7 +132,15 @@ protected:
 	afx_msg void OnEditFind();
 	afx_msg void OnEditRepeat();
 	afx_msg void OnUpdateEditRepeat(CCmdUI* pCmdUI);
+	afx_msg void OnSize(UINT nType, int cx, int cy);
+	afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
 	//}}AFX_MSG
+	void OnTimer(UINT_PTR);
+	afx_msg void OnInitialUpdate();
+	afx_msg void OnEnChange();
+	afx_msg void OnEnVScroll();
+	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
+	afx_msg void OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView);
 	DECLARE_MESSAGE_MAP()
 };
 
