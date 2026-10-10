@@ -22,7 +22,11 @@ protected:
   // Intercettiamo il doppio click sulla barra/maniglia dello splitter
   afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
   DECLARE_MESSAGE_MAP()
+
+	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	};
+
+
 
 // ChildFrm.h : interface of the CChildFrame class
 //
@@ -65,6 +69,7 @@ protected:
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
+	afx_msg LRESULT OnFileChangedExternally(WPARAM, LPARAM);
 };
 
 /////////////////////////////////////////////////////////////////////////////

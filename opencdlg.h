@@ -29,6 +29,89 @@ protected:
 };
 
 
+/////////////////////////////////////////////////////////////////////////////
+// CMyFindReplaceDialog
+
+class CMyFindReplaceDialog : public CFindReplaceDialog {
+public:
+  CMyFindReplaceDialog(BOOL bFindDialogOnly,COpenCDoc* pParent = NULL);   // standard constructor);
+
+protected:
+	CComboBox m_cmbFindHistory;
+  static CStringList s_findHistory; // Cronologia condivisa tra le aperture della dialog
+
+// Dialog Data
+	//{{AFX_DATA(CMyFindReplaceDialog)
+	enum { IDD = IDD_MY_FIND_DIALOG };
+	CString m_strSearch;
+	//}}AFX_DATA
+
+// Implementation
+protected:
+	// Generated message map functions
+	//{{AFX_MSG(CMyFindReplaceDialog)
+	virtual BOOL OnInitDialog();
+	//}}AFX_MSG
+  DECLARE_MESSAGE_MAP()
+
+	// ClassWizard generated virtual function overrides
+	//{{AFX_VIRTUAL(CMyFindReplaceDialog)
+protected:
+	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+	//}}AFX_VIRTUAL
+};
+
+/////////////////////////////////////////////////////////////////////////////
+// CMyFindInFilesDialog
+
+class CMyFindInFilesDialog : public CDialog {
+// Construction
+public:
+    CMyFindInFilesDialog(CWnd* pParent = NULL);   // standard constructor
+
+// Dialog Data
+  //{{AFX_DATA(CMyFindInFilesDialog)
+  enum { IDD = IDD_MY_FIND_DIALOG };
+  CString m_strSearch;
+  //}}AFX_DATA
+
+// Overrides
+  // ClassWizard generated virtual function overrides
+  //{{AFX_VIRTUAL(CMyFindInFilesDialog)
+protected:
+  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+  //}}AFX_VIRTUAL
+
+// Implementation
+protected:
+  // Generated message map functions
+  //{{AFX_MSG(CMyFindInFilesDialog) // FIXED: Corretto da CProprietaDlg
+  virtual BOOL OnInitDialog();
+  //}}AFX_MSG
+  DECLARE_MESSAGE_MAP()
+};
+
+class CGotoLineDlg : public CDialog {
+public:
+  CGotoLineDlg(CWnd* pParent = NULL);
+
+  //{{AFX_DATA(CGotoLineDlg)
+  enum { IDD = IDD_GOTO_LINE };
+  int m_nLineNumber; // Salverà il numero riga inserito dall'utente
+  //}}AFX_DATA
+
+protected:
+  //{{AFX_VIRTUAL(CMyFindInFilesDialog)
+  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+  //}}AFX_VIRTUAL
+
+protected:
+  //{{AFX_MSG(CMyFindInFilesDialog) // FIXED: Corretto da CProprietaDlg
+  virtual BOOL OnInitDialog();
+  //}}AFX_MSG
+  DECLARE_MESSAGE_MAP()
+};
+
 
 /////////////////////////////////////////////////////////////////////////////
 // COpzioniCompilDlg dialog

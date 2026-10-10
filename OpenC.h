@@ -12,6 +12,7 @@
 
 #define WM_ADDTEXT (WM_USER+1)
 #define WM_CLSWINDOW (WM_USER+2)
+#define WM_COMPILEDONE (WM_USER+3)
 #define WM_MY_FILE_CHANGED (WM_USER + 501)
 
 /////////////////////////////////////////////////////////////////////////////
@@ -297,8 +298,9 @@ struct SMonitoredFile {
 
 struct PROGETTO_ENTRY {
 	CStringEx nomefile;
-	bool flag;
 	RECT rc;
+	int8_t wState;
+	bool flag;
 	};
 
 class COpenCDoc;
@@ -363,17 +365,18 @@ public:
 	int WritePrivateProfileTime(char *s, int k, CTimeSpan t) { char ks[32]; LoadString(m_hInstance,k,ks,32); return WritePrivateProfileTime(s,ks,t); }
 	char *getProfileKey(char *,const char *);
 
-	void WriteOutputWndText(char *,int n=-1);
+	void WriteOutputWndText(const char *,int n=-1,bool imm=FALSE);
 	void ClearOutputWnd();
 
 	void updateWindowTitle(CStringEx);
+	static int8_t isSourceFile(CStringEx);
 
-	void COpenCApp::RestoreStandaloneSession();
+	void RestoreStandaloneSession();
 
-	BOOL AddFileToProject(const char *,bool mode,RECT *rc=NULL);
+	BOOL AddFileToProject(const char *,bool,int8_t,RECT *rc=NULL);
 	void ReparseProgetto();
 	CString ParseOpzioni();
-	COpenCDoc *GetDocByTitle(LPCTSTR );
+	COpenCDoc *GetDocByTitle(LPCTSTR);
 
 	static FILETIME GetFileLastWriteTime(LPCTSTR);
 	static LONG CompareFileTimes(const FILETIME&, const FILETIME&);
@@ -397,7 +400,8 @@ public:
 public:
 	char *variabiliKey,*fileApertiKey;
 	DWORD Opzioni;
-	BYTE MemoryModel,Warning,AbsRel,TestoColorato,AutoRicaricaProgetto;
+	BYTE MemoryModel,Warning,AbsRel,TestoColorato,AutoRicaricaProgetto,AutoRicaricaFiles;
+	BYTE lTabSize;
 	CString CartellaInclude,CartellaLibrerie;
 
 	CMultiDocTemplate *pDocTemplate;
@@ -409,6 +413,8 @@ public:
 	CArray < struct PROGETTO_ENTRY, struct PROGETTO_ENTRY > fileProgetto; //(che cazzo c'ha?? serve header!
 	bool progettoModified;
 
+	int totWarnings,totErrors;
+
   CArray<SMonitoredFile, SMonitoredFile&> m_arrMonitoredFiles;
   CCriticalSection m_csMonitoredFiles;
   
@@ -417,6 +423,7 @@ public:
 
 
 	HINSTANCE m_hinstRE41;
+  CStringEx m_strLastSearch;        // Ultima stringa cercata MESSA GLOBALE!
 
 	// Secondo gestore MRU dedicato ai soli file di Progetto (.MAK / .PRJ)
   CRecentProjectList *m_pRecentProjectList;

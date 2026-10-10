@@ -64,6 +64,160 @@ END_MESSAGE_MAP()
 /////////////////////////////////////////////////////////////////////////////
 // CSplashDlg message handlers
 
+
+/////////////////////////////////////////////////////////////////////////////
+// CMyFindReplaceDialog
+
+BEGIN_MESSAGE_MAP(CMyFindReplaceDialog, CFindReplaceDialog)
+	//{{AFX_MSG_MAP(CMyFindReplaceDialog)
+		// NOTE: the ClassWizard will add message map macros here
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+CMyFindReplaceDialog::CMyFindReplaceDialog(BOOL bFindDialogOnly,COpenCDoc* pParent) 
+	: CFindReplaceDialog() {
+
+  // 1. Diciamo alla struttura di Windows di usare il NOSTRO template di risorse
+  m_fr.Flags |= FR_ENABLETEMPLATE;
+  m_fr.lpTemplateName = MAKEINTRESOURCE(IDD_MY_FIND_DIALOG);
+  m_fr.hInstance = AfxGetInstanceHandle();
+
+  m_fr.lpTemplateName = bFindDialogOnly ? MAKEINTRESOURCE(IDD_MY_REPLACE_DIALOG) : MAKEINTRESOURCE(IDD_MY_FIND_DIALOG);
+	}
+
+void CMyFindReplaceDialog::DoDataExchange(CDataExchange* pDX) {
+	CFindReplaceDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CMyFindReplaceDialog)
+// no!	DDX_Text(pDX, 1152, m_strSearch);
+	//}}AFX_DATA_MAP
+	}
+
+BOOL CMyFindReplaceDialog::OnInitDialog() {
+
+  CFindReplaceDialog::OnInitDialog();
+  
+	/*
+// Sottoclasse la ComboBox con ID 1152
+  m_cmbFindHistory.SubclassDlgItem(1152, this);
+
+  // Ripopola la ComboBox con le ricerche precedenti
+  POSITION pos = s_findHistory.GetHeadPosition();
+  while (pos)
+      m_cmbFindHistory.AddString(s_findHistory.GetNext(pos));
+
+  // Se c'è almeno un elemento, seleziona il più recente
+  if (m_cmbFindHistory.GetCount() > 0)
+      m_cmbFindHistory.SetCurSel(0);
+  */
+
+		// Qui puoi personalizzare la grafica al volo, o impostare lo stato dei TUOI controlli extra
+  // es: CheckDlgButton(IDC_CHK_ALL_TABS, BST_CHECKED);
+
+  return TRUE;
+	}
+
+/*
+void CCustomFindDlg::OnFindNext() {	// o nel gestore del bottone "Trova"
+  CString strFind;
+  m_cmbFindHistory.GetWindowText(strFind);
+
+  strFind.Trim();
+  if(!strFind.IsEmpty())    {
+    // Rimuovi duplicati esistenti
+    POSITION pos = s_findHistory.Find(strFind);
+    if (pos)
+        s_findHistory.RemoveAt(pos);
+
+    // Aggiungi in cima alla cronologia
+    s_findHistory.AddHead(strFind);
+
+    // Limita la cronologia ad esempio agli ultimi 10-15 elementi
+    while(s_findHistory.GetCount() > 15)
+      s_findHistory.RemoveTail();
+		}
+
+  // Prosegui con la ricerca standard
+  CFindReplaceDialog::OnFindNext();
+	}*/
+
+/////////////////////////////////////////////////////////////////////////////
+// CMyFindInFilesDialog
+
+BEGIN_MESSAGE_MAP(CMyFindInFilesDialog, CDialog)
+	//{{AFX_MSG_MAP(CMyFindInFilesDialog)
+		// NOTE: the ClassWizard will add message map macros here
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+CMyFindInFilesDialog::CMyFindInFilesDialog(CWnd *pParent) 
+	: CDialog(CMyFindInFilesDialog::IDD, pParent) {
+
+	m_strSearch = _T("");
+	}
+
+void CMyFindInFilesDialog::DoDataExchange(CDataExchange* pDX) {
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CMyFindInFilesDialog)
+	DDX_Text(pDX, 1152, m_strSearch);
+	//}}AFX_DATA_MAP
+	}
+
+BOOL CMyFindInFilesDialog::OnInitDialog() {
+
+  CDialog::OnInitDialog();
+
+	CenterWindow();
+
+	SetWindowText("Cerca in tutti i file");
+
+	m_strSearch=theApp.m_strLastSearch;
+  
+  // Qui puoi personalizzare la grafica al volo, o impostare lo stato dei TUOI controlli extra
+  // es: CheckDlgButton(IDC_CHK_ALL_TABS, BST_CHECKED);
+
+  return TRUE;
+	}
+
+
+/////////////////////////////////////////////////////////////////////////////
+CGotoLineDlg::CGotoLineDlg(CWnd* pParent /*=NULL*/)
+    : CDialog(CGotoLineDlg::IDD, pParent) {
+
+	//{{AFX_DATA_INIT(CGotoLineDlg)
+	m_nLineNumber = FALSE;
+	//}}AFX_DATA_INIT
+  m_nLineNumber = 1;
+	}
+
+void CGotoLineDlg::DoDataExchange(CDataExchange* pDX) {
+  CDialog::DoDataExchange(pDX);
+
+  // Collega l'Edit box alla variabile intera con validazione automatica (DDX/DDV)
+	//{{AFX_DATA_MAP(CGotoLineDlg)
+  DDX_Text(pDX, IDC_EDIT_LINE, m_nLineNumber);
+  DDV_MinMaxInt(pDX, m_nLineNumber, 1, 1000000); // Evita valori <= 0
+	//}}AFX_DATA_MAP
+	}
+
+BEGIN_MESSAGE_MAP(CGotoLineDlg, CDialog)
+	//{{AFX_MSG_MAP(CGotoLineDlg)
+		// NOTE: the ClassWizard will add message map macros here
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+BOOL CGotoLineDlg::OnInitDialog() {
+  CDialog::OnInitDialog();
+  
+  // Seleziona il testo nell'Edit Box così l'utente può sovrascriverlo subito
+  CEdit* pEdit = (CEdit*)GetDlgItem(IDC_EDIT_LINE);
+  if(pEdit) {
+    pEdit->SetSel(0, -1);
+    pEdit->SetFocus();
+		}
+  return FALSE; // Abbiamo impostato noi il focus manualmente
+	}
+
+
 /////////////////////////////////////////////////////////////////////////////
 // COpzioniCompilPropPage1 property page
 
@@ -319,9 +473,12 @@ BOOL COpzioniCompilPropPage3::OnInitDialog() {
 	CPropertyPage::OnInitDialog();
 
 	m_TestoColorato = theApp.TestoColorato;
+	m_TabSize = 2;		// finire :)
+
 //	m_SalvaCompila = ;
 //	m_SalvaChiedi = ;
-//	m_RicaricaFileAuto = ;
+	m_RicaricaFileAuto = theApp.AutoRicaricaFiles;
+	m_TabSize=theApp.lTabSize;
 
 	isInitialized=TRUE;
 

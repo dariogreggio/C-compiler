@@ -47,7 +47,12 @@ protected:
   afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnTabSelChange(NMHDR* pNMHDR, LRESULT* pResult);
   DECLARE_MESSAGE_MAP()
+
+friend class CMainFrame;
 };
+
+
+class COpenCView;
 
 class CMainFrame : public CMDIFrameWnd {
 	DECLARE_DYNAMIC(CMainFrame)
@@ -71,13 +76,31 @@ public:
 
 // Operations
 public:
+  BOOL CreateSearchComboBox();
+
 	void ActivateViewByTitle(const CString& strTargetTitle);
 
 	RECT *getOutputWndRect(RECT *);
 	CTreeCtrl& GetProjectTree() { return m_wndProjectTree; }
 	RECT *getToolbarRect(RECT *rc) { m_wndToolBar.GetClientRect(rc); return rc;}
 
-	void AddOutputText(LPCTSTR lpszText);
+	COpenCDoc *GetMDIActiveDocument();
+	COpenCView *GetMDIActiveView();
+
+	void SetStatusText(LPCTSTR s) { m_wndStatusBar.SetWindowText(s); }
+	void ActivateOutputTab(int8_t n) { 
+		NMHDR nmhdr;
+		m_wndOutputBar.m_wndOutputTab.SetCurSel(n);
+
+		nmhdr.hwndFrom = m_wndOutputBar.m_wndOutputTab.GetSafeHwnd();
+		nmhdr.idFrom   = m_wndOutputBar.m_wndOutputTab.GetDlgCtrlID();
+		nmhdr.code     = TCN_SELCHANGE;
+
+		// Chiama direttamente la tua funzione di cambio tab (es. OnTabChanged)
+		m_wndOutputBar.OnTabSelChange(&nmhdr, NULL);
+		}
+
+	void AddOutputText(LPCTSTR);
 	void ClearOutputText();
 	int AddText(const char *s,int m);
 	int Cls();
@@ -86,6 +109,11 @@ public:
 	void OnNextError();
 	void OnPrevError();
 
+	void AddFindInFilesText(LPCTSTR);
+	void ClearFindInFilesText();
+
+	void SearchComboAddString(LPCTSTR);
+
 // Overrides
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(CMainFrame)
@@ -93,6 +121,7 @@ public:
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 	virtual BOOL DestroyWindow();
 	//}}AFX_VIRTUAL
+	BOOL PreTranslateMessage(MSG*);
 
 // Implementation
 public:
@@ -104,7 +133,9 @@ public:
 
 protected:  // control bar embedded members
 	CToolBar    m_wndToolBar;
-
+  CComboBox m_comboSearch; // La tua ComboBox
+	CStatic m_lblSearch;
+    
 public:
 
 // Generated message map functions
@@ -133,13 +164,27 @@ protected:
 	afx_msg void OnTreeElimina();
 	afx_msg void OnUpdateTreeElimina(CCmdUI* pCmdUI);
 	afx_msg void OnFileSalvatutto();
+	afx_msg void OnProgettoAggiungifile();
+	afx_msg void OnUpdateProgettoAggiungifile(CCmdUI* pCmdUI);
+	afx_msg void OnCompilaFile2();
+	afx_msg void OnUpdateCompilaFile2(CCmdUI* pCmdUI);
+	afx_msg void OnEditCercaintuttiifile();
+	afx_msg void OnUpdateEditCercaintuttiifile(CCmdUI* pCmdUI);
+	afx_msg void OnEditFindCombo();
+	afx_msg void OnFinestraChiudi();
+	afx_msg void OnUpdateFinestraChiudi(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	afx_msg LRESULT OnAddText(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnClsWindow(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnCompileDone(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnTreeDoubleClick(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnTreeRightClick(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnTreeItemExpanded(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnTvnDeleteitemTree(NMHDR *pNMHDR, LRESULT *pResult);
+	afx_msg void OnSearchComboExecute();
+	afx_msg void OnSearchComboSelChange();
+	afx_msg void OnDblclkStatusBar(NMHDR* pNMHDR, LRESULT* pResult);
+  afx_msg void OnUpdateFrameTitle(BOOL bAddToTitle);
 	DECLARE_MESSAGE_MAP()
 };
 

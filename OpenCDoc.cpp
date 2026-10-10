@@ -7,6 +7,7 @@
 #include "mainfrm.h"
 #include "OpenCDoc.h"
 #include "openCview.h"
+#include "openCdlg.h"
 //#include <afxext.h>		// per GetWindowFrame dice, ma ovviamente non è vero
 //#include <afxpriv.h>		// idem
 //#include "childfrm.h"
@@ -37,6 +38,9 @@ BEGIN_MESSAGE_MAP(COpenCDoc, CRichEditDoc)
 	ON_COMMAND(ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE, OnModificaVaialsegnalibroprecedente)
 	ON_UPDATE_COMMAND_UI(ID_MODIFICA_VAIALSEGNALIBROPRECEDENTE, OnUpdateModificaVaialsegnalibroprecedente)
 	ON_UPDATE_COMMAND_UI(ID_MODIFICA_VAIALPROSSIMOSEGNALIBRO, OnUpdateModificaVaialprossimosegnalibro)
+	ON_COMMAND(ID_MODIFICA_VAIALLARIGA, OnModificaVaiallariga)
+	ON_COMMAND(ID_MODIFICA_ELIMINATUTTIISEGNALIBRI, OnModificaEliminatuttiisegnalibri)
+	ON_UPDATE_COMMAND_UI(ID_MODIFICA_ELIMINATUTTIISEGNALIBRI, OnUpdateModificaEliminatuttiisegnalibri)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -67,6 +71,7 @@ BOOL COpenCDoc::OnOpenDocument(LPCTSTR lpszPathName) {
 	char myBuf[256],myBuf2[64],*p;
 	RECT rc;
 	COpenCView *w=(COpenCView *)getView();
+	CWnd* pChildFrame = w->GetParentFrame();
 
 	if(!CExRichDocument::OnOpenDocument(lpszPathName))
 		return FALSE;
@@ -82,32 +87,24 @@ BOOL COpenCDoc::OnOpenDocument(LPCTSTR lpszPathName) {
 	GetPrivateProfileString(IDS_COORDINATECHILD,myBuf,32);
 	if(*myBuf) {
 		sscanf(myBuf,"%d,%d,%d,%d",&rc.left,&rc.top,&rc.right,&rc.bottom);	// sono coord. client rispetto alla MDIFRAME madre della mia ChildFrame
-		if(!IsRectEmpty(&rc))
-//			rc.left-=4;		// (per motivi ignoti (credo sia colpa della toolbar)...
-//			rc.right+=4;
-//			rc.top-=19+4;		// 
-//			rc.bottom+=4;
-//			rc.left=10; rc.right=400;
-//			rc.top=10; rc.bottom=200;
-//			w->GetParent()->GetParent()->SetWindowPos(NULL,rc.left,rc.top,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
-			// DUE GetParent perche' c'e' Splitter!!
-			w->GetParent()->GetParent()->SetWindowPos(NULL,rc.left -(215-30),rc.top,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
+		if(!IsRectEmpty(&rc)) {
 
-		/* DOPO windowplacement, v. sopra
-		CWnd* pChildFrame = pView->GetParentFrame();
-        if(pChildFrame ) {
-            // Applichiamo le coordinate direttamente alla Child Frame.
-            // Essendo figlia dell'MDIClient, si posizionerà al millimetro!
-            pChildFrame->SetWindowPos(
-                NULL, 
-                nLeft, 
-                nTop, 
-                nWidth, 
-                nHeight, 
-                SWP_NOZORDER | SWP_NOACTIVATE
-            );
-        }*/
+      if(pChildFrame) {
+        // Applichiamo le coordinate direttamente alla Child Frame.
+        // Essendo figlia dell'MDIClient, si posizionerà al millimetro!
+        pChildFrame->SetWindowPos(NULL, 
+          rc.left, rc.top, 
+          rc.right-rc.left, rc.bottom- rc.top, 
+          SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+			}
 
+		}
+
+	WIN32_FILE_ATTRIBUTE_DATA wfd;
+	if(GetFileAttributesEx(lpszPathName, GetFileExInfoStandard, &wfd)) {
+		// Registra la finestra corrente presso il monitor globale
+		theApp.RegisterMonitoredFile(lpszPathName, pChildFrame->m_hWnd, wfd.ftLastWriteTime);
 		}
 
 //	          m_bookmarks.InsertAt(0, 2); // PROVA
@@ -153,17 +150,15 @@ BOOL COpenCDoc::OnSaveDocument(LPCTSTR lpszPathName) {
 
 void COpenCDoc::OnCloseDocument() {
 	CString S,S1;
-	RECT rc,rc2;
 	char myBuf[64];
 	COpenCView *w=(COpenCView *)getView();
+	CWnd* pChildFrame = w->GetParentFrame();
 
 	theApp.SaveProjectSection(theApp.nomeProgetto,this);		// per i segnalibri
-
 	
 	strcpy(myPrfSection,(LPCTSTR)GetTitle());
 
 	if(w) {		// in chiusura o se file non trovato!
-		w->GetWindowPos(&rc);
 		CWnd* pFrame = w->GetParentFrame();
     if(pFrame) {
 			// 3. Otteniamo posizione e stato (Normal, Minimized, Maximized)
@@ -175,14 +170,16 @@ void COpenCDoc::OnCloseDocument() {
 				// wp.showCmd contiene lo stato (SW_SHOWMAXIMIZED, SW_SHOWNORMAL, ecc.)
       
 				// Salvi queste coordinate nel file di progetto!
+				S.LoadString(IDS_OPZIONI);
+				S1.LoadString(IDS_COORDINATECHILD);
+				wsprintf(myBuf,"%d,%d,%d,%d",wp.rcNormalPosition.left,wp.rcNormalPosition.top,
+					wp.rcNormalPosition.right,wp.rcNormalPosition.bottom);
+				theApp. /*prStore->*/ WritePrivateProfileString(myPrfSection,S1,myBuf);
 				}
 			}
-		S.LoadString(IDS_OPZIONI);
-		S1.LoadString(IDS_COORDINATECHILD);
-		wsprintf(myBuf,"%d,%d,%d,%d",rc.left,rc.top,rc.right,rc.bottom);
-		theApp. /*prStore->*/ WritePrivateProfileString(myPrfSection,S1,myBuf);
 		}
 
+	theApp.UnregisterMonitoredFile(pChildFrame->m_hWnd);
 //	SaveState(m_nDocType);
 
 	CExRichDocument::OnCloseDocument();
@@ -300,7 +297,7 @@ void COpenCDoc::ToggleBreakpoint(UINT nLine) {
       m_breakpoints.RemoveAt(i); // Rimuove se presente
       return;
       }
-    else if (m_breakpoints[i] > nLine)        {
+    else if(m_breakpoints[i] > nLine)        {
       SetBreakpoint(nLine); // Inserisce in ordine crescente
       return;
       }
@@ -310,17 +307,25 @@ void COpenCDoc::ToggleBreakpoint(UINT nLine) {
 	}
 
 void COpenCDoc::SetBreakpoint(UINT nLine) {
+	CStringEx S;
 
-  for(INT_PTR i=0; i < m_breakpoints.GetSize(); i++)    {
-    if(m_breakpoints[i] == nLine)
-			return;
-    if(m_breakpoints[i] > nLine)        {
-      m_breakpoints.InsertAt(i, nLine); // Inserisce in ordine crescente
-      return;
-      }
-    }
-  // Se è maggiore di tutti gli elementi
-  m_breakpoints.Add(nLine);
+	S.SplitPath(GetTitle(),4);
+	S.MakeUpper();
+
+	if(S == _T(".C") || S == _T(".ASM")) {
+		//isSourceFile(
+
+		for(INT_PTR i=0; i < m_breakpoints.GetSize(); i++)    {
+			if(m_breakpoints[i] == nLine)
+				return;
+			if(m_breakpoints[i] > nLine)        {
+				m_breakpoints.InsertAt(i, nLine); // Inserisce in ordine crescente
+				return;
+				}
+			}
+		// Se è maggiore di tutti gli elementi
+		m_breakpoints.Add(nLine);
+		}
 	}
 
 BOOL COpenCDoc::HasBreakpoint(UINT nLine) const    {
@@ -502,15 +507,21 @@ void COpenCDoc::Dump(CDumpContext& dc) const
 /////////////////////////////////////////////////////////////////////////////
 // COpenCDoc commands
 
-void COpenCDoc::OnCompilaFile() {
+void COpenCDoc::OnCompilaFile() {	// v. anche OnCompilaFile2 mainframe
 
 	if(((COpenCView*)m_viewList.GetHead())->IsModified() /*IsModified()*/)
 		OnSaveDocument(GetPathName());	
 
 	theApp.m_pMainWnd->PostMessage(WM_CLSWINDOW,0,(LPARAM)NULL);
+	((CMainFrame*)theApp.m_pMainWnd)->ActivateOutputTab(0);
 
-	if(!theApp.CompilaFile(GetPathName()))
+	theApp.totWarnings=theApp.totErrors=0;
+	if(!theApp.CompilaFile(GetPathName(),""))
 		AfxMessageBox("Impossibile caricare il compilatore",MB_ICONEXCLAMATION);
+
+	if(theApp.totErrors>0)	/// hmmm non va perché arrivano con PostMessage...
+		MessageBeep(MB_ICONHAND);
+
 
 fine:
 		;
@@ -583,6 +594,7 @@ void COpenCDoc::OnDebugTogglebreakpoint() {
 
 void COpenCDoc::OnUpdateDebugTogglebreakpoint(CCmdUI* pCmdUI) {
 	
+	pCmdUI->Enable(theApp.isSourceFile(GetTitle()));
 	}
 
 void COpenCDoc::OnModificaVaialprossimosegnalibro() {
@@ -601,8 +613,9 @@ void COpenCDoc::OnModificaVaialprossimosegnalibro() {
 		}
 	else {
 		MessageBeep(-1);
-		if(m_bookmarks.GetSize() > 0)
+		if(m_bookmarks.GetSize() > 0) {
 			((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[0],NULL,FALSE);
+			}
 		}
 	
 	}
@@ -626,18 +639,54 @@ void COpenCDoc::OnModificaVaialsegnalibroprecedente() {
 		}
 	else {
 		MessageBeep(-1);
-		if(m_bookmarks.GetSize() > 0)
+		if(m_bookmarks.GetSize() > 0) {
 			((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(m_bookmarks[m_bookmarks.GetSize()-1],NULL,FALSE);
+			}
 		}
 
 	}
 
 void COpenCDoc::OnUpdateModificaVaialsegnalibroprecedente(CCmdUI* pCmdUI) {
 	
+	pCmdUI->Enable(m_bookmarks.GetSize() > 0);	
 	}
 
 void COpenCDoc::OnUpdateModificaVaialprossimosegnalibro(CCmdUI* pCmdUI) {
 	
+	pCmdUI->Enable(m_bookmarks.GetSize() > 0);	
 	}
 
+
+
+void COpenCDoc::OnModificaVaiallariga() {
+	COpenCView *w=((COpenCView*)getView());
+	CRichEditCtrl& edit = w->GetRichEditCtrl();
+    
+  // Calcoliamo la riga attuale dove si trova il cursore per proporla come default
+  long nStart, nEnd;
+  edit.GetSel(nStart, nEnd);
+  int nCurrentLine = edit.LineFromChar(nStart) + 1; // 1-based
+
+  CGotoLineDlg dlg(w);
+  dlg.m_nLineNumber = nCurrentLine;
+
+  if(dlg.DoModal() == IDOK) {
+      // Usa la tua funzione GotoLine già pronta!
+		nCurrentLine=dlg.m_nLineNumber;
+		((CMainFrame*)theApp.m_pMainWnd)->GoToRichEditLine(nCurrentLine ,NULL,FALSE);
+    }
+	}
+
+
+void COpenCDoc::OnModificaEliminatuttiisegnalibri() {
+	COpenCView *w=((COpenCView*)getView());
+
+	m_bookmarks.RemoveAll();
+	w->Invalidate();
+	}
+
+void COpenCDoc::OnUpdateModificaEliminatuttiisegnalibri(CCmdUI* pCmdUI) {
+
+	pCmdUI->Enable(m_bookmarks.GetSize() > 0);	
+	}
 

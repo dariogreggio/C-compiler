@@ -136,10 +136,14 @@ protected:
 	afx_msg void OnModificaVaialsegnalibroprecedente();
 	afx_msg void OnUpdateModificaVaialsegnalibroprecedente(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateModificaVaialprossimosegnalibro(CCmdUI* pCmdUI);
+	afx_msg void OnModificaVaiallariga();
+	afx_msg void OnModificaEliminatuttiisegnalibri();
+	afx_msg void OnUpdateModificaEliminatuttiisegnalibri(CCmdUI* pCmdUI);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
 	friend class COpenCView;
+	friend class CChildFrame;
 	};
 
 /////////////////////////////////////////////////////////////////////////////

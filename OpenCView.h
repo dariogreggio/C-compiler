@@ -32,6 +32,9 @@ protected:
   DECLARE_MESSAGE_MAP()
 	};
 
+
+class CMyFindReplaceDialog;
+
 class COpenCView : public CRichEditView {
 protected: // create from serialization only
 	COpenCView();
@@ -53,13 +56,14 @@ public:
 	long StreamOut(EDITSTREAM);
 
 protected:
-	CFindReplaceDialog* m_pFindDlg; // Puntatore alla dialog attiva
-  CString m_strLastSearch;        // Ultima stringa cercata
+	CMyFindReplaceDialog *m_pFindDlg; // Puntatore alla dialog attiva
+//  CStringEx m_strLastSearch;        // Ultima stringa cercata MESSA GLOBALE!
   BOOL m_bMatchCase;              // Rispetta maiuscole/minuscole
   BOOL m_bWholeWord;              // Parola intera
 
 	CString m_strSelectedInclude; // Mantiene il nome del file (es. "stdio.h" o "mioheader.h")
 
+	COleDropTarget m_dragSync;		// doveva esistere già secondo gemini
 
 //	CGutterWnd m_gutterWnd;
 //  const int m_nGutterWidth; // Larghezza della gutter in pixel
@@ -68,6 +72,7 @@ protected:
   BOOL DoSearchText(LPCTSTR lpszFind, BOOL bDown, BOOL bCase, BOOL bWholeWord);
 	CString GetRichTextSelection();
 	void SelectWordAtCaret();
+	CString GetWordAtCaret();
 
 	// per testo colorato
 	void HighlightVisibleRange();
@@ -78,6 +83,7 @@ protected:
 	BOOL IsKeyword(const CString& strWord, const LPCTSTR szKeywords[]);
 	void GetTextRange(int nStart, int nEnd, CString& strText);
 
+	long ScanForMatchingBrace(long nStartPos, TCHAR chOpen);
 
 // Operations
 public:
@@ -89,7 +95,7 @@ public:
 
 // Overrides
 	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(COpenCEditView)
+	//{{AFX_VIRTUAL(COpenCView)
 	public:
 //	virtual void OnDraw(CDC* pDC);  // overridden to draw this view
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
@@ -102,6 +108,7 @@ public:
 	void OnUpdatePosIndicator(CCmdUI* pCmdUI);
   // Gestori dei messaggi
   afx_msg void OnEditFindCustom();
+	afx_msg LRESULT OnFindReplaceMsg(WPARAM wParam, LPARAM lParam);
   afx_msg void OnFindWordNext();
   afx_msg LRESULT OnFindReplaceCmd(WPARAM, LPARAM);
 
@@ -134,7 +141,19 @@ protected:
 	afx_msg void OnUpdateEditRepeat(CCmdUI* pCmdUI);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
+	afx_msg void OnEditFindReplace();
+	afx_msg void OnEditMatchBrace();
+	afx_msg void OnEditRepeatBack();
+	afx_msg void OnUpdateEditRepeatBack(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditRedo(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditUndo(CCmdUI* pCmdUI);
+	afx_msg void OnEditUndo();
+	afx_msg void OnEditRedo();
+	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	//}}AFX_MSG
+	virtual DROPEFFECT OnDragEnter(COleDataObject* pDataObject, DWORD dwKeyState, CPoint point);
+  virtual DROPEFFECT OnDragOver(COleDataObject* pDataObject, DWORD dwKeyState, CPoint point);
+  virtual BOOL OnDrop(COleDataObject* pDataObject, DROPEFFECT dropEffect, CPoint point);
 	void OnTimer(UINT_PTR);
 	afx_msg void OnInitialUpdate();
 	afx_msg void OnEnChange();
@@ -142,6 +161,8 @@ protected:
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
 	afx_msg void OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView);
 	DECLARE_MESSAGE_MAP()
+
+friend class CMainFrame;
 };
 
 #ifndef _DEBUG  // debug version in OpenCEditView.cpp
