@@ -58,6 +58,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWnd)
 	ON_WM_ENDSESSION()
 	ON_COMMAND(ID_FINESTRA_CHIUDI, OnFinestraChiudi)
 	ON_UPDATE_COMMAND_UI(ID_FINESTRA_CHIUDI, OnUpdateFinestraChiudi)
+	ON_UPDATE_COMMAND_UI(ID_INDICATOR_OVR, OnUpdateIndicatorOvr)
 	//}}AFX_MSG_MAP
 	// Global help commands
 	ON_COMMAND(ID_HELP_FINDER, CMDIFrameWnd::OnHelpFinder)
@@ -82,6 +83,7 @@ static UINT indicators[] = {
 	ID_INDICATOR_POS,
 	ID_INDICATOR_CAPS,
 	ID_INDICATOR_NUM,
+	ID_INDICATOR_OVR,
 	ID_INDICATOR_SCRL,
 };
 
@@ -507,6 +509,13 @@ void CMainFrame::OnClose() {
 	CMDIFrameWnd::OnClose();
 	}
 
+void CMainFrame::OnUpdateIndicatorOvr(CCmdUI* pCmdUI) {
+  // Legge lo stato di toggle di VK_INSERT
+  BOOL bOvr = (::GetKeyState(VK_INSERT) & 1) != 0;
+  
+  pCmdUI->Enable(bOvr);
+	}
+
 void CMainFrame::OnWindowCascade() {
 	CWnd *w;
 	CString S;
@@ -758,6 +767,7 @@ afx_msg LRESULT CMainFrame::OnClsWindow(WPARAM wParam, LPARAM lParam) {
 
 afx_msg LRESULT CMainFrame::OnCompileDone(WPARAM wParam, LPARAM lParam) {
 	
+	m_wndOutputBar /*m_wndOutputEdit*/ .Invalidate();		// aiuta perché in alcuni casi il testo rimane invisibile...
 	if(lParam)
 		MessageBeep(MB_ICONHAND);		// v. anche Compila in main
 
