@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "cc.h"
-#include "..\OpenC.h"
+//#include "..\OpenC.h"
 
 #include <stdlib.h>
 #include <conio.h>

@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "cc.h"
-#include "..\OpenC.h"
+//#include "..\OpenC.h"
 
 #include <mmsystem.h>
 #include <stdlib.h>
@@ -50,12 +50,12 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 #elif Z80
 		if(!_tcscmp(V->name+9,"di") || !_tcscmp(V->name+9,"ei")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 		else if(!_tcscmp(V->name+9,"nop")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 //block_copy  e search
@@ -63,86 +63,86 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 #elif I8086 
 		if(!_tcscmp(V->name+9,"di") || !_tcscmp(V->name+9,"ei")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 		else if(!_tcscmp(V->name+9,"nop")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 //__builtin_into
 #elif MC68000 
 		if(!_tcscmp(V->name+9,"swap")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=2;// creo lista parametri
-			*((int*)V->parm+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+2)=2;
-			*((int*)V->parm+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+4)=2;
+			*V->parm.ptr32=2;// creo lista parametri
+			*(V->parm.ptr32+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+2)=2;
+			*(V->parm.ptr32+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+4)=2;
 			V->size=0;
 			}
 		else if(!_tcscmp(V->name+9,"di") || !_tcscmp(V->name+9,"ei")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 		else if(!_tcscmp(V->name+9,"nop")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 		//__builtin_abcd(a, b) e __builtin_sbcd(a, b)
 #elif GD24032 
 		if(!_tcscmp(V->name+9,"nand") || !_tcscmp(V->name+9,"nor")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=2;// creo lista parametri
-			*((int*)V->parm+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+2)=4;
-			*((int*)V->parm+3)=VARTYPE_PLAIN_INT;
-			*((int*)V->parm+4)=4;
+			*V->parm.ptr32=2;// creo lista parametri
+			*(V->parm.ptr32+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+2)=4;
+			*(V->parm.ptr32+3)=VARTYPE_PLAIN_INT;
+			*(V->parm.ptr32+4)=4;
 			V->size=4;
 			}
 		else if(!_tcscmp(V->name+9,"mas") || !_tcscmp(V->name+9,"mss")) {		// e poi VMA ecc
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
 //			V->classe = CLASSE_BUILTIN;		//fare...
-			*(int*)V->parm=3;// creo lista parametri
-			*((int*)V->parm+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+2)=4;
-			*((int*)V->parm+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+4)=4;
-			*((int*)V->parm+5)=VARTYPE_PLAIN_INT;
-			*((int*)V->parm+6)=4;
+			*V->parm.ptr32=3;// creo lista parametri
+			*(V->parm.ptr32+1)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+2)=4;
+			*(V->parm.ptr32+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+4)=4;
+			*(V->parm.ptr32+5)=VARTYPE_PLAIN_INT;
+			*(V->parm.ptr32+6)=4;
 			V->size=4;
 			}
 		else if(!_tcscmp(V->name+9,"vma")) {		// e poi VMA ecc
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
 //			V->classe = CLASSE_BUILTIN;		//fare...
-			*(int*)V->parm=4;// creo lista parametri
-			*((int*)V->parm+1)=VARTYPE_ARRAY | VARTYPE_POINTER | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+2)=4;
-			*((int*)V->parm+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
-			*((int*)V->parm+4)=4;
-			*((int*)V->parm+5)=VARTYPE_PLAIN_INT;
-			*((int*)V->parm+6)=4;
-			*((int*)V->parm+7)=VARTYPE_PLAIN_INT;
-			*((int*)V->parm+8)=4;
+			*V->parm.ptr32=4;// creo lista parametri
+			*(V->parm.ptr32+1)=VARTYPE_ARRAY | VARTYPE_POINTER | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+2)=4;
+			*(V->parm.ptr32+3)=VARTYPE_PLAIN_INT | VARTYPE_NOIMMEDIATE;
+			*(V->parm.ptr32+4)=4;
+			*(V->parm.ptr32+5)=VARTYPE_PLAIN_INT;
+			*(V->parm.ptr32+6)=4;
+			*(V->parm.ptr32+7)=VARTYPE_PLAIN_INT;
+			*(V->parm.ptr32+8)=4;
 			V->size=4;
 			}
 		else if(!_tcscmp(V->name+9,"getflags")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=4;
 			}
 		else if(!_tcscmp(V->name+9,"di") || !_tcscmp(V->name+9,"ei")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 		// fare anche __builtin_get_and_disable_interrupts() e __builtin_restore_interrupts(status)
 		else if(!_tcscmp(V->name+9,"nop")) {
 			V->modif |= (FUNC_MODIF_INLINE | FUNC_MODIF_BUILTIN);
-			*(int*)V->parm=0;
+			*V->parm.ptr32=0;
 			V->size=0;
 			}
 #elif MICROCHIP
@@ -167,7 +167,7 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 
   if(tosave1)
     Regs->Save();
-	parmPtr=(int*)V->parm;
+	parmPtr=V->parm.ptr32;
 	if(parmPtr) {
 		totParm=parmPtr[0];		// il primo int è il #parm da prototipo
 		parmPtr++;
@@ -207,8 +207,16 @@ int Ccc::PROCUsaFun(struct VARS *V,bool tosave1,bool tosave2) {    // r per salv
 				parmProto=FALSE;
 				}
 
-		  i=FNGetMemSize(parmType,parmSize,0/*dim*/,1);
-		  j=FNGetMemSize(R.type,R.size,0/*dim*/,1);
+		  i=FNGetMemSize(parmType,parmSize,NULL/*dim*/,1);
+		  j=FNGetMemSize(R.type,R.size,NULL/*dim*/,1);
+
+			if(parmType & VARTYPE_IS_POINTER && !(R.type & VARTYPE_IS_POINTER)) {	// 
+				PROCError(2116,R.var ? R.var->name : "",prParm);
+				}
+			else if(parmSize /*void* assorbe tutto!*/ && (parmType ^ R.type) & (VARTYPE_STRUCT | VARTYPE_UNION)
+				|| ((parmType ^ R.type) & VARTYPE_IS_POINTER)) {	// e poi tag, dim array...
+				PROCWarn(4133,R.var ? R.var->name : "");
+				}
 
 #if MC68000
 			_tcscpy(pushString2,pushString);
@@ -937,7 +945,7 @@ forced_size4:
 											PROCOper(LINE_TYPE_ISTRUZIONE,"MOV.w",OPDEF_MODE_REGISTRO16,Regs->D,OPDEF_MODE_FRAMEPOINTER_INDIRETTO,0,MAKEPTROFS(R.var->label));
 											}
 										if(!(R.type & VARTYPE_UNSIGNED))
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.l",OPDEF_MODE_REGISTRO32,Regs->D);
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.d",OPDEF_MODE_REGISTRO32,Regs->D);
 										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,Regs->D);
 										}
 									else {
@@ -992,7 +1000,7 @@ forced_size4:
 													OPDEF_MODE_REGISTRO16,MAKEPTRREG(R.var->label),OPDEF_MODE_IMMEDIATO16,0x000000ff);
 											}
 										else {
-											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.l",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
+											PROCOper(LINE_TYPE_ISTRUZIONE,"SE.d",OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
 											}
 										PROCOper(LINE_TYPE_ISTRUZIONE,pushString2,OPDEF_MODE_REGISTRO32,MAKEPTRREG(R.var->label));
 										}
@@ -1628,8 +1636,7 @@ L19440:
 
 //	myLog->print("totparm %d, prparm %d\n",totParm,prParm);  
   if(totParm != -1 && prParm!=totParm) {
-    wsprintf(MyBuf,"%s, #%u",V->name,prParm);
-    PROCError(2116,MyBuf);
+    PROCError(2116,V->name,prParm);
     }
 
 #if ARCHI
@@ -2108,4 +2115,108 @@ L19440:
   
   return 0;
   }
+
+int Ccc::subAcquisisciParm(int *ptr32,struct VARS *V,bool is_member,bool doDeclare) {
+	int totParm;
+	int *parmPtr=NULL;
+	char T[64];
+	long t;
+	int v;
+	int i,t1;
+	struct VARS *newvar;
+	O_TYPE Type;
+	O_SIZE Size;
+	O_DIM dim;
+	struct TAGS *tag;
+	enum VAR_CLASSES Class;
+	uint32_t attrib;
+	char nome[64],outbuf[256],MyBuf[128];
+
+	*outbuf=0;
+
+	if(!is_member)
+		*ptr32=0;		// no, per this
+	totParm=*ptr32;
+
+	FNLA(T);
+	v=FNIsClass(T);
+	if((v>=0) || (FNIsType(T) != VARTYPE_NOTYPE)) {
+
+		if(*T==')' || *T==',' /*!iscsymf(*T)*/) {			// tipo parentesi subito chiusa, o virgola - csymf solo lettere! quindi mi incasina gli '*'
+			PROCError(2055);
+			return 0 /*break*/;
+			}
+		do {
+			v=FNIsClass(T);
+			if(!_tcscmp(FNLA(T),"const"))	{	// GESTIRE! usare v. anche di là
+				FNLO(T);                 
+				}
+			if(v>=0) {
+				v &= 0xf;
+				Class=(enum VAR_CLASSES)v;
+				t=FIn->GetPosition();
+				FNLO(T);
+				}
+			else {
+				if(!(V->modif & (FUNC_MODIF_FASTCALL | FUNC_MODIF_INLINE)))
+					Class=CLASSE_AUTO;
+				else
+					Class=CLASSE_REGISTER;
+				}
+
+			Size=INT_SIZE;
+			Type=VARTYPE_PLAIN_INT;
+			tag=NULL;
+
+			PROCGetType(&Type,&Size,&tag,dim,&attrib,t);
+
+			if(!Type && !Size) {		// questo è void!
+				goto void_parm;
+				}
+
+			if(doDeclare)
+				newvar=PROCDclVar(Class,0,Type,Size,tag,dim,attrib,TRUE);
+			if(FNGetMemSize(Type,Size,0/*dim*/,0) != 0) {     // scavalco VOID, ma non void*
+				parmPtr=V->parm.ptr32;
+				i=totParm;
+				parmPtr[i*4+1]=Type;
+				parmPtr[i*4+2]=Size;
+				parmPtr[i*4+3]=0;
+
+				totParm=i+1;
+				if(totParm>20)
+					PROCError(1001,"func parm > 20");
+
+				}
+	
+void_parm:
+skip_var:
+			FNLO(T);
+			if(*T == ',') {
+				_tcscat(outbuf,T);
+				t=FIn->GetPosition();
+				FNLO(T);
+				}
+			else if(*T == '=') {
+				int *parmPtr;
+				parmPtr=V->parm.ptr32;
+				t1=FNGetConst(MyBuf,1);
+				parmPtr[i*4+3]=t1;		// defvalue, può essere costante o un membro statico o var globale o funzione/costruttore
+				parmPtr[i*4+1] |= VARTYPE_INITIALIZED;
+				goto skip_var;
+				}
+			else if(*T == ')')
+				;
+			else {
+				if(iscsymf(*T)) {		// se c'è nome di variabile, lo salto
+					goto skip_var;
+					}
+				else 
+					PROCError(2059);
+				}
+			} while(*T != ')');
+		if(parmPtr)
+			parmPtr[0]=totParm;
+		}
+	}
 

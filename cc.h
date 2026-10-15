@@ -5,6 +5,10 @@
 //#define MICROCHIP 1
 // MESSE IN PROGETTO!!
 
+#define WM_ADDTEXT (WM_USER+1)		// v.openC
+#define WM_CLSWINDOW (WM_USER+2)
+#define WM_COMPILEDONE (WM_USER+3)
+
 #include <stdint.h>
        
 #define ANSI  TRUE
@@ -109,7 +113,7 @@ enum OPDEF_MODE {
 	OPDEF_MODE_SHIFTR,
 #endif
 	OPDEF_MODE_INDIRETTO=0x80,
-//	OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC=0x87,		// USARE per copia struct e/o array
+	OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC=(OPDEF_MODE_INDIRETTO | 7),		// per copia struct e/o array
 	OPDEF_MODE_REGISTRO_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_REGISTRO),
 	OPDEF_MODE_IMMEDIATO_INDIRETTO=0x86,
 	OPDEF_MODE_FRAMEPOINTER_INDIRETTO=(OPDEF_MODE_INDIRETTO | OPDEF_MODE_FRAMEPOINTER),
@@ -157,6 +161,7 @@ struct LINE {
   struct OP_DEF s3;
 #endif
   char rem[128];
+	uint8_t flag;		// se volatile, se asm (per ottimizzatore
   };
   
 struct LINE_DEF {
@@ -210,6 +215,7 @@ enum VAR_CLASSES {			// v. anche class Ccc
 	CLASSE_STATIC=2,
 	CLASSE_AUTO=3,
 	CLASSE_REGISTER=4,
+	CLASSE_MEMBER=5,		// per membri di una struct/union
 
 	CLASSE_INTERRUPT=0x10,			// nello stesso ordine, shiftati di 4 rispetto ai MODIFIERS
 	CLASSE_PASCAL=0x20,
@@ -272,8 +278,8 @@ enum VAR_TYPES {		// v. anche class Ccc
 	VARTYPE_CONST=0x40000000
 	};
 struct VARS {
-  char label[MAX_NAME_LEN+1];
-  char name[MAX_NAME_LEN+1];
+  char label[MAX_NAME_LEN+1];		// offset var locali o parm, e offset dalla base per membri struct (e nel 5° byte la dim bitfield, nel caso
+  char name[MAX_NAME_LEN+1];		// nome, con _ o meno
   enum VAR_CLASSES classe;
 // 0 extern, 1 global, 2 static, 3 auto, 4 register; 
   uint8_t modif;
@@ -281,19 +287,29 @@ struct VARS {
   O_TYPE type;
   O_SIZE size;
   uint8_t block;
-	int blockId;
-  struct VARS *func;
-  char *parm;
-  struct TAGS *tag;         // se <>0, la var. è un membro della struct tag
-  struct TAGS *hasTag;      // questo indica il tag di questa struct
+	short int blockId;
+	int32_t value;
+  union {
+		char *ptr;
+		int *ptr32;
+		struct {
+			int16_t ofs;
+			int16_t flag;
+			};
+		} parm;
+  struct TAGS *isInTag;         // se <>0, la var. è un membro della struct tag
+  struct TAGS *tag;      // questo indica il tag di questa struct
   O_DIM dim;							// dim TOTALE dell'array o aggr
   uint8_t attrib;
 	uint8_t inlineCnt;
 	struct LINE *definition;		// dove è definita (usato da funzioni inlined)
+  struct VARS *parent;		// la funzione a cui appartiene
+  struct VARS *members;		// var locali di una funzione
+  struct VARS *prev;
   struct VARS *next;
   };
 
-struct VARS2 {
+struct VARS2 {		// usata da enum
   uint32_t value;
   O_TYPE type;
   O_SIZE size;
@@ -310,7 +326,13 @@ struct CONS {
 //#pragma message USARE vars2 ANCHE PER STRUCT *********************
 struct TAGS {
   char label[MAX_NAME_LEN+1];
+	uint8_t type;		// 1=struct, 0=union
+  struct VARS *func;
+  uint8_t block;
+	short int blockId;
+	uint16_t size;		// calcolata al momento della definizione
   struct VARS *member;		
+  struct TAGS *prev;
   struct TAGS *next;
   };  
    
@@ -361,7 +383,7 @@ struct BLOCK_PTR {
 
 #define MAKEPTRREG(s) (*(uint8_t*)s)
 #define MAKEPTROFS(s) (*(uint32_t*)s)
-#define MAKEPTRBITF(s) (*(uint8_t*)s)
+#define MAKEPTRBITF(s) (*(uint8_t*)(s+4))
 
 class COpenCDoc;
 class COpenCView2;
@@ -447,16 +469,11 @@ private:
 */
 
 
-extern const char *movString,*storString,
-#if ARCHI
-	*loadString,			// qua sono diverse!
-#endif
-	*jmpString,*jmpShortString,*jmpCondString,*callString,*returnString,
-	*incString,*decString,
-	*pushString,*popString;
 
 class CSourceFile : public CFile {
 public:
+//test	class CSourceFile *sf;
+//test	class CSourceFile piciu(class CSourceFile a);
 	CSourceFile(LPCTSTR);
   static char *FNTrasfNome(char *);
 	static char *AddExt(char *n, const char *x);
@@ -525,7 +542,8 @@ public:
 		FUNC_MODIF_PASCAL=2,
 		FUNC_MODIF_C=4,
 		FUNC_MODIF_INLINE=8,
-		FUNC_MODIF_FASTCALL=16
+		FUNC_MODIF_FASTCALL=16,
+		FUNC_MODIF_BUILTIN=32,
 		};
 /*	enum {
 		VARTYPE_PLAIN_INT=0,
@@ -581,7 +599,7 @@ public:
 		CONDIZ_MAGGIORE_UNSIGNED=VALUE_IS_CONDITION | 9,
 		};
 	enum OPERAND_MODES {
-		MODE_IS_OTHER=-1,
+		// c'era MODE_IS_OTHER: pre 2026 :)
 		MODE_IS_VARIABLE=0,
 		MODE_IS_CONSTANT1=1,
 		MODE_IS_CONSTANT2=2,
@@ -593,6 +611,12 @@ public:
 		ARITM_IS_OPERANDO=3,
 		ARITM_IS_UNKNOWN=-1,
 		};
+	enum LINE_FLAGS {
+		LINE_IS_NORMAL=0,
+		LINE_IS_ASSEMBLER=1,
+		LINE_IS_VOLATILE=2,
+		};
+
 	friend class CCPreProcessor;
 
 protected:
@@ -614,7 +638,14 @@ protected:
 	COutputFile *FO1,*FO2,*FO3,*FO4,*FO5;
 	COutputFile *FObj,*FCod;
 	COutputFile *FLst,*FErr;
-	int Warning;
+	int8_t Warning;
+	static const char *movString,*storString,
+#if ARCHI
+		*loadString,			// qua sono diverse!
+#endif
+		*jmpString,*jmpShortString,*jmpCondString,*callString,*returnString,
+		*incString,*decString,*pushString,*popString;
+	static const struct ERRORE Errs[];
   struct LINE *RootOut,*LastOut,*StaticOut,*BSSOut;
 	struct VARS *Var;
 	struct VARS *LVars;   // root, used, last
@@ -634,6 +665,7 @@ protected:
 	char *RootIn;
 	uint8_t Brack;				// usati da FNRev
 	int8_t isRValue,isPtrUsed,inCast;	// tutti questi potrebbero andare in  struct OPERAND
+	bool FuncReturnedValue;
 	int8_t maxRegUsed;
 	uint32_t TempProg;				//
 	struct LINE *GlblOut;	//
@@ -648,7 +680,7 @@ protected:
 	char __time__[11];
 	char TextSegm[64],DataSegm[64]; 
 	int Declaring,FuncCalled,SaveFP,ASM,AutoOff;
-	uint8_t debug;
+	uint8_t debug,verbose;
 	uint8_t PreProcOnly;          // PREPROCESSA SOLO SU stdout  -E
 	uint8_t PreProcCommenti;			// inserisce commenti nel .i e quindi in output
 	uint8_t CheckStack;            // INSERISCE LO STACK PROBE    -Gs
@@ -670,7 +702,8 @@ protected:
 	uint16_t Optimize;
 	static struct TIPI Types[MAX_TIPI];
 	static struct OPERANDO Op[];
-	uint16_t numErrors,numWarnings;
+	uint16_t numErrors,numWarnings,numWarningsSuppr;
+	bool panicMode;		// per gestire valanga di errori
 	bool hexNumbers;
 
 // Operations
@@ -684,7 +717,7 @@ public:
 	struct VARS *PROCDclVar(enum VAR_CLASSES, uint8_t, O_TYPE type, O_SIZE size, struct TAGS *, O_DIM dim, uint32_t attrib, bool isparm);
 	int subAsm(char *);
 	int FNIsStmt();
-	char *FNGetLabel(char *,uint8_t);
+	char *FNGetLabel(char *,uint8_t,int8_t m=0);
 	int PROCGenCondBranch(const char *, int T, int8_t *VQ, O_SIZE );
 	int FNGetCondString(uint8_t , uint8_t);
 	int PROCAssignCond(int8_t *VQ, O_TYPE *type, O_SIZE *size, char *);
@@ -694,7 +727,10 @@ public:
 	int FNRegFree();
 	struct VARS *FNCercaVar(const char *, bool);
 	struct VARS *FNCercaVar(struct TAGS *,const char *);
+	struct TAGS *FNCercaAggr(const char *, bool);
+	bool FNHasVar(struct TAGS *);			// ossia "se è definita"
 	struct VARS *PROCAllocVar(const char *name, O_TYPE type, enum VAR_CLASSES, uint8_t modif, O_SIZE size, struct TAGS *, O_DIM dim);
+	struct VARS *PROCDeleteVar(struct VARS **,struct VARS **,struct VARS *);
 	struct VARS *PROCAllocFunzProto(const char *name, O_TYPE type, O_SIZE size);
 	struct VARS *PROCAllocGoto(const char *label);
 	struct VARS *FNCercaGoto(const char *);
@@ -708,8 +744,9 @@ public:
 	int PROCStoreD0(struct VARS *, int8_t VQ, struct VARS *, union STR_LONG *, uint16_t ofs);
 	int PROCGetAdd(int8_t VQ, struct VARS *, int ofs, bool asPtr);
 	int PROCUsaFun(struct VARS *,bool tosave1,bool tosave2);
+	int subAcquisisciParm(int *ptr32,struct VARS *V,bool is_member,bool doDeclare);
 	struct CONS *FNAllocCost(const char *, uint8_t, O_TYPE type=0);
-	struct ENUMS *FNAllocEnum(const char *tag, const char *name, uint32_t value, O_SIZE Size);
+	struct ENUMS *FNAllocEnum(const char *isInTag, const char *name, uint32_t value, O_SIZE Size);
 	int PROCInit();
 	int subOfsD0(struct VARS *, int, int, int);
 	
@@ -767,8 +804,8 @@ public:
 
 	void subObj(COutputFile *,struct OP_DEF *);
 	int PROCObj(COutputFile *,bool doDelete=TRUE);
-  int PROCError(int, const char *s=NULL);
-  int PROCWarn(int, const char *s=NULL);
+  int PROCError(int, ...);
+  int PROCWarn(int, ...);
   int PROCV(const char *);
 	int PROCT();
 	int PROCD();
@@ -781,6 +818,7 @@ public:
 	bool PROCCheck(const char *);
 	bool PROCCheck(char);
 	long FNGetLine(long,char *);
+	int FNGoToEOL();
 	unsigned int xtoi(const char *);
   BYTE xtob(char );
   unsigned int btoi(const char *);
@@ -797,34 +835,48 @@ public:
   struct LINE *PROCDelLista(struct LINE *, struct LINE *, struct LINE *);
 	void PROCDelLastLine(struct LINE *);
 	void swap(struct LINE * *, struct LINE * *);
-  void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, const char *R=NULL);
+  void PROCOut(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, struct OP_DEF *, const char *R=NULL, enum LINE_FLAGS flags=LINE_IS_NORMAL);
 #if ARCHI || GD24032
-  void PROCOut(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF * /*, const char *R=NULL*/);
+  void PROCOut(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, struct OP_DEF *, struct OP_DEF * /*, const char *R=NULL*/, enum LINE_FLAGS flags=LINE_IS_NORMAL);
 #endif
   void PROCOut1(COutputFile *,const char *, const char *, const char *s3=NULL, const char *s4=NULL);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, union SUB_OP_DEF *, int);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, int);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, const char *R=NULL);
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int s1=0);
-  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *);
-  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, union SUB_OP_DEF *, int, const char *R=NULL, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, int, enum OPDEF_MODE, union SUB_OP_DEF *, int, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, union SUB_OP_DEF *, int, enum OPDEF_MODE, int, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, int, enum OPDEF_MODE, int, const char *R=NULL, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, int s1=0, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, struct OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
 #if ARCHI
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum LINE_FLAGS=LINE_IS_NORMAL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, 
-		enum OPDEF_MODE, union SUB_OP_DEF *);
+		enum OPDEF_MODE, union SUB_OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
   void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, 
-		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
+		enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
 //  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, union SUB_OP_DEF *, 
 	//	enum OPDEF_MODE, union SUB_OP_DEF *, enum OPDEF_MODE, union SUB_OP_DEF *);
 	void PROCOper(enum LINE_TYPE n, const char *A, enum OPDEF_MODE m1, union SUB_OP_DEF *s1,
 									 enum OPDEF_MODE m2, union SUB_OP_DEF *s2, 
-									 enum OPDEF_MODE m3, union SUB_OP_DEF *s3);
-  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
+									 enum OPDEF_MODE m3, union SUB_OP_DEF *s3, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
 #elif GD24032
-  void PROCOper(enum LINE_TYPE, const char *, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int);
-  void PROCOper(enum LINE_TYPE, const char *, struct OP_DEF *, struct OP_DEF *, struct OP_DEF *);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum OPDEF_MODE, int, enum LINE_FLAGS=LINE_IS_NORMAL);
+  void PROCOper(enum LINE_TYPE, const char *, 
+		struct OP_DEF *, struct OP_DEF *, struct OP_DEF *, enum LINE_FLAGS=LINE_IS_NORMAL);
 #endif
   int PROCOutLab(const char *,const char *s1=NULL,const char *s2=NULL);
 
@@ -833,9 +885,11 @@ public:
 	int PROCGetType(O_TYPE *type, O_SIZE *size, struct TAGS **, O_DIM dim, uint32_t *attrib,long textpointer);
 	long FNIsType(char *);
 	struct VARS *FNGetAggr(struct TAGS *, const char *, bool, int *);
-	uint32_t FNGetAggr2(struct VARS *, struct VARS *, int *, int *ofs=NULL);
+	uint32_t FNGetAggr2(struct VARS *, int *, int *ofs=NULL);
 	struct TAGS *subAllocTag(const char *);
-	struct TAGS *FNAllocAggr();
+	void addMember(struct TAGS *, struct VARS *);
+	struct TAGS *FNAllocAggr(int8_t);
+	struct TAGS *PROCDeleteAggr(struct TAGS **,struct TAGS **,struct TAGS *);
 	int StoreVar(struct VARS *Vvar,int8_t VQ, struct VARS *RVar, union STR_LONG *, uint16_t ofs);
 	#if MICROCHIP
 	int ReadVar(struct VARS *,O_TYPE type,O_SIZE size,uint8_t/*bool*/ isCond,bool asPtr,uint8_t lh);
@@ -1062,5 +1116,73 @@ public:
 
 private:
 //	CString GetFileTitle() { CString a; return a; };
+	};
+
+class CStringEx : public CString {
+	public:
+		enum Options {
+			NO_OPTIONS=0,
+			COMMA_DELIMIT=1,
+			};
+		static const int BASE64_MAXLINE;
+		static const char *EOL;
+		static const char decimalChar,thousandChar;
+		static const char CRchar,LFchar,TABchar;
+	public:
+		static const char m_base64tab[];
+	public:
+		CString Tokenize(CString delimiter, int& first);
+		static CStringEx CommaDelimitNumber(const char *);
+		static CStringEx CommaDelimitNumber(CString);
+		static CStringEx CommaDelimitNumber(DWORD);
+		CStringEx SubStr(int begin, int len) const;					// substring from s[begin] to s[begin+len]
+		BYTE Asc(int);
+		int Val(int base=10);
+		double Val();
+		struct in_addr IPVal();
+		void Repeat(int);
+		void Repeat(const char *,int);
+		void Repeat(char,int);
+		void AddCR() { CStringEx::operator+=(LFchar); }
+		void RemoveLeft(int n) { CStringEx::operator=(Mid(n)); }
+		void RemoveRight(int n) { CStringEx::operator=(Mid(1,GetLength()-n)); }		// era un'idea per fare LEFT$ di tot char, ma Trimright c'è già anche se diversa...
+		void Trim() { CString::TrimLeft(); CString::TrimRight(); }	
+		static bool IsAlpha(char);
+		bool IsAlpha(int);
+		static bool IsAlnum(char);
+		bool IsAlnum(int);
+		static bool IsDigit(char);
+		bool IsDigit(int);
+		static bool IsPrint(char);
+		bool IsPrint(int);
+		int FindNoCase(CString substr,int start=0);
+		int ReverseFindNoCase(CString substr);
+		WORD GetAsciiLength();
+		CStringEx Encode64();
+		int Decode64();
+		CStringEx FormatTime(int m=0,CTime mT=0);
+		CStringEx FormatSize(DWORD);
+		CStringEx SplitPath(LPCTSTR,BYTE mode);
+		CStringEx GetASCII();
+		WCHAR *GetUnicode(WCHAR *);
+		void Print();
+		void Debug();
+		CStringEx() : CString() {};		// servono tutti i costruttori "perché non ne ha di virtual, la CString" !
+		// https://www.codeguru.com/cpp/cpp/string/ext/article.php/c2793/CString-Extension.htm
+		// https://www.codeproject.com/Articles/2396/Simple-CString-Extension
+		CStringEx(const CString& stringSrc) : CString(stringSrc) {};
+		// bah, eppure non sembra... 2021...
+//		CStringEx(const CStringEx& stringSrc) : CString(stringSrc) {};
+		CStringEx(TCHAR ch, int nRepeat = 1) : CString(ch, nRepeat) {};
+//		CStringEx(LPCTSTR lpch, int nLength) : CString(lpch, nLength) {};
+//		CStringEx(const unsigned char *psz) : CString(psz) {};
+		CStringEx(LPCWSTR lpsz) : CString(lpsz) {};
+		CStringEx(LPCSTR lpsz) : CString(lpsz) {};
+//		CStringEx(const char c) {char s[2]={'\0', '\0'}; s[0]=c; CString::operator=(s);}
+		CStringEx(int i, const char* format="%d", DWORD options=NO_OPTIONS);
+		CStringEx(double d, const char* format="%02lf", DWORD options=NO_OPTIONS);
+		virtual ~CStringEx() {};
+private:
+	CString InsertSeparator(DWORD);
 	};
 

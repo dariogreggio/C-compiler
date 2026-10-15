@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "cc.h"
-#include "..\OpenC.h"
+//#include "..\OpenC.h"
 //#include "..\openCdoc.h"
 
 #include <stdlib.h>
@@ -106,11 +106,10 @@ rifo:
       case '<':
 //      case '>':                         v. sotto
       case '|':
-Op3:      
         if(ch==ch1) {
           *p++=ch;
           *p=0;
-          if(ch=='<' || ch=='>')            // op a 3 caratteri
+          if(ch=='<' || ch=='>')            // 
             goto rifo;
           }         
         else
@@ -418,4 +417,14 @@ rifo:
 
   return l2;
   }
+
+int Ccc::FNGoToEOL() {
+  register int ch;
+  
+  do {
+    ch=FIn->get();
+    } while(ch != '\n' && ch!=EOF);
+
+	return ch == '\n';
+	}
 

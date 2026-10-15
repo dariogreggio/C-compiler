@@ -78,6 +78,10 @@ int Ccc::Ottimizza(struct LINE *r) {
   if(Optimize) {
     r1=r;
     while(r) {
+
+			if(r->flag)		// gestire!
+				;
+
       if(Optimize & OPTIMIZE_SUBEXPR) {           // common expr
         if(r->type==LINE_TYPE_LABEL || r->type==LINE_TYPE_DATA_DEF || r->type==LINE_TYPE_LABEL_CON_ISTRUZIONE || r->type==LINE_TYPE_JUMPC) {   // una label o call distrugge tutto
 delAll:       

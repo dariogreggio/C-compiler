@@ -1,17 +1,17 @@
 #include "stdafx.h"
 #include "cc.h"
-#include "..\OpenC.h"
-#include "..\OpenCView2.h"
+//#include "..\OpenC.h"
+//#include "..\OpenCView2.h"
 
 #include <stdlib.h>
 #include <conio.h>
 
 
-struct ERRORE Errs[]={
+const struct ERRORE Ccc::Errs[]={
   1000,1,"unknown internal error - contact Cyberdyne",
-  1001,1,"internal error:",
-  1002,1,"unsupported:",
-  1003,1,"partially unimplemented:",
+  1001,1,"internal error: %s",
+  1002,1,"unsupported: %s",
+  1003,1,"error count exceeds 100; stopping compilation",
   1004,1,"unexpected EOF",
   1016,1,"#if[n]def expected an identifier",
   1017,1,"unexpected chars",
@@ -20,13 +20,14 @@ struct ERRORE Errs[]={
   1020,1,"unexpected #endif",
   1021,1,"bad preprocessor command",
   1022,1,"expected #endif",
-  1023,1,"cannot open source file",
-  1024,1,"cannot open include file",
+  1023,1,"cannot open source file %s",
+  1024,1,"cannot open include file %s",
   1035,1,"expression too complex, please simplify",
-  1037,1,"cannot open object file",
+  1037,1,"cannot open object file %s",
   1065,1,"out of tags space",
-  1068,1,"cannot open file",
-  1069,1,"write error on file",
+  1068,1,"cannot open file %s",
+  1069,1,"write error on file %s",
+  1092,1,"new data types not supported by incremental build - full build required",
 #if MC68000 || ARCHI
   1126,1,"automatic allocation exceeds size (32768)" ,
 #elif GD24032
@@ -34,20 +35,24 @@ struct ERRORE Errs[]={
 #else
   1126,1,"automatic allocation exceeds size (128)" /*anche 2127*/,
 #endif
+  2000,1,"partially unimplemented: %s",
   2001,1,"newline in constant",
   2007,1,"#define syntax",
   2010,1,"invalid formal list",
-  2011,1,"redefinition:",
+  2011,1,"redefinition: %s",
   2012,1,"bad char following include",
   2015,1,"too many chars in costant",
   2017,1,"illegal escape sequence",
   2018,1,"unknown character",
-  2025,1,"enum/struct/union type redefinition:",
-  2026,1,"type redefinition:",
-  2027,1,"use of undefined type",
-  2030,1,"struct/union member redefinition:",
+  2021,1,"invalid character",
+  2025,1,"enum/struct/union type redefinition: %s",
+  2026,1,"type redefinition: %s",
+  2027,1,"use of undefined type %s",
+  2030,1,"struct/union member redefinition: %s",
+  2032,1,"'%s' : function cannot be member of struct '%s'",
   2037,1,"left operand specifies undefined struct/union",
-  2038,1,"not struct/union member:",   /* anche 2021*/
+  2038,1,"not struct/union member of namespace: %s",   /* anche 2021*/
+  2039,1,"not struct/union member: %s",
   2040,1,"different levels of indirection", /*anche 4047*/
   2041,1,"illegal digit for base",
   2043,1,"illegal break",
@@ -56,27 +61,28 @@ struct ERRORE Errs[]={
   2046,1,"illegal case",
   2047,1,"illegal default",
   2048,1,"more than one default",
-  2049,1,"case value already used:",
+  2049,1,"case value already used: %u",
   2050,1,"non-integral switch expression",
   2051,1,"case expression not constant",
   2052,1,"case expression not integral",
-  2053,1,"case expression too large for switch variable",
-  2054,1," expected",
-	2055,1, "expected formal parameter name list",
+  2053,1,"case expression too large for switch variable %u",
+  2054,1,"%s expected",
+	2055,1,"expected formal parameter name list",
   2057,1,"expected constant expression",
   2058,1,"divide by zero",
-  2059,1,"syntax error",
-  2062,1,"unexpected",/*anche 2132*/
-  2064,1,"not a function:",/*2063 anche ok*/
-  2065,1,"undefined:",			//undeclared identifier
+  2059,1,"syntax error: %s",
+  2062,1,"%s unexpected",/*anche 2132*/
+  2064,1,"not a function: %s",/*2063 anche ok*/
+  2065,1,"undefined: %s",			//undeclared identifier
   2068,1,"illegal cast",
   2070,1,"illegal sizeof operand",
   2071,1,"bad storage class",
   2078,1,"too many initializers",
-  2079,1,"uses undefined struct/union",
-  2082,1,"redefinition of formal parameter:",
-  2084,1,"funtion already has a body:",
-  2086,1,"redefinition:",/*anche 2011?*/
+  2079,1,"uses undefined struct/union %s",
+  2082,1,"%s: redefinition of formal parameter: %u",
+  2083,1,"redundant declaration of function: %s",
+  2084,1,"funtion already has a body: %s",
+  2086,1,"redefinition: %s",/*anche 2011?*/
   2087,1,"missing subscript",
   2093,1,"can't use address of automatic variable as static init",
   2094,1,"label undefined",
@@ -86,7 +92,7 @@ struct ERRORE Errs[]={
   2101,1,"'&' on constant",
   2103,1,"'&' on register variable",
   2104,1,"'&' on bitfield variable",
-  2105,1,"needs lvalue",
+  2105,1,"%s needs lvalue",
   2106,1,"left operand must be lvalue",
   2109,1,"subscript on non-array",
 //   2110,1,"variable used as a pointer",
@@ -94,7 +100,8 @@ struct ERRORE Errs[]={
   2111,1,"pointer + non-integral value",
   2112,1,"illegal use of pointer",
   2115,1,"incompatible types",
-  2116,1,"function parameter list differed",
+  2116,1,"function parameter list differed: %s, %u",
+  2121,1,"bad right operand",
 #if MC68000 || ARCHI
   2127,1,"stack allocation exceeds size (32768)", /*anche 1126*/
 #elif GD24032
@@ -102,18 +109,20 @@ struct ERRORE Errs[]={
 #else
   2127,1,"stack allocation exceeds size (128)",
 #endif
-	2129,1,"static function '' declared but not defined",
+	2129,1,"static function '%s' declared but not defined",
   2137,1,"empty character constant",
   2141,3,"value out of range for enum"/*anche 4341*/,
-  2143,1,"syntax error : missing ';' before 'type'",
+  2143,1,"syntax error : missing '%s' before '%s'",
+  2146,1,"syntax error : missing '%s' before identifier '%s'",
   2149,1,"named bitfield cannot have zero width",
   2153,1,"hex constant must have at least one digit",
   2156,1,"pragma must be outside function",
   2166,1,"l-value specifies const object",
-  2187,1,"syntax error : 'void' was unexpected",
+  2187,1,"syntax error : '%s' was unexpected",
   2200,1,"warning treated as error",
-  2205,1,"can't initialize extern variable",
+  2205,1,"can't initialize extern variable %s",
 	2215,1,"local variable '%s' in naked function '%s' allocated without stack frame",
+	2220,1,"bit field is too large for its type %s",		// gemini diceva 0099...
   2221,1,"'.' left operand points to struct/union, use ->",/*anche 2231*/
   2222,1,"'->' left operand has struct/union type, use .",/*anche 2232*/
   2223,1,"left operand must point to struct/union type",/*anche 2227*/
@@ -121,32 +130,36 @@ struct ERRORE Errs[]={
   2297,1,"operand is illegal (not integer)",
 // anche ,gemini	2301,1,"local variable '%s' in naked function '%s' allocated without stack frame"
   2371,1,"redefinition (different basic types):",/*anche altri*/		// questa per funzioni
-  2440,1,"cannot convert from 'void' to ",		// e mettere il tipo :)
+  2440,1,"cannot convert from '%s' to %s",		// e mettere il tipo :)
   2599,1,"local records are not supported",
   2601,1,"local functions are not supported",
    3001,1,"interrupt function returning a value",
    3002,1,"interrupt function with parms",
-  4002,1,"ignoring unknown flag",/*Microsoft D4002*/
-  4005,1,"macro redefinition",
-  4013,3,"function undefined; assuming extern returning int",
+  4002,1,"ignoring unknown flag %s",/*Microsoft D4002*/
+  4005,1,"macro redefinition: %s",
+  4013,3,"function undefined %s; assuming extern returning int",
   4018,3,"signed/unsigned mismatch",
-	4033,3,"must return a value",
-  4035,1,"function with no return value",
-  4042,1,"bad storage class",
+	4028,3,"redundant declaration of function: %s",		// anche 2083
+	4033,3,"%s must return a value",
+  4035,1,"%s function with no return value",
+  4042,1,"bad storage class: %s",
   4047,1,"different levels of indirection",
   4049,1,"indirection to different types",
-  4068,1,"#pragma o attributo sconosciuto",
-  4069,1,"ignorato: ",
-  4098,1,"void function returning a value",
+  4068,1,"#pragma o attributo sconosciuto %s",
+  4069,1,"ignorato: %s",
+  4091,1,"'struct %s': ignored on left of '%s' when no variable is declared",
   4099,1,"void type invalid",
-  4101,3,"unreferenced local variable",
-  4102,3,"unreferenced label",
+  4101,3,"unreferenced local variable %s",
+  4102,3,"unreferenced label %s",
   4127,4,"conditional expression is constant",/*anche 4727*/
   4131,4,"old-style declaration",
-  4244,3,"conversion, truncation, possible loss of data",
-  4305,3,"truncation from ",
-  4309,3,"truncation of constant value",
-  4701,3,"local variable used without initialization",
+  4133,2,"incompatible types",
+	4172,3,"returning address of local variable or temporary",
+	4244,3,"'initializing' / 'conversion' : conversion from '%s' to '%s', possible loss of data",
+  4305,3,"truncation from %s",
+  4309,3,"truncation of constant value %u",
+	4430,4,"missing type specifier - int assumed",
+	4701,3,"local variable used without initialization %s",
   4705,4,"statement has no effect",
   4710,4,"function not inlined",
   4761,3,"integral size mismatch in argument; conversion supplied",
@@ -164,7 +177,7 @@ char *Ccc::OpCond[16]={		// v. OPERANDO_CONDIZIONALE , ne servono solo 6 (logica
   "lt","ge","le","gt","eq","ne", "cs","cc","ls","hi"		// ahem boh...
 //  "ge","lt","gt","le","eq","ne", "cc","cs","hi","ls"		// OCCHIO le inverto perché gli operandi sono invertiti qua!
 #elif GD24032
-  "LT","GE","LE","GT","EQ","NE", "CS","CC","LS","HI"		// 
+  "LT","GE","LE","GT","EQ","NE", "C","NC","LS","HI"		// 
 #elif I8051
   "b", "ae","be","a", "z", "nz", "l", "ge","le","g"
 #elif MICROCHIP
@@ -292,15 +305,23 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
         FO->printf("%+d",s->ofs);
 #endif
       break;
+		case OPDEF_MODE_REGISTRO_INDIRETTO_POSTINC & 0x7f:
+#if MC68000 
+			FO->printf("(%s)+",(*Regs)[s->s.n]);
+#elif GD24032
+			FO->printf("%s++",(*Regs)[s->s.n]);
+#else
+#endif
+      break;
     case OPDEF_MODE_IMMEDIATO8:				// quantità 8bit
 #if MC68000 || ARCHI
 			if(s->hexNumbers)
-				FO->printf("#%02X",(int8_t)s->s.n);
+				FO->printf("#%02X",(uint8_t)s->s.n);
 			else
 				FO->printf("#%d",(int8_t)s->s.n);
 #else
 			if(s->hexNumbers)
-				FO->printf("%02X",(int8_t)s->s.n);
+				FO->printf("%02X",(uint8_t)s->s.n);
 			else
 	      FO->printf("%d",(int8_t)s->s.n);
 #endif
@@ -308,12 +329,12 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_IMMEDIATO16:				// quantità 16bit
 #if MC68000 || ARCHI
 			if(s->hexNumbers)
-				FO->printf("#%04X",(int16_t)s->s.n);
+				FO->printf("#%04X",(uint16_t)s->s.n);
 			else
 	      FO->printf("#%d",(int16_t)s->s.n);
 #else
 			if(s->hexNumbers)
-				FO->printf("%04X",(int16_t)s->s.n);
+				FO->printf("%04X",(uint16_t)s->s.n);
 			else
 	      FO->printf("%d",(int16_t)s->s.n);
 #endif
@@ -321,12 +342,12 @@ void Ccc::subObj(COutputFile *FO,struct OP_DEF *s) {
     case OPDEF_MODE_IMMEDIATO32:				// quantità 32bit
 #if MC68000 || ARCHI
 			if(s->hexNumbers)
-				FO->printf("#%08X",(int32_t)s->s.n);
+				FO->printf("#%08X",(uint32_t)s->s.n);
 			else
 	      FO->printf("#%ld",(int32_t)s->s.n);
 #else
 			if(s->hexNumbers)
-				FO->printf("%08X",(int32_t)s->s.n);
+				FO->printf("%08X",(uint32_t)s->s.n);
 			else
 	      FO->printf("%ld",(int32_t)s->s.n);
 #endif
@@ -702,6 +723,9 @@ int Ccc::PROCObj(COutputFile *FO,bool doDelete) {
 				}
         break;
 			}
+    if(TEXT->flag & (LINE_IS_ASSEMBLER | LINE_IS_VOLATILE)) {
+	    FO->printf("\t; (n/o)");
+			}
     if(*TEXT->rem) {
       if(TEXT->type) {
         FO->put('\t');
@@ -726,37 +750,50 @@ int Ccc::PROCObj(COutputFile *FO,bool doDelete) {
   return 0;
   }
 
-int Ccc::PROCError(int Er, const char *a) {
+int Ccc::PROCError(int Er, ...) {
+  char errBuf[512];
+  char msgBuf[256];
+  char lineBuf[256];
   int i;
-  char myBuf[256],errBuf[256];
 
-  wsprintf(errBuf,"%s: (%d): errore %d",__file__,__line__,Er);
+  // 1. Cerca il messaggio di base nella tabella degli errori
   i=0;
-  while (Er != Errs[i].t && Errs[i].t)
+  while(Errs[i].t != Er && Errs[i].t != 0)
     i++;
-  if(Errs[i].t) {
-  	wsprintf(myBuf,": %s",Errs[i].s);
-		_tcscat(errBuf,myBuf);
- 	  if(a)
- 	    wsprintf(myBuf,": %s",a);
- 	  else  
- 	    wsprintf(myBuf,".");
-		_tcscat(errBuf,myBuf);
-		if(FErr) {
-			FErr->println(errBuf);
-			if(FIn)	// se errore DOPO la compilazione
-				FNGetLine(FIn->GetPosition(),myBuf);			// SISTEMARE posizione...
-			FErr->println(myBuf);
-			}
-	  if(debug) {
-	    PROCV("vartmp.map");
-//	    PROCT();
-	    }
-    }
-	else	{
-	  wsprintf(myBuf,"(%d)",Er);
-    PROCError(1000,myBuf);
-    }
+
+  if(Errs[i].t == 0) {
+    // Codice errore sconosciuto: fallback all'errore 1000
+    char unkBuf[32];
+    wsprintf(unkBuf, "(%d)", Er);
+    return PROCError(1000, unkBuf);
+		}
+
+  // 2. Formatta la parte custom ricevuta nei parametri variabili (...)
+  // wvsprintfA (Win32) oppure vsnprintf gestisce la lista di argomenti variadici
+	va_list args;
+  va_start(args, Er);
+  wvsprintf(msgBuf, Errs[i].s, args); // oppure vsnprintf/vsprintf
+	va_end(args);
+
+  // 3. Compone l'intestazione standard MSVC: file(line): error CXXXX: description: custom
+  wsprintf(errBuf, "%s: (%d): errore %u: %s",
+            __file__, __line__, Er, msgBuf);
+
+  // 4. Stampa su file di log/errori e mostra la riga sorgente
+  if(FErr) {
+    FErr->println(errBuf);
+    
+    if(FIn) {
+      // Estrae la linea di codice dal sorgente per mostrare dove si trova l'errore
+      FNGetLine(FIn->GetPosition(), lineBuf);
+      FErr->println(lineBuf);
+      }
+	  }
+
+  // 5. Gestione del Debugger/Dump dello stato interno
+  if(debug)
+    PROCV("vartmp.map");
+
 /*  if(FPre)
     fclose(FPre);
   if(FObj)
@@ -773,32 +810,50 @@ int Ccc::PROCError(int Er, const char *a) {
 		FLst=NULL;
 		}*/
 	// NON dovremmo uscire al primo errore... forse
+	//
 	bExit=1;
+	// per gestire la valanga di errori, fare poi così:
+	//1. Panic-Mode Recovery (La tecnica dei "Punti di Ancoraggio", cercare ; (fine istruzione) o } (fine blocco scope) o ) (fine lista parametri)
+	//2. Flag di Suppressione (panic_mode / Suppressed Errors) dopo il primo errore e fino a resync
+	//3. Il "Soffitto" degli Errori (Error Limit)
+	//4. Bilanciamento delle Parentesi (Brace Matching Tracking)
 
-	numErrors++;
-	if(myOutput) {
-		char *p=(LPSTR)GlobalAlloc(GPTR,256);
-		_tcscpy(p,errBuf);
-		myOutput->PostMessage(WM_ADDTEXT,1,(LPARAM)p);
-		}
+  if(!panicMode) {
+    numErrors++;
+    
+    // Invio del messaggio alla finestra GUI tramite PostMessage Win32
+    if(myOutput) {
+      char *p = (LPSTR)GlobalAlloc(GPTR, 512);
+      if(p) {
+        _tcscpy(p, errBuf);
+        myOutput->PostMessage(WM_ADDTEXT, 1, (LPARAM)p);
+        }
+      }
+    } 
+	else
+	  panicMode = TRUE;
+
 //	throw; 
   return 0;
   }
 
-int Ccc::PROCWarn(int Er, const char *a) {
+int Ccc::PROCWarn(int Er, ...) {
   int i;
   char myBuf[256],errBuf[256];
 
   if(Warning) {
 		numWarnings++;
 	  i=0;
-    while (Er != Errs[i].t && Errs[i].t)
+    while(Er != Errs[i].t && Errs[i].t)
       i++;
     if(Errs[i].t) {  
 		  if(Warning<0 || Errs[i].l <= Warning) {
-			  wsprintf(errBuf,"%s: (%d): warning %d",__file__,__line__,Er);
-			  wsprintf(myBuf,": %s %s",Errs[i].s,a ? a : ".");
-				_tcscat(errBuf,myBuf);
+				va_list args;
+				va_start(args, Er);
+				wvsprintf(myBuf, Errs[i].s, args); // oppure vsnprintf/vsprintf
+				va_end(args);
+			  wsprintf(errBuf, "%s: (%u): warning %u: %s",
+						     __file__, __line__, Er, myBuf);
 				{
 				char *p=(LPSTR)GlobalAlloc(GPTR,256);
 				_tcscpy(p,errBuf);
@@ -807,11 +862,13 @@ int Ccc::PROCWarn(int Er, const char *a) {
 				if(FErr)
 					FErr->println(errBuf);
 		    if(Warning<0)
-		      PROCError(2200,NULL);
+		      PROCError(2200,"warning");
 			  }
+			else
+				numWarningsSuppr++;
 			}
 		else	
-      PROCError(1000,NULL);
+      PROCError(1000,"warning sconosciuto");
     
     }
   return 0;
@@ -833,13 +890,13 @@ int Ccc::PROCV(const char *n) {
   V=Var;
   while(V) {
 		FO->printf("Ogg. %s\t\tTipo %x\tLabel %s\tSize %d\tdi %s\n",
-			V->name,V->type,V->label,V->size,V->func ? V->func->name : "");
+			V->name,V->type,V->label,V->size,V->parent ? V->parent->name : "");
     FO->printf("Blocco attuale: %d, blocco var: %d\n",InBlock,V->block);
-		if(V->tag) {
-      FO->printf("\tFa parte del TAG: %s\n",V->tag->label);
+		if(V->isInTag) {
+      FO->printf("\tFa parte del TAG: %s\n",V->isInTag->label);
 			}
-		if(V->hasTag) {
-      FO->printf("\tIl suo TAG e': %s\n",V->hasTag->label);
+		if(V->tag) {
+      FO->printf("\tIl suo TAG e': %s\n",V->tag->label);
 			}
     V=V->next;
     }
@@ -884,19 +941,22 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
   char *p;
   char myBuf[256];
   struct VARS *V;
+	struct TAGS *C;
   
   if(func) {
-    FO->printf("%s: variabili locali\n",func->name);
+    FO->printf("%s: variabili locali -----------------------------------------------------------------------------------\n",func->name);
+	  V=func->members;
 		}
   else {
-    FO->println("Variabili globali");
+    FO->println("\fVariabili globali ---------------------------------------------------------------------------------------------------");
+	  V=Var;
 		}
-  V=Var;
+
   while(V) {
-    if(V->func==func) {
+	  struct VARS *v;
+
 			if(!(T % 60)) {
-				FO->printf("\f\n%32s%10s%16s%10s%12s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro");
-				//spostare FormFeed prima/fuori...
+				FO->printf("%32s%10s%16s%10s%12s%12s\n\n","Nome","Classe","Tipo","Dim.","Offset/Registro","Tag");
 				}
 			FO->printf("%32s",V->name);
 
@@ -923,6 +983,9 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 					break;
 				case CLASSE_REGISTER:
 					p="register";
+					break;
+				case CLASSE_MEMBER:		// mai qua cmq! v.sotto
+					p="member";
 					break;
 				}
 			FO->printf("%10s",p);
@@ -993,15 +1056,18 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				}
 			else {
 				p=myBuf;
-				if(V->type & VARTYPE_ARRAY)
-					sprintf(myBuf,"%u",FNGetArraySize(V));
+				if(V->type & VARTYPE_ARRAY) {
+					if(V->type & VARTYPE_IS_POINTER)
+						sprintf(myBuf,"%u(%u)",getPtrSize(V->type),FNGetArraySize(V));
+					else
+						sprintf(myBuf,"%u",FNGetArraySize(V));
+					}
 				else {
-					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION))
-						sprintf(myBuf,"%u",V->size);
-					else if(V->type & VARTYPE_BITFIELD) {
-						int j;
-						j=FNGetAggr2(NULL,V,&bs1,&bs2);
-						sprintf(myBuf,"%u",bs2);
+					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION)) {
+						if(V->type & VARTYPE_IS_POINTER)
+							sprintf(myBuf,"%u(%u)",getPtrSize(V->type),V->size);
+						else
+							sprintf(myBuf,"%u",V->size);
 						}
 					else {
 						if(V->type & VARTYPE_IS_POINTER)
@@ -1013,33 +1079,199 @@ int Ccc::PROCVarList(COutputFile *FO, struct VARS *func) {
 				}
 			FO->printf("%9s",p);
 
-			if(V->type & VARTYPE_BITFIELD) {
-				sprintf(myBuf,"%u",bs1);
+			if(V->classe==CLASSE_AUTO) {
+				p=myBuf;
+				I=MAKEPTROFS(V->label);
+				sprintf(myBuf,"%d",I);
 				}
 			else {
-				if(V->classe==CLASSE_AUTO) {
-					p=myBuf;
-					I=MAKEPTROFS(V->label);
-					sprintf(myBuf,"%d",I);
-					}
-				else {
-					p="***";
-  				}
-				}
+				p="***";
+  			}
 			FO->printf("%7s",p);
 
 			if(V->classe==CLASSE_REGISTER) {
-				_tcscpy(myBuf,(*Regs)[V]);
+				_tcscpy(myBuf," ");
+				_tcscat(myBuf,(*Regs)[V]);
 				}
 			else
 				*myBuf=0;
 
+			if(V->isInTag) {
+				FO->printf("\t\t(di: %s)",V->isInTag->label);
+				}
+			if(V->tag) {
+				FO->printf("\t\t%s",V->tag->label);
+				}
+		
 			FO->println(myBuf);
 			T++;
-			}
+			if(!(T % 60)) {
+				FO->println("\f");		// stacco meglio
+				}
     V=V->next;
     }
 	FO->putcr();
+
+	if(!func) {
+		T=0;
+    FO->println("\fOggetti aggregati ---------------------------------------------------------------------------------------------------");
+    C=StrTag;
+    while(C) {
+			if(!(T % 60)) {
+				FO->printf("%32s%16s%10s%12s%12s\n\n","Nome","Tipo","Dim.","Offset","Tag");
+				}
+
+			FO->printf("\t%s\n",C->label);
+
+		  V=C->member;
+			I=0;
+			while(V) {
+				struct VARS *v;
+
+				FO->printf("%32s",V->name);
+
+				// riciclo, e modifico, il tutto sopra...
+				if(V->type & VARTYPE_FUNC) {
+					if(V->type & VARTYPE_FUNC_POINTER)
+						p="funct/ptr";
+					else
+						p="function";
+					}
+				// VA TUTTO RIVISTO, i tipi possono miscelarsi...
+
+				else if(V->type & VARTYPE_ARRAY) {
+					p=myBuf;
+					int j=0;
+					while(V->dim[j] && j<MAX_DIM)
+						j++;
+					sprintf(myBuf,"array[%u]",j);
+					}
+				else if(V->type & VARTYPE_IS_POINTER) 
+					p="pointer";
+				else {
+					if(V->type & (VARTYPE_UNION | VARTYPE_STRUCT))
+						p="struct/union";
+					else if(V->type & VARTYPE_FLOAT)
+						p="float";
+					else if(V->type & VARTYPE_BITFIELD)
+						p="bitfield";
+					else {             
+						p=myBuf;
+						if(V->type & VARTYPE_UNSIGNED)
+							_tcscpy(myBuf,"unsigned ");
+						else
+							*myBuf=0;
+						if(V->size == INT_SIZE) {
+							_tcscat(myBuf,"int ");
+							}
+						else {  
+							switch(V->size) {
+								case 1:
+									_tcscat(myBuf,"char ");
+									break;
+								case 2:
+									_tcscat(myBuf,"short ");
+									break;
+								case 4:
+									_tcscat(myBuf,"long ");
+									break;
+								} 
+							}
+						if(V->type & VARTYPE_FAR)
+							_tcscat(myBuf,"far ");
+	#if MICROCHIP
+						if(V->type & VARTYPE_ROM)
+							_tcscat(myBuf,"rom ");
+	#endif
+						}
+
+					}
+				FO->printf("%16s",p);
+
+		//	  FO->printf("\t");
+				p=myBuf;
+				if(V->type & VARTYPE_ARRAY) {
+					if(V->type & VARTYPE_IS_POINTER)
+						sprintf(myBuf,"%u(%u)",getPtrSize(V->type),FNGetArraySize(V));
+					else
+						sprintf(myBuf,"%u",FNGetArraySize(V));
+					}
+				else {
+					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION)) {
+						if(V->type & VARTYPE_IS_POINTER)
+							sprintf(myBuf,"%u(%u)",getPtrSize(V->type),V->size);
+						else
+							sprintf(myBuf,"%u",V->size);
+						}
+					else if(V->type & VARTYPE_BITFIELD) {
+						int j;
+						j=FNGetAggr2(V,&bs1,&bs2);
+						sprintf(myBuf,"%u",MAKEPTRBITF(V->label));
+						}
+					else {
+						if(V->type & VARTYPE_IS_POINTER) {
+							sprintf(myBuf,"%u",getPtrSize(V->type));
+							}
+						else {
+							sprintf(myBuf,"%u",V->size);
+							}
+						}
+					}
+				FO->printf("%9s",p);
+
+				if(V->type & VARTYPE_BITFIELD) {
+					sprintf(myBuf,"%u:%u",bs2,bs1);
+					}
+				else {
+					sprintf(myBuf,"%u",MAKEPTROFS(V->label) /*I*/);
+					}
+				FO->printf("%7s",p);
+
+				if(V->type & VARTYPE_ARRAY) {		// DOPO :)
+					I+=FNGetArraySize(V);
+					}
+				else {
+					if(V->type & (VARTYPE_STRUCT | VARTYPE_UNION)) {
+						I+=V->size;
+						}
+					else if(V->type & VARTYPE_BITFIELD) {
+						int j;
+						j=FNGetAggr2(V,&bs1,&bs2);
+						I+=bs1;
+						}
+					else {
+						if(V->type & VARTYPE_IS_POINTER) {
+							I+=getPtrSize(V->type);
+							}
+						else {
+							if(V->size>= StructPacking/*INT_SIZE*/) {
+								I+=((V->size+StructPacking-1) & -StructPacking);		// v. FNAllocAggr
+								}
+							else
+								I+=V->size;
+							}
+						}
+					}
+
+				*myBuf=0;
+				if(V->tag) {
+					FO->printf("%16s",V->tag->label);
+					}
+
+				FO->println(myBuf);
+				T++;
+				if(!(T % 60)) {
+					FO->println("\f");		// stacco meglio
+					}
+
+				V=V->next;
+				}
+			FO->putcr();
+
+      C=C->next;
+      } 
+		}
+
 	FO->putcr();
   
   return 0;
